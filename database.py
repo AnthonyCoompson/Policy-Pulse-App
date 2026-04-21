@@ -272,6 +272,13 @@ def remove_watchlist_keyword(keyword):
 
 # ── MANUAL TAGS ────────────────────────────────────────────
 
+def update_article_sentiment(article_id, sentiment):
+    conn = get_conn()
+    conn.execute("UPDATE articles SET sentiment = ? WHERE id = ?", (sentiment, article_id))
+    conn.commit()
+    conn.close()
+
+
 def add_article_tag(article_id, tag):
     conn = get_conn()
     row = conn.execute("SELECT tags FROM articles WHERE id = ?", (article_id,)).fetchone()

@@ -13,7 +13,7 @@ from datetime import datetime
 from database import (init_db, get_articles, get_article_by_id, get_sources, get_stats,
                        get_digest_history, save_digest, update_article_read, update_article_staged,
                        get_watchlist_keywords, add_watchlist_keyword, remove_watchlist_keyword,
-                       add_article_tag, remove_article_tag)
+                       add_article_tag, remove_article_tag, update_article_sentiment)
 from scraper import run_scrape
 from scheduler import start_scheduler
 
@@ -135,6 +135,15 @@ def add_keyword(body: dict):
 @app.delete("/watchlist/{keyword}")
 def delete_keyword(keyword: str):
     remove_watchlist_keyword(keyword)
+    return {"ok": True}
+
+# ── SENTIMENT ─────────────────────────────────────────────
+
+@app.patch("/articles/{article_id}/sentiment")
+def update_sentiment(article_id: int, body: dict):
+    from database import update_article_sentiment
+    sentiment = body.get("sentiment","Neutral")
+    update_article_sentiment(article_id, sentiment)
     return {"ok": True}
 
 # ── MANUAL TAGS ────────────────────────────────────────────
