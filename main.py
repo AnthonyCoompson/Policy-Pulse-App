@@ -10,7 +10,10 @@ import uvicorn
 import os
 from datetime import datetime
 
-from database import init_db, get_articles, get_article_by_id, get_sources, get_stats, get_digest_history, save_digest, update_article_read, update_article_staged
+from database import (init_db, get_articles, get_article_by_id, get_sources, get_stats,
+                       get_digest_history, save_digest, update_article_read, update_article_staged,
+                       get_watchlist_keywords, add_watchlist_keyword, remove_watchlist_keyword,
+                       add_article_tag, remove_article_tag)
 from scraper import run_scrape
 from scheduler import start_scheduler
 
@@ -114,6 +117,40 @@ def create_digest(body: dict):
         token=token,
     )
     return {"ok": True, "id": digest_id, "token": token, "public_url": f"/digest/{token}"}
+
+# ── WATCHLIST ─────────────────────────────────────────────
+
+@app.get("/watchlist")
+def list_watchlist():
+    return {"keywords": get_watchlist_keywords()}
+
+@app.post("/watchlist")
+def add_keyword(body: dict):
+    kw = body.get("keyword","").strip()
+    if not kw:
+        raise HTTPException(status_code=400, detail="keyword required")
+    added = add_watchlist_keyword(kw)
+    return {"ok": True, "added": added, "keyword": kw}
+
+@app.delete("/watchlist/{keyword}")
+def delete_keyword(keyword: str):
+    remove_watchlist_keyword(keyword)
+    return {"ok": True}
+
+# ── MANUAL TAGS ────────────────────────────────────────────
+
+@app.post("/articles/{article_id}/tags")
+def add_tag(article_id: int, body: dict):
+    tag = body.get("tag","").strip()
+    if not tag:
+        raise HTTPException(status_code=400, detail="tag required")
+    add_article_tag(article_id, tag)
+    return {"ok": True}
+
+@app.delete("/articles/{article_id}/tags/{tag}")
+def remove_tag(article_id: int, tag: str):
+    remove_article_tag(article_id, tag)
+    return {"ok": True}
 
 # ── HEALTH ────────────────────────────────────────────────
 

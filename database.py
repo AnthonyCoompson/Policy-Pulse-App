@@ -75,6 +75,12 @@ def init_db():
             articles_added  INTEGER DEFAULT 0,
             errors          TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS watchlist_keywords (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            keyword      TEXT UNIQUE NOT NULL,
+            created_date TEXT
+        );
     """)
 
     # Seed sources if empty
@@ -236,6 +242,55 @@ def update_source_scraped(source_name, count):
     conn.commit()
     conn.close()
 
+
+# ── WATCHLIST KEYWORDS ────────────────────────────────────
+
+def get_watchlist_keywords():
+    conn = get_conn()
+    rows = conn.execute("SELECT keyword FROM watchlist_keywords ORDER BY id").fetchall()
+    conn.close()
+    return [r["keyword"] for r in rows]
+
+def add_watchlist_keyword(keyword):
+    conn = get_conn()
+    try:
+        conn.execute("INSERT INTO watchlist_keywords (keyword, created_date) VALUES (?,?)",
+                     (keyword.strip(), datetime.utcnow().isoformat()))
+        conn.commit()
+        result = True
+    except sqlite3.IntegrityError:
+        result = False
+    finally:
+        conn.close()
+    return result
+
+def remove_watchlist_keyword(keyword):
+    conn = get_conn()
+    conn.execute("DELETE FROM watchlist_keywords WHERE keyword = ?", (keyword,))
+    conn.commit()
+    conn.close()
+
+# ── MANUAL TAGS ────────────────────────────────────────────
+
+def add_article_tag(article_id, tag):
+    conn = get_conn()
+    row = conn.execute("SELECT tags FROM articles WHERE id = ?", (article_id,)).fetchone()
+    if row:
+        existing = [t.strip() for t in (row["tags"] or "").split(",") if t.strip()]
+        if tag not in existing:
+            existing.append(tag)
+        conn.execute("UPDATE articles SET tags = ? WHERE id = ?", (",".join(existing), article_id))
+        conn.commit()
+    conn.close()
+
+def remove_article_tag(article_id, tag):
+    conn = get_conn()
+    row = conn.execute("SELECT tags FROM articles WHERE id = ?", (article_id,)).fetchone()
+    if row:
+        existing = [t.strip() for t in (row["tags"] or "").split(",") if t.strip() and t.strip() != tag]
+        conn.execute("UPDATE articles SET tags = ? WHERE id = ?", (",".join(existing), article_id))
+        conn.commit()
+    conn.close()
 
 # ── SOURCES ───────────────────────────────────────────────
 
