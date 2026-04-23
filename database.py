@@ -214,6 +214,24 @@ def update_article_staged(article_id, staged):
     conn.execute("UPDATE articles SET staged = ? WHERE id = ?", (1 if staged else 0, article_id))
     conn.commit()
     conn.close()
+def update_article_content(article_id: int, fields: dict):
+    """
+    Update summary and/or why_it_matters on an article.
+    Called when the frontend regenerates these fields via Gemini.
+    Only updates fields present in the dict.
+    """
+    allowed = {"summary", "why_it_matters"}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return
+    conn = get_conn()
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [article_id]
+    conn.execute(f"UPDATE articles SET {set_clause} WHERE id = ?", values)
+    conn.commit()
+    conn.close()
+
+
 
 
 def log_scrape(articles_added, errors=""):

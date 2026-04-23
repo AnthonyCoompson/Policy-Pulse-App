@@ -1,10 +1,10 @@
 """
 PolicyPulse AI Processor — Gemini API
-Analyzes each article using its FULL TEXT for accurate:
-  - Domain, jurisdiction, relevance, sentiment tagging
-  - 2-3 sentence policy-focused summary (from real content)
-  - "Why It Matters" tailored to BC/Canadian policy professionals
+Analyzes each article for domain, relevance, sentiment, summary, why-it-matters.
 Only keeps articles scoring 6+.
+
+v2: Now accepts full article_text so summaries and why-it-matters are
+    generated from the actual article content, not just the title.
 """
 
 import json
@@ -41,98 +41,91 @@ Urgent | Briefing Note Worthy | UNDRIP | DRIPA | TRC | OCAP | Budget | Funding |
 
 Return ONLY valid JSON. No markdown, no explanation."""
 
-
-# ── PROMPT WHEN WE HAVE FULL ARTICLE BODY ────────────────
-
-ANALYSIS_PROMPT_WITH_BODY = """Analyze this article and return a JSON object with these exact fields:
+# Used when we have the full article body
+ANALYSIS_PROMPT_FULL = """Analyze this article and return a JSON object with these exact fields:
 
 {{
   "domain": "<single domain from list>",
   "jurisdiction": "<single jurisdiction from list>",
-  "relevance": <integer 1-10>,
+  "relevance": <integer 1-10, where 10 = critical for BC/Canada post-secondary/Indigenous policy>,
   "sentiment": "<Critical|Supportive|Neutral toward government policy>",
-  "summary": "<2-3 sentences capturing the key policy facts and decisions from the article body — be specific, cite numbers/names if present>",
-  "why_it_matters": "<1-2 sentences on the concrete implications for a BC university government relations or Indigenous policy team — what action or awareness does this require?>",
+  "summary": "<2-3 sentences summarizing what the article actually says — drawn from the article text, not just the title>",
+  "why_it_matters": "<2-3 sentences on the concrete implications for a BC university government relations team — be specific, not generic>",
   "tags": ["<tag1>", "<tag2>"]
 }}
-
-Relevance scoring guide (relative to BC/Canada post-secondary and Indigenous policy):
-9-10: Critical — directly affects post-secondary funding, Indigenous rights, BC government relations; brief-worthy
-7-8: High — clearly relevant to sector, worth monitoring closely
-6: Moderate — tangentially relevant, include if space allows
-1-5: Low — return exactly: null
 
 TITLE: {title}
 SOURCE: {source}
 URL: {url}
 
-ARTICLE BODY:
-{body}
+ARTICLE TEXT:
+{article_text}
 
-Write the summary and why_it_matters FROM THE ARTICLE BODY above — not just the title.
-If the body is empty or uninformative, base analysis on the title alone but note uncertainty.
+Relevance scoring guide:
+9-10: Critical — directly affects post-secondary funding, Indigenous policy, BC government relations
+7-8: High — relevant to sector, worth monitoring closely
+6: Moderate — tangentially relevant, include if space allows
+1-5: Low relevance — return null
+
 If relevance would be 5 or below, return exactly: null"""
 
-
-# ── PROMPT WHEN WE ONLY HAVE THE TITLE (fallback) ────────
-
+# Fallback when we only have title (no article body fetched)
 ANALYSIS_PROMPT_TITLE_ONLY = """Analyze this article and return a JSON object with these exact fields:
 
 {{
   "domain": "<single domain from list>",
   "jurisdiction": "<single jurisdiction from list>",
-  "relevance": <integer 1-10>,
+  "relevance": <integer 1-10, where 10 = critical for BC/Canada post-secondary/Indigenous policy>,
   "sentiment": "<Critical|Supportive|Neutral toward government policy>",
-  "summary": "<1-2 sentences inferring the likely policy content from the title and source>",
-  "why_it_matters": "<1 sentence on the potential implications for a BC university or Indigenous policy team>",
+  "summary": "<2-3 sentences summarizing the likely policy significance based on the title and source>",
+  "why_it_matters": "<2-3 sentences on the concrete implications for a BC university government relations team>",
   "tags": ["<tag1>", "<tag2>"]
 }}
-
-Relevance scoring guide:
-9-10: Critical
-7-8: High
-6: Moderate
-1-5: return exactly: null
 
 TITLE: {title}
 SOURCE: {source}
 URL: {url}
 
-Note: No article body was available. Base analysis on title and source only.
+Relevance scoring guide:
+9-10: Critical — directly affects post-secondary funding, Indigenous policy, BC government relations
+7-8: High — relevant to sector, worth monitoring closely
+6: Moderate — tangentially relevant, include if space allows
+1-5: Low relevance — return null
+
 If relevance would be 5 or below, return exactly: null"""
 
 
-def analyze_article(
-    title: str,
-    url: str,
-    source_name: str = "",
-    article_body: str = "",
-) -> dict | None:
+def analyze_article(title: str, url: str, source_name: str = "",
+                    article_text: str = "") -> dict | None:
     """
     Call Gemini to analyze an article.
 
-    Now accepts article_body — the full fetched text of the article page.
-    When body is provided, Gemini generates a real summary and why-it-matters
-    grounded in the actual content rather than guessing from the title alone.
+    Args:
+        title:        Article headline.
+        url:          Article URL.
+        source_name:  Name of the source (e.g. "BC Government Newsroom").
+        article_text: Full article body text (optional but strongly recommended).
+                      When provided, summaries and why-it-matters are generated
+                      from real content instead of just the title.
 
-    Returns dict with domain/relevance/sentiment/summary/why_it_matters/tags,
-    or None if relevance < 6 or on persistent error.
+    Returns:
+        dict with domain/relevance/sentiment/summary/why_it_matters/tags,
+        or None if relevance < 6 or on error.
     """
     if not GEMINI_API_KEY:
-        log.warning("GEMINI_API_KEY not set — using keyword-based defaults")
+        log.warning("GEMINI_API_KEY not set — skipping AI analysis, using defaults")
         return _default_analysis(title, source_name)
 
-    # Choose prompt based on whether we have body text
-    has_body = bool(article_body and len(article_body.strip()) > 100)
-
-    if has_body:
-        # Truncate body to keep within token limits (Gemini flash handles ~8k tokens well)
-        body_snippet = article_body.strip()[:3500]
-        prompt = ANALYSIS_PROMPT_WITH_BODY.format(
+    # Choose prompt based on whether we have article body
+    has_text = bool(article_text and len(article_text.strip()) > 150)
+    if has_text:
+        # Trim to ~4000 chars to stay within token limits while giving Gemini enough context
+        trimmed = article_text.strip()[:4000]
+        prompt = ANALYSIS_PROMPT_FULL.format(
             title=title,
             source=source_name,
             url=url,
-            body=body_snippet,
+            article_text=trimmed,
         )
     else:
         prompt = ANALYSIS_PROMPT_TITLE_ONLY.format(
@@ -150,9 +143,9 @@ def analyze_article(
             }
         ],
         "generationConfig": {
-            "temperature": 0.15,
+            "temperature": 0.1,
             "maxOutputTokens": 500,
-        },
+        }
     }
 
     for attempt in range(3):
@@ -168,8 +161,7 @@ def analyze_article(
             text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
 
             # Handle null response (low relevance)
-            if text.lower() in ("null", ""):
-                log.debug(f"AI scored low relevance: {title[:60]}")
+            if text.lower() == "null" or text == "":
                 return None
 
             # Strip markdown fences if present
@@ -182,97 +174,62 @@ def analyze_article(
             if result.get("relevance", 0) < 6:
                 return None
 
-            # Validate summary and why_it_matters are real content, not placeholders
-            summary = result.get("summary", "").strip()
-            why     = result.get("why_it_matters", "").strip()
-
-            # If AI returned empty or trivial strings, fall back gracefully
-            if len(summary) < 20:
-                summary = f"{title} — reported by {source_name}."
-            if len(why) < 20:
-                why = "Review this article for potential relevance to your policy priorities."
-
             return {
-                "domain":          result.get("domain", "Other"),
-                "jurisdiction":    result.get("jurisdiction", "Unknown"),
-                "relevance":       int(result.get("relevance", 6)),
-                "sentiment":       result.get("sentiment", "Neutral"),
-                "summary":         summary,
-                "why_it_matters":  why,
-                "tags":            result.get("tags", []),
+                "domain":         result.get("domain", "Other"),
+                "jurisdiction":   result.get("jurisdiction", "Unknown"),
+                "relevance":      int(result.get("relevance", 6)),
+                "sentiment":      result.get("sentiment", "Neutral"),
+                "summary":        result.get("summary", title),
+                "why_it_matters": result.get("why_it_matters",
+                                             "Review this article for potential relevance to your policy priorities."),
+                "tags":           result.get("tags", []),
             }
 
         except json.JSONDecodeError as e:
-            log.warning(f"JSON parse error attempt {attempt+1}: {e} — raw: {text[:200]}")
+            log.warning(f"JSON parse error on attempt {attempt+1}: {e} — raw: {text[:200]}")
             if attempt < 2:
                 time.sleep(1)
         except requests.RequestException as e:
-            log.warning(f"Gemini API request error attempt {attempt+1}: {e}")
+            log.warning(f"Gemini API request error on attempt {attempt+1}: {e}")
             if attempt < 2:
                 time.sleep(2)
         except (KeyError, IndexError) as e:
             log.warning(f"Gemini response structure error: {e}")
             break
 
-    # All attempts failed — use keyword fallback rather than dropping the article
-    log.warning(f"All Gemini attempts failed for: {title[:60]} — using defaults")
+    # Fallback: use defaults rather than dropping article entirely
     return _default_analysis(title, source_name)
 
 
 def _default_analysis(title: str, source_name: str) -> dict:
-    """
-    Keyword-based fallback when Gemini API is unavailable.
-    Used when GEMINI_API_KEY is not set or all API attempts fail.
-    """
+    """Fallback analysis when AI is unavailable."""
     title_lower = title.lower()
 
-    if any(w in title_lower for w in ["indigenous", "first nations", "métis", "inuit", "reconcili", "dripa", "undrip", "trc", "ocap"]):
-        domain = "Indigenous"
-        jurisdiction = "BC"
-        relevance = 8
-        tags = ["Indigenous", "Reconciliation"]
-    elif any(w in title_lower for w in ["university", "college", "post-secondary", "postsecondary", "tuition", "student", "campus", "academic"]):
-        domain = "Higher Education"
-        jurisdiction = "BC"
-        relevance = 7
-        tags = ["Higher Education"]
-    elif any(w in title_lower for w in ["research", "grant", "sshrc", "nserc", "cihr", "funding", "scholarship"]):
-        domain = "Research Funding"
-        jurisdiction = "Federal"
-        relevance = 7
-        tags = ["Research", "Funding"]
-    elif any(w in title_lower for w in ["budget", "fiscal", "spending", "billion", "million", "deficit", "surplus"]):
-        domain = "Budget"
-        jurisdiction = "Federal"
-        relevance = 6
-        tags = ["Budget"]
-    elif any(w in title_lower for w in ["health", "pharmacare", "mental health", "wellness", "fnha"]):
-        domain = "Health"
-        jurisdiction = "BC"
-        relevance = 6
-        tags = ["Health"]
-    elif any(w in title_lower for w in ["bill", "legislation", "act ", " act", "regulation", "law", "statute"]):
-        domain = "Legislation"
-        jurisdiction = "BC"
-        relevance = 6
-        tags = ["Legislation"]
-    elif any(w in title_lower for w in ["workforce", "labour", "labor", "employment", "jobs", "hiring"]):
-        domain = "Workforce"
-        jurisdiction = "BC"
-        relevance = 6
-        tags = ["Workforce"]
+    if any(w in title_lower for w in ["indigenous", "first nations", "métis", "inuit",
+                                       "reconcili", "dripa", "undrip", "trc"]):
+        domain = "Indigenous"; jurisdiction = "BC"; relevance = 8
+    elif any(w in title_lower for w in ["university", "college", "post-secondary",
+                                         "tuition", "student", "campus"]):
+        domain = "Higher Education"; jurisdiction = "BC"; relevance = 7
+    elif any(w in title_lower for w in ["research", "grant", "sshrc", "nserc",
+                                         "cihr", "funding"]):
+        domain = "Research Funding"; jurisdiction = "Federal"; relevance = 7
+    elif any(w in title_lower for w in ["budget", "fiscal", "spending",
+                                         "billion", "million"]):
+        domain = "Budget"; jurisdiction = "Federal"; relevance = 6
+    elif any(w in title_lower for w in ["health", "pharmacare", "mental health", "wellness"]):
+        domain = "Health"; jurisdiction = "BC"; relevance = 6
+    elif any(w in title_lower for w in ["bill", "legislation", "act", "regulation", "law"]):
+        domain = "Legislation"; jurisdiction = "BC"; relevance = 6
     else:
-        domain = "Other"
-        jurisdiction = "Federal"
-        relevance = 6
-        tags = []
+        domain = "Other"; jurisdiction = "Federal"; relevance = 6
 
     return {
         "domain":         domain,
         "jurisdiction":   jurisdiction,
         "relevance":      relevance,
         "sentiment":      "Neutral",
-        "summary":        f"{title} — reported by {source_name}. Review for full details.",
-        "why_it_matters": "This article may be relevant to your policy portfolio. Review directly to assess impact.",
-        "tags":           tags,
+        "summary":        f"{title} — from {source_name}.",
+        "why_it_matters": "Review this article for potential relevance to your policy priorities.",
+        "tags":           [],
     }
