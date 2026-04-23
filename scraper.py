@@ -1,13 +1,15 @@
 """
-PolicyPulse Scraper v2
+PolicyPulse Scraper v3
 - Scrapes 20 fixed government/education sources
 - ALSO scrapes Google News RSS for each watchlist keyword
-- Processes each article through Gemini AI (relevance >= 6 kept)
+- Fetches full article body text before AI analysis
+- Passes full text to AI for real summaries and why-it-matters
 """
 
 import hashlib
 import logging
 import os
+import re
 import time
 from datetime import datetime
 from urllib.parse import urljoin, quote_plus
@@ -33,72 +35,206 @@ HEADERS = {
     "Accept-Language": "en-CA,en;q=0.9",
 }
 REQUEST_TIMEOUT = 15
+ARTICLE_FETCH_TIMEOUT = 12   # slightly shorter for individual article fetches
 DELAY_BETWEEN_SOURCES = 1.5
+DELAY_BETWEEN_ARTICLES = 0.4  # small delay between article body fetches
+MAX_ARTICLE_CHARS = 4000      # truncate body text passed to AI to keep tokens low
 
+
+# ── ARTICLE BODY FETCHER ──────────────────────────────────
+
+# Tags that are never useful content
+_BOILERPLATE_TAGS = {
+    "script", "style", "noscript", "nav", "header", "footer",
+    "aside", "form", "button", "iframe", "svg", "figure",
+    "figcaption", "advertisement", "banner",
+}
+
+# CSS class/id fragments that signal navigation/boilerplate
+_BOILERPLATE_HINTS = [
+    "nav", "menu", "sidebar", "footer", "header", "cookie",
+    "subscribe", "newsletter", "share", "social", "related",
+    "comment", "breadcrumb", "pagination", "advertisement",
+    "promo", "banner", "skip", "search",
+]
+
+
+def _is_boilerplate(tag):
+    """Return True if a BeautifulSoup tag looks like navigation/boilerplate."""
+    classes = " ".join(tag.get("class", [])).lower()
+    id_val  = (tag.get("id") or "").lower()
+    combined = classes + " " + id_val
+    return any(h in combined for h in _BOILERPLATE_HINTS)
+
+
+def fetch_article_body(url: str) -> str:
+    """
+    Fetch the full text of an article page.
+    Returns up to MAX_ARTICLE_CHARS of clean body text, or "" on failure.
+    """
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=ARTICLE_FETCH_TIMEOUT)
+        resp.raise_for_status()
+
+        # Only process HTML
+        content_type = resp.headers.get("Content-Type", "")
+        if "html" not in content_type and "text" not in content_type:
+            return ""
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Remove boilerplate tags entirely
+        for tag in soup.find_all(_BOILERPLATE_TAGS):
+            tag.decompose()
+
+        # Remove boilerplate elements by class/id
+        for tag in soup.find_all(True):
+            if _is_boilerplate(tag):
+                tag.decompose()
+
+        # Try semantic content containers first (best quality)
+        body_text = ""
+        for selector in [
+            "article", "main", "[role='main']",
+            ".article-body", ".entry-content", ".post-content",
+            ".field-body", ".node-content", ".content-body",
+            ".article-content", ".story-body", ".news-body",
+            "#content", ".content", ".main-content",
+        ]:
+            el = soup.select_one(selector)
+            if el:
+                body_text = el.get_text(separator=" ", strip=True)
+                if len(body_text) > 200:  # meaningful content found
+                    break
+
+        # Fallback: whole body
+        if len(body_text) < 200:
+            body_text = soup.get_text(separator=" ", strip=True)
+
+        # Clean up whitespace
+        body_text = re.sub(r"\s{2,}", " ", body_text).strip()
+
+        return body_text[:MAX_ARTICLE_CHARS]
+
+    except Exception as e:
+        log.debug(f"Body fetch failed [{url[:60]}]: {e}")
+        return ""
+
+
+# ── RSS SCRAPER ───────────────────────────────────────────
 
 def scrape_rss(url, source_name, extra_tag=None):
+    """
+    Parse an RSS/Atom feed.
+    Also extracts the <description> or <content> field as a body hint —
+    RSS summaries are usually 1-2 sentences but better than nothing.
+    """
     articles = []
     try:
         resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.content, "xml")
         items = soup.find_all("item") or soup.find_all("entry")
+
         for item in items[:20]:
-            title_el = item.find("title")
-            link_el  = item.find("link")
-            pub_el   = item.find("pubDate") or item.find("published") or item.find("updated")
+            title_el   = item.find("title")
+            link_el    = item.find("link")
+            pub_el     = item.find("pubDate") or item.find("published") or item.find("updated")
+            # Try to get RSS description/summary as a body hint
+            desc_el    = (item.find("content:encoded") or item.find("content")
+                          or item.find("description") or item.find("summary"))
+
             if not title_el:
                 continue
+
             title = title_el.get_text(strip=True)
-            link  = (link_el.get_text(strip=True) or link_el.get("href","")) if link_el else ""
+            link  = (link_el.get_text(strip=True) or link_el.get("href", "")) if link_el else ""
             pub_date = datetime.utcnow().date().isoformat()
+
             if pub_el:
                 raw = pub_el.get_text(strip=True)
-                for fmt in ["%a, %d %b %Y %H:%M:%S %z","%a, %d %b %Y %H:%M:%S GMT","%Y-%m-%dT%H:%M:%S%z","%Y-%m-%d"]:
+                for fmt in [
+                    "%a, %d %b %Y %H:%M:%S %z",
+                    "%a, %d %b %Y %H:%M:%S GMT",
+                    "%Y-%m-%dT%H:%M:%S%z",
+                    "%Y-%m-%d",
+                ]:
                     try:
                         pub_date = datetime.strptime(raw[:25], fmt).date().isoformat()
                         break
                     except ValueError:
                         pass
+
+            # Extract RSS body hint (strip HTML tags)
+            rss_body = ""
+            if desc_el:
+                raw_desc = desc_el.get_text(separator=" ", strip=True)
+                rss_body = re.sub(r"\s{2,}", " ", raw_desc).strip()[:1000]
+
             if title and link and len(title) > 10:
-                art = {"title": title, "url": link, "pub_date": pub_date}
+                art = {
+                    "title":    title,
+                    "url":      link,
+                    "pub_date": pub_date,
+                    "rss_body": rss_body,  # body hint from RSS feed
+                }
                 if extra_tag:
                     art["forced_tag"] = extra_tag
                 articles.append(art)
+
     except Exception as e:
         log.warning(f"RSS error [{source_name}]: {e}")
+
     return articles
 
 
+# ── HTML INDEX SCRAPER ────────────────────────────────────
+
 def scrape_generic(url, source_name, base_url=None):
+    """Scrape a news index page for article links/titles."""
     articles = []
     try:
         resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
-        selectors = ["article h2 a","article h3 a",".news-item a",".news-title a",
-                     ".views-row a",".field-content a","h2.title a","h3.title a",
-                     ".entry-title a",".post-title a","h2 a","h3 a"]
+
+        selectors = [
+            "article h2 a", "article h3 a",
+            ".news-item a", ".news-title a",
+            ".views-row a", ".field-content a",
+            "h2.title a", "h3.title a",
+            ".entry-title a", ".post-title a",
+            "h2 a", "h3 a",
+        ]
         seen = set()
         for sel in selectors:
             for el in soup.select(sel)[:20]:
                 title = el.get_text(strip=True)
-                href  = el.get("href","")
+                href  = el.get("href", "")
                 if not title or len(title) < 15 or href in seen:
                     continue
-                if any(w in title.lower() for w in ["home","about","contact","menu","search","login","sign in"]):
+                if any(w in title.lower() for w in ["home", "about", "contact", "menu", "search", "login", "sign in"]):
                     continue
                 if href and not href.startswith("http"):
                     href = urljoin(base_url or url, href)
                 if href and title:
                     seen.add(href)
-                    articles.append({"title": title, "url": href, "pub_date": datetime.utcnow().date().isoformat()})
+                    articles.append({
+                        "title":    title,
+                        "url":      href,
+                        "pub_date": datetime.utcnow().date().isoformat(),
+                        "rss_body": "",
+                    })
             if len(articles) >= 12:
                 break
+
     except Exception as e:
         log.warning(f"HTML scrape error [{source_name}]: {e}")
+
     return articles[:12]
 
+
+# ── GOOGLE NEWS ───────────────────────────────────────────
 
 def build_google_news_url(keyword, region="CA", lang="en"):
     q = quote_plus(keyword + " Canada policy")
@@ -123,38 +259,41 @@ def scrape_google_news_keywords(keywords):
     return all_articles
 
 
+# ── SOURCE MAPS ───────────────────────────────────────────
+
 RSS_SOURCES = {
-    "University Affairs Canada":           "https://www.universityaffairs.ca/feed/",
-    "Policy Options (IRPP)":               "https://policyoptions.irpp.org/feed/",
-    "Maclean's Education":                 "https://www.macleans.ca/education/feed/",
-    "Universities Canada":                 "https://www.univcan.ca/feed/",
-    "Higher Education Strategy Associates":"https://higheredstrategy.com/feed/",
-    "Times Higher Education":              "https://www.timeshighereducation.com/rss.xml",
+    "University Affairs Canada":            "https://www.universityaffairs.ca/feed/",
+    "Policy Options (IRPP)":                "https://policyoptions.irpp.org/feed/",
+    "Maclean's Education":                  "https://www.macleans.ca/education/feed/",
+    "Universities Canada":                  "https://www.univcan.ca/feed/",
+    "Higher Education Strategy Associates": "https://higheredstrategy.com/feed/",
+    "Times Higher Education":               "https://www.timeshighereducation.com/rss.xml",
 }
 
 HTML_SOURCES = {
-    "BC Government Newsroom":                       ("https://news.gov.bc.ca/","https://news.gov.bc.ca/"),
-    "BC Ministry of Post-Secondary Education":      ("https://news.gov.bc.ca/ministries/post-secondary-education-and-future-skills","https://news.gov.bc.ca/"),
-    "BC Indigenous Relations & Reconciliation":     ("https://news.gov.bc.ca/ministries/indigenous-relations-reconciliation","https://news.gov.bc.ca/"),
-    "BC First Nations Summit":                      ("https://fns.bc.ca/news/","https://fns.bc.ca/"),
-    "First Nations Health Authority":               ("https://www.fnha.ca/about/news-and-events/news","https://www.fnha.ca/"),
-    "Crown-Indigenous Relations Canada":            ("https://www.canada.ca/en/crown-indigenous-relations-northern-affairs/news.html","https://www.canada.ca/"),
-    "Government of Canada — Education":             ("https://www.canada.ca/en/employment-social-development/news.html","https://www.canada.ca/"),
-    "Innovation, Science and Economic Development Canada": ("https://www.canada.ca/en/innovation-science-economic-development/news.html","https://www.canada.ca/"),
-    "SSHRC News":                                   ("https://www.sshrc-crsh.gc.ca/news_room-salle_des_nouvelles/latest_news-nouvelles_recentes-eng.aspx","https://www.sshrc-crsh.gc.ca/"),
-    "NSERC News":                                   ("https://www.nserc-crsng.gc.ca/Media-Media/NewsReleases-CommuniquesDePresse_eng.asp","https://www.nserc-crsng.gc.ca/"),
-    "CIHR News":                                    ("https://cihr-irsc.gc.ca/e/51999.html","https://cihr-irsc.gc.ca/"),
-    "Burnaby City Hall News":                       ("https://www.burnaby.ca/city-hall/news","https://www.burnaby.ca/"),
-    "BC Legislature News":                          ("https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings","https://www.leg.bc.ca/"),
+    "BC Government Newsroom":                            ("https://news.gov.bc.ca/", "https://news.gov.bc.ca/"),
+    "BC Ministry of Post-Secondary Education":           ("https://news.gov.bc.ca/ministries/post-secondary-education-and-future-skills", "https://news.gov.bc.ca/"),
+    "BC Indigenous Relations & Reconciliation":          ("https://news.gov.bc.ca/ministries/indigenous-relations-reconciliation", "https://news.gov.bc.ca/"),
+    "BC First Nations Summit":                           ("https://fns.bc.ca/news/", "https://fns.bc.ca/"),
+    "First Nations Health Authority":                    ("https://www.fnha.ca/about/news-and-events/news", "https://www.fnha.ca/"),
+    "Crown-Indigenous Relations Canada":                 ("https://www.canada.ca/en/crown-indigenous-relations-northern-affairs/news.html", "https://www.canada.ca/"),
+    "Government of Canada — Education":                  ("https://www.canada.ca/en/employment-social-development/news.html", "https://www.canada.ca/"),
+    "Innovation, Science and Economic Development Canada": ("https://www.canada.ca/en/innovation-science-economic-development/news.html", "https://www.canada.ca/"),
+    "SSHRC News":                                        ("https://www.sshrc-crsh.gc.ca/news_room-salle_des_nouvelles/latest_news-nouvelles_recentes-eng.aspx", "https://www.sshrc-crsh.gc.ca/"),
+    "NSERC News":                                        ("https://www.nserc-crsng.gc.ca/Media-Media/NewsReleases-CommuniquesDePresse_eng.asp", "https://www.nserc-crsng.gc.ca/"),
+    "CIHR News":                                         ("https://cihr-irsc.gc.ca/e/51999.html", "https://cihr-irsc.gc.ca/"),
+    "Burnaby City Hall News":                            ("https://www.burnaby.ca/city-hall/news", "https://www.burnaby.ca/"),
+    "BC Legislature News":                               ("https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings", "https://www.leg.bc.ca/"),
 }
 
+
+# ── MAIN SCRAPE RUNNER ────────────────────────────────────
 
 def run_scrape():
     log.info("=== PolicyPulse scrape started ===")
     total_added = 0
     all_errors  = []
 
-    # Fixed sources
     sources = get_sources()
     for source in [s for s in sources if s["active"]]:
         name = source["name"]
@@ -167,13 +306,16 @@ def run_scrape():
                 raw = scrape_generic(url, name, base)
             else:
                 raw = scrape_generic(source["url"], name)
+
             added = _process_and_save(raw, source)
             total_added += added
             update_source_scraped(name, added)
             log.info(f"  -> {added} new articles")
+
         except Exception as e:
             all_errors.append(f"{name}: {e}")
             log.error(f"Error [{name}]: {e}")
+
         time.sleep(DELAY_BETWEEN_SOURCES)
 
     # Google News keyword scraping
@@ -207,12 +349,33 @@ def _process_and_save(raw_articles, source, relevance_boost=0):
         url        = (raw.get("url")   or "").strip()
         pub_date   = raw.get("pub_date", datetime.utcnow().date().isoformat())
         forced_tag = raw.get("forced_tag")
+        rss_body   = raw.get("rss_body", "")
 
         if not title or not url or len(title) < 10:
             continue
 
+        # ── STEP 1: Fetch full article body ──────────────
+        # Use RSS body as a starting point; try to fetch full page on top of it
+        log.debug(f"  Fetching body: {url[:70]}")
+        full_body = fetch_article_body(url)
+
+        # Prefer full body; fall back to RSS body if fetch failed or returned little
+        article_text = full_body if len(full_body) > len(rss_body) else rss_body
+
+        if not article_text:
+            log.debug(f"  No body text retrieved for: {title[:60]}")
+            # Still proceed — AI will work from title alone as last resort
+
+        time.sleep(DELAY_BETWEEN_ARTICLES)
+
+        # ── STEP 2: AI analysis with full text ───────────
         url_hash = hashlib.sha256(url.encode()).hexdigest()
-        ai = analyze_article(title, url, source_name=source_name)
+        ai = analyze_article(
+            title=title,
+            url=url,
+            source_name=source_name,
+            article_body=article_text,   # ← now passing actual content
+        )
         if ai is None:
             continue
 
