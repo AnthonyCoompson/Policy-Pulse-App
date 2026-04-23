@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PolicyPulse — Policy Intelligence Platform by Anthony Coompson</title>
+<meta name="description" content="AI-powered policy intelligence for BC and Canadian government relations professionals. Monitor, analyze, and act on policy news.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-CFP7HCN7ZG"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-CFP7HCN7ZG');</script>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink: #0a0f1a;
+  --ink2: #1a2540;
+  --ink3: #2a3a5c;
+  --mist: #8a9bbf;
+  --pale: #c8d4e8;
+  --paper: #f2f5fa;
+  --white: #ffffff;
+  --gold: #b8860b;
+  --gold-light: #d4a017;
+  --teal: #006d77;
+  --teal-light: #0097a7;
+  --accent: #c41e3a;
+  --accent-dim: rgba(196,30,58,0.08);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--ink);
+  color: var(--white);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── GRAIN TEXTURE ── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: .4;
+}
+
+/* ── NAV ── */
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 48px;
+  background: rgba(10,15,26,0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+}
+.nav-logo-mark {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #00c2ff, #1d4ed8);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 0 20px rgba(0,194,255,0.3);
+}
+.nav-logo-text {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--white);
+  letter-spacing: 0.01em;
+}
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  list-style: none;
+}
+.nav-links a {
+  color: var(--mist);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--white); }
+.nav-cta {
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  color: var(--white) !important;
+  padding: 9px 22px;
+  border-radius: 8px;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 16px rgba(37,99,235,0.35);
+  transition: box-shadow 0.2s !important;
+}
+.nav-cta:hover { box-shadow: 0 6px 24px rgba(37,99,235,0.55) !important; color: var(--white) !important; }
+
+/* ── HERO ── */
+#hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  padding: 120px 48px 80px;
+}
+
+/* Animated background elements */
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.hero-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  animation: drift 20s ease-in-out infinite;
+}
+.hero-orb-1 {
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(0,194,255,0.08), transparent 70%);
+  top: -200px; left: -100px;
+  animation-delay: 0s;
+}
+.hero-orb-2 {
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, rgba(29,78,216,0.1), transparent 70%);
+  bottom: -150px; right: -100px;
+  animation-delay: -7s;
+}
+.hero-orb-3 {
+  width: 300px; height: 300px;
+  background: radial-gradient(circle, rgba(184,134,11,0.06), transparent 70%);
+  top: 40%; left: 50%;
+  animation-delay: -14s;
+}
+@keyframes drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -20px) scale(1.05); }
+  66% { transform: translate(-20px, 30px) scale(0.95); }
+}
+
+/* Grid overlay */
+.hero-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+}
+
+.hero-inner {
+  position: relative;
+  z-index: 2;
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,194,255,0.08);
+  border: 1px solid rgba(0,194,255,0.2);
+  border-radius: 24px;
+  padding: 6px 16px;
+  margin-bottom: 28px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #00c2ff;
+  animation: fadeUp 0.8s ease forwards;
+  opacity: 0;
+}
+.hero-live-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: pulse-live 2s infinite;
+}
+@keyframes pulse-live { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.hero-headline {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(52px, 8vw, 96px);
+  font-weight: 700;
+  line-height: 1.0;
+  letter-spacing: -0.02em;
+  color: var(--white);
+  margin-bottom: 10px;
+  animation: fadeUp 0.8s 0.1s ease forwards;
+  opacity: 0;
+}
+.hero-headline em {
+  font-style: italic;
+  font-weight: 300;
+  color: rgba(255,255,255,0.5);
+}
+.hero-headline-accent {
+  display: block;
+  background: linear-gradient(90deg, #00c2ff 0%, #b8860b 60%, #00c2ff 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer-text 4s linear infinite, fadeUp 0.8s 0.2s ease forwards;
+  opacity: 0;
+}
+@keyframes shimmer-text { to { background-position: 200% center; } }
+
+.hero-sub {
+  font-size: clamp(15px, 2vw, 19px);
+  color: var(--mist);
+  line-height: 1.75;
+  max-width: 580px;
+  margin-bottom: 44px;
+  font-weight: 300;
+  animation: fadeUp 0.8s 0.3s ease forwards;
+  opacity: 0;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  animation: fadeUp 0.8s 0.4s ease forwards;
+  opacity: 0;
+}
+.btn-primary-hero {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  color: var(--white);
+  padding: 15px 32px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 4px 24px rgba(37,99,235,0.45);
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+.btn-primary-hero:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(37,99,235,0.6); }
+.btn-secondary-hero {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--pale);
+  padding: 15px 28px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+.btn-secondary-hero:hover { background: rgba(255,255,255,0.09); color: var(--white); border-color: rgba(255,255,255,0.2); }
+
+/* Hero stats strip */
+.hero-stats {
+  display: flex;
+  gap: 40px;
+  margin-top: 72px;
+  padding-top: 32px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  flex-wrap: wrap;
+  animation: fadeUp 0.8s 0.5s ease forwards;
+  opacity: 0;
+}
+.hero-stat-num {
+  font-family: 'DM Mono', monospace;
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--white);
+  letter-spacing: -0.02em;
+}
+.hero-stat-num span { color: #00c2ff; }
+.hero-stat-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mist);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── DIVIDER ── */
+.divider {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+}
+
+/* ── SECTION BASE ── */
+section {
+  padding: 100px 48px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+.section-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #00c2ff;
+  margin-bottom: 14px;
+}
+.section-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(36px, 5vw, 56px);
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--white);
+  letter-spacing: -0.01em;
+  margin-bottom: 18px;
+}
+.section-title em {
+  font-style: italic;
+  font-weight: 300;
+  color: rgba(255,255,255,0.45);
+}
+.section-body {
+  font-size: 16px;
+  color: var(--mist);
+  line-height: 1.8;
+  font-weight: 300;
+  max-width: 560px;
+}
+
+/* ── FEATURES SECTION ── */
+#features { padding: 100px 48px; }
+.features-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: end;
+  margin-bottom: 64px;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  overflow: hidden;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.feature-card {
+  background: #0d1424;
+  padding: 36px 32px;
+  transition: background 0.25s;
+  position: relative;
+  overflow: hidden;
+}
+.feature-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #00c2ff, transparent);
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.feature-card:hover { background: #111a2e; }
+.feature-card:hover::before { opacity: 1; }
+.feature-icon {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  margin-bottom: 18px;
+  position: relative;
+}
+.feature-icon-bg-blue { background: rgba(29,78,216,0.15); border: 1px solid rgba(29,78,216,0.2); }
+.feature-icon-bg-teal { background: rgba(0,109,119,0.15); border: 1px solid rgba(0,109,119,0.2); }
+.feature-icon-bg-gold { background: rgba(184,134,11,0.15); border: 1px solid rgba(184,134,11,0.2); }
+.feature-icon-bg-green { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.18); }
+.feature-icon-bg-red { background: rgba(196,30,58,0.1); border: 1px solid rgba(196,30,58,0.18); }
+.feature-icon-bg-cyan { background: rgba(0,194,255,0.1); border: 1px solid rgba(0,194,255,0.18); }
+.feature-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--white);
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
+}
+.feature-desc {
+  font-size: 13px;
+  color: var(--mist);
+  line-height: 1.7;
+  font-weight: 300;
+}
+.feature-tag {
+  display: inline-flex;
+  margin-top: 14px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 4px;
+  background: rgba(0,194,255,0.08);
+  color: #00c2ff;
+  border: 1px solid rgba(0,194,255,0.15);
+}
+
+/* ── HOW IT WORKS ── */
+#how {
+  background: linear-gradient(180deg, transparent, rgba(29,78,216,0.04), transparent);
+}
+.how-steps {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.steps-list { display: flex; flex-direction: column; gap: 0; }
+.step-item {
+  display: flex;
+  gap: 24px;
+  padding: 28px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.step-item:last-child { border-bottom: none; }
+.step-item:hover .step-title { color: #00c2ff; }
+.step-num-large {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mist);
+  letter-spacing: 0.1em;
+  width: 28px;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+.step-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--white);
+  margin-bottom: 6px;
+  transition: color 0.2s;
+  letter-spacing: -0.01em;
+}
+.step-desc {
+  font-size: 13px;
+  color: var(--mist);
+  line-height: 1.7;
+  font-weight: 300;
+}
+.how-visual {
+  background: linear-gradient(135deg, rgba(13,20,36,0.9), rgba(17,26,46,0.8));
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 20px;
+  padding: 36px;
+  backdrop-filter: blur(12px);
+  position: relative;
+  overflow: hidden;
+}
+.how-visual::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #00c2ff, #b8860b, #00c2ff, transparent);
+  opacity: 0.6;
+}
+.how-visual-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #00c2ff;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pulse-dot { width: 6px; height: 6px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981; animation: pulse-live 2s infinite; }
+.mock-article {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  position: relative;
+}
+.mock-article::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 3px 0 0 3px; }
+.mock-article.high::before { background: #10b981; }
+.mock-article.med::before { background: #f59e0b; }
+.mock-tag { display: inline-flex; font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 4px; margin-right: 5px; margin-bottom: 7px; letter-spacing: 0.06em; text-transform: uppercase; }
+.tag-ind { background: rgba(29,78,216,0.15); color: #60a5fa; border: 1px solid rgba(29,78,216,0.2); }
+.tag-bc { background: rgba(184,134,11,0.12); color: #fbbf24; border: 1px solid rgba(184,134,11,0.2); }
+.tag-fed { background: rgba(16,185,129,0.1); color: #34d399; border: 1px solid rgba(16,185,129,0.2); }
+.mock-title { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.85); margin-bottom: 5px; line-height: 1.4; }
+.mock-meta { font-size: 10px; color: rgba(255,255,255,0.35); font-family: 'DM Mono', monospace; display: flex; align-items: center; gap: 8px; }
+.relevance-dot { font-size: 10px; font-weight: 700; color: #f59e0b; }
+
+/* ── ABOUT SECTION ── */
+#about {
+  padding: 100px 48px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.about-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+}
+.about-card {
+  background: linear-gradient(135deg, rgba(13,20,36,0.9), rgba(17,26,46,0.8));
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 20px;
+  padding: 48px 44px;
+  position: relative;
+  overflow: hidden;
+}
+.about-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #b8860b, transparent);
+}
+.about-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--white);
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+.about-role {
+  font-size: 13px;
+  color: #b8860b;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 24px;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+.about-bio {
+  font-size: 14px;
+  color: var(--mist);
+  line-height: 1.85;
+  font-weight: 300;
+  margin-bottom: 28px;
+}
+.about-expertise {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.expertise-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--pale);
+  letter-spacing: 0.02em;
+}
+.about-content .section-body {
+  margin-bottom: 24px;
+}
+.about-content blockquote {
+  border-left: 3px solid #b8860b;
+  padding-left: 20px;
+  margin: 28px 0;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px;
+  font-weight: 400;
+  font-style: italic;
+  color: rgba(255,255,255,0.7);
+  line-height: 1.6;
+}
+
+/* ── POLICY DOMAINS ── */
+#domains {
+  padding: 80px 48px;
+  background: rgba(0,0,0,0.2);
+}
+.domains-inner { max-width: 1200px; margin: 0 auto; }
+.domains-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 36px;
+  font-weight: 600;
+  color: var(--white);
+  text-align: center;
+  margin-bottom: 48px;
+}
+.domains-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+.domain-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 50px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  font-size: 13px;
+  color: var(--pale);
+  font-weight: 400;
+  transition: all 0.2s;
+  cursor: default;
+}
+.domain-pill:hover { background: rgba(0,194,255,0.08); border-color: rgba(0,194,255,0.2); color: #00c2ff; }
+.domain-pill-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── CTA SECTION ── */
+#cta {
+  padding: 100px 48px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.cta-inner { max-width: 700px; margin: 0 auto; position: relative; z-index: 2; }
+.cta-bg-glow {
+  position: absolute;
+  width: 600px; height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(29,78,216,0.12), transparent 70%);
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  pointer-events: none;
+}
+.cta-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(40px,6vw,64px);
+  font-weight: 700;
+  color: var(--white);
+  line-height: 1.1;
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+}
+.cta-sub {
+  font-size: 16px;
+  color: var(--mist);
+  line-height: 1.75;
+  margin-bottom: 40px;
+  font-weight: 300;
+}
+.cta-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+/* ── FOOTER ── */
+footer {
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding: 40px 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.footer-logo-mark {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #00c2ff, #1d4ed8);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+}
+.footer-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--white);
+}
+.footer-right {
+  font-size: 12px;
+  color: var(--mist);
+}
+
+/* ── SCROLL REVEAL ── */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── MOBILE ── */
+@media (max-width: 768px) {
+  nav { padding: 16px 20px; }
+  .nav-links { display: none; }
+  #hero, section, #features, #how, #about, #domains, #cta { padding-left: 20px; padding-right: 20px; }
+  .features-header, .how-steps, .about-grid { grid-template-columns: 1fr; gap: 40px; }
+  .features-grid { grid-template-columns: 1fr; }
+  .hero-stats { gap: 24px; }
+  footer { flex-direction: column; text-align: center; padding: 28px 20px; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">
+    <div class="nav-logo-mark">&#x1F4E1;</div>
+    <span class="nav-logo-text">PolicyPulse</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#how">How It Works</a></li>
+    <li><a href="#about">About</a></li>
+    <li><a href="#domains">Policy Domains</a></li>
+    <li><a href="app.html?enter=1" class="nav-cta">Enter App &rarr;</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="hero-bg">
+    <div class="hero-orb hero-orb-1"></div>
+    <div class="hero-orb hero-orb-2"></div>
+    <div class="hero-orb hero-orb-3"></div>
+    <div class="hero-grid"></div>
+  </div>
+  <div class="hero-inner">
+    <div class="hero-eyebrow">
+      <span class="hero-live-dot"></span>
+      AI&#x2011;Powered Policy Intelligence &bull; BC &amp; Canada
+    </div>
+    <h1 class="hero-headline">
+      Policy intelligence,<br>
+      <em>finally</em>
+      <span class="hero-headline-accent">automated.</span>
+    </h1>
+    <p class="hero-sub">
+      PolicyPulse monitors 20+ government sources daily, analyzes every article with AI, and assembles your weekly briefing — so you spend time on policy, not monitoring.
+    </p>
+    <div class="hero-actions">
+      <a href="app.html?enter=1" class="btn-primary-hero">
+        Enter PolicyPulse &rarr;
+      </a>
+      <a href="#features" class="btn-secondary-hero">
+        Explore Features
+      </a>
+    </div>
+    <div class="hero-stats">
+      <div>
+        <div class="hero-stat-num">20<span>+</span></div>
+        <div class="hero-stat-label">Gov&rsquo;t Sources</div>
+      </div>
+      <div>
+        <div class="hero-stat-num">3<span>+</span></div>
+        <div class="hero-stat-label">Citation Formats</div>
+      </div>
+      <div>
+        <div class="hero-stat-num">1<span>–10</span></div>
+        <div class="hero-stat-label">AI Relevance Scoring</div>
+      </div>
+      <div>
+        <div class="hero-stat-num">0<span>$</span></div>
+        <div class="hero-stat-label">Cost to Run</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- FEATURES -->
+<section id="features" style="padding:100px 48px;max-width:100%">
+  <div class="features-header">
+    <div>
+      <div class="section-eyebrow">Platform Features</div>
+      <div class="section-title">Everything a government<br>relations team <em>needs</em></div>
+    </div>
+    <p class="section-body">Built specifically for BC and Canadian policy professionals. Every feature is designed around the daily realities of government relations work — not generic news monitoring.</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card reveal">
+      <div class="feature-icon feature-icon-bg-cyan">&#x1F4E1;</div>
+      <div class="feature-title">Live Policy Scraper</div>
+      <div class="feature-desc">Monitors BC Legislature, BC Ministries, FNHA, SSHRC, NSERC, CIHR, Crown-Indigenous Relations, and 15 more sources daily. Google News keyword feeds extend coverage to the entire internet.</div>
+      <div class="feature-tag">Automated Daily</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon feature-icon-bg-blue">&#x1F916;</div>
+      <div class="feature-title">AI Article Analysis</div>
+      <div class="feature-desc">Every article is scored 1&#x2013;10 for relevance, tagged by domain and jurisdiction, analyzed for sentiment (Critical/Supportive/Neutral), and summarized with a &ldquo;Why It Matters&rdquo; field for your institution.</div>
+      <div class="feature-tag">Groq AI &bull; Llama 3</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon feature-icon-bg-gold">&#x1F4C4;</div>
+      <div class="feature-title">Digest Builder</div>
+      <div class="feature-desc">Stage articles into structured sections: Headline of the Week, Federal Policy Watch, Provincial Policy Watch, Regulatory & Funding Updates, and On Our Radar. Export as PDF or send by email.</div>
+      <div class="feature-tag">Print-Ready PDF</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon feature-icon-bg-teal">&#x1F4DA;</div>
+      <div class="feature-title">Citations & Bibliography</div>
+      <div class="feature-desc">Auto-generate properly formatted APA 7th, MLA 9th, and Chicago 17th citations for any article. AI-refines formatting for academic precision. Export as formatted PDF bibliography.</div>
+      <div class="feature-tag">APA &bull; MLA &bull; Chicago</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon feature-icon-bg-green">&#x1F4AC;</div>
+      <div class="feature-title">Ask AI</div>
+      <div class="feature-desc">Chat with Groq AI about your article database in natural language. Ask what should go in this week&rsquo;s digest, get briefings on reconciliation news, or surface the most urgent items for your team.</div>
+      <div class="feature-tag">Context-Aware Queries</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon feature-icon-bg-red">&#x1F50D;</div>
+      <div class="feature-title">Advanced Filtering</div>
+      <div class="feature-desc">Filter by domain, jurisdiction, source, sentiment, or custom tag. Keyword watchlist drives targeted Google News searches. Save search configurations for one-click recall.</div>
+      <div class="feature-tag">Saved Searches</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- HOW IT WORKS -->
+<section id="how" style="padding:100px 48px;max-width:100%">
+  <div class="how-steps" style="max-width:1200px;margin:0 auto">
+    <div>
+      <div class="section-eyebrow">Workflow</div>
+      <div class="section-title">From news to<br><em>briefing</em> in minutes</div>
+      <p class="section-body" style="margin-bottom:40px">PolicyPulse replaces hours of manual monitoring with an automated intelligence pipeline that surfaces only what matters.</p>
+      <div class="steps-list">
+        <div class="step-item">
+          <div class="step-num-large">01</div>
+          <div>
+            <div class="step-title">Automated Daily Scrape</div>
+            <div class="step-desc">The backend scrapes 20+ sources at 7am daily. Your keyword watchlist drives additional Google News searches across the internet.</div>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num-large">02</div>
+          <div>
+            <div class="step-title">AI Relevance Filtering</div>
+            <div class="step-desc">Groq AI scores each article 1&#x2013;10 for relevance to your field. Only articles scoring 6+ are stored — eliminating irrelevant noise automatically.</div>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num-large">03</div>
+          <div>
+            <div class="step-title">Review & Curate</div>
+            <div class="step-desc">Articles appear in your feed with AI summaries, sentiment tags, and &ldquo;Why It Matters&rdquo; analysis. Stage key articles to your digest with one click.</div>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num-large">04</div>
+          <div>
+            <div class="step-title">Publish Your Briefing</div>
+            <div class="step-desc">Export a formatted PDF briefing note, send by email to subscribers, or share a read-only public link — all from the Digest tab.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="how-visual">
+        <div class="how-visual-title">
+          <span class="pulse-dot"></span>
+          Live Article Feed
+        </div>
+        <div class="mock-article high">
+          <div>
+            <span class="mock-tag tag-ind">Indigenous</span>
+            <span class="mock-tag tag-bc">BC</span>
+          </div>
+          <div class="mock-title">DRIPA Action Plan Year 3 Progress Report Released</div>
+          <div class="mock-meta">
+            <span>Indigenous Relations &amp; Reconciliation</span>
+            <span class="relevance-dot">&#x1F525; 9/10</span>
+            <span>&#x1F7E2; Today</span>
+          </div>
+        </div>
+        <div class="mock-article high">
+          <div>
+            <span class="mock-tag tag-fed">Federal</span>
+            <span class="mock-tag" style="background:rgba(244,63,94,0.1);color:#fb7185;border:1px solid rgba(244,63,94,0.2)">&#x1F534; Critical</span>
+          </div>
+          <div class="mock-title">Federal Budget 2026: Post-Secondary Research Infrastructure Cuts Raise Alarm</div>
+          <div class="mock-meta">
+            <span>University Affairs Canada</span>
+            <span class="relevance-dot">&#x1F525; 10/10</span>
+            <span>&#x1F7E1; This week</span>
+          </div>
+        </div>
+        <div class="mock-article med">
+          <div>
+            <span class="mock-tag tag-bc">BC</span>
+            <span class="mock-tag" style="background:rgba(16,185,129,0.1);color:#34d399;border:1px solid rgba(16,185,129,0.2)">&#x1F7E2; Supportive</span>
+          </div>
+          <div class="mock-title">BC Pharmacare Expansion: Extended Coverage for Post-Secondary Students</div>
+          <div class="mock-meta">
+            <span>BC Ministry of Post-Secondary Education</span>
+            <span style="font-size:10px;color:#f59e0b;font-weight:600">&#x2B50; 7/10</span>
+          </div>
+        </div>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:10px;color:rgba(255,255,255,0.3);font-family:'DM Mono',monospace">12 articles · Last scraped: 07:06 AM</span>
+          <span style="font-size:10px;font-weight:600;color:#10b981">&#x2713; Feed current</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- POLICY DOMAINS -->
+<section id="domains" style="padding:80px 48px;max-width:100%;background:rgba(0,0,0,0.15)">
+  <div class="domains-inner">
+    <div class="domains-title reveal">Policy domains covered</div>
+    <div class="domains-grid">
+      <div class="domain-pill reveal"><span class="domain-pill-dot" style="background:#60a5fa"></span>Higher Education</div>
+      <div class="domain-pill reveal"><span class="domain-pill-dot" style="background:#34d399"></span>Research Funding</div>
+      <div class="domain-pill reveal"><span class="domain-pill-dot" style="background:#818cf8"></span>Indigenous Relations</div>
+      <div class="domain-pill reveal"><span class="domain-pill-dot" style="background:#f59e0b"></span>Reconciliation</div>
+      <div class="domain-pill reveal"><span class="domain-pill-dot" style="background:#fb7185"></span>Health Policy</div>
+      <div class="domain-pill reveal"><span class="domain-pill-dot" style="background:#00c2ff"></span>Pharmacare</div>
+      <div class="domain-pill reveal"><span class="domain-pill-dot" style="background:#a78bfa"></span>Budget &amp; Fiscal</div>
+      <div class="domain-pill reveal"><span class="domain-pill-dot" style="background:#fbbf24"></span>Legislation</div>
+      <div class="domain-pill reveal"><span class="domain-pill-dot" style="background:#10b981"></span>Consultation</div>
+      <div class="domain-pill reveal"><span class="domain-pill-dot" style="background:#f97316"></span>Infrastructure</div>
+      <div class="domain-pill reveal"><span class="domain-pill-dot" style="background:#ec4899"></span>Workforce</div>
+      <div class="domain-pill reveal"><span class="domain-pill-dot" style="background:#06b6d4"></span>DRIPA &bull; UNDRIP &bull; TRC</div>
+      <div class="domain-pill reveal"><span class="domain-pill-dot" style="background:#84cc16"></span>OCAP &bull; Data Sovereignty</div>
+      <div class="domain-pill reveal"><span class="domain-pill-dot" style="background:#b8860b"></span>Child Care &amp; Housing</div>
+      <div class="domain-pill reveal"><span class="domain-pill-dot" style="background:#6366f1"></span>International</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ABOUT -->
+<section id="about" style="padding:100px 48px;max-width:100%">
+  <div class="about-grid" style="max-width:1200px;margin:0 auto">
+    <div class="about-card reveal">
+      <div class="about-name">Anthony Coompson</div>
+      <div class="about-role">Policy &amp; Research Professional &bull; Vancouver, BC</div>
+      <div class="about-bio">
+        With experience spanning Indigenous policy, government relations, health policy, international student services, and higher education, Anthony brings deep domain expertise to the intersection of technology and policy intelligence.
+      </div>
+      <div class="about-bio">
+        Previous roles at the First Nations Health Authority, Midwives Association of BC, UBC, and the International Organization for Migration have shaped a uniquely cross-sector perspective on Canadian policy.
+      </div>
+      <div class="about-expertise">
+        <span class="expertise-tag">Indigenous Policy</span>
+        <span class="expertise-tag">Government Relations</span>
+        <span class="expertise-tag">Higher Education</span>
+        <span class="expertise-tag">Health Policy</span>
+        <span class="expertise-tag">UNDRIP &bull; DRIPA &bull; TRC</span>
+        <span class="expertise-tag">OCAP</span>
+      </div>
+    </div>
+    <div class="about-content reveal">
+      <div class="section-eyebrow">About PolicyPulse</div>
+      <div class="section-title" style="font-size:clamp(28px,3.5vw,42px)">Built from the<br><em>inside</em> of policy work</div>
+      <p class="section-body">PolicyPulse was built out of a direct need — the gap between the volume of policy information being published daily across BC and Canadian government sources, and the time available to monitor and synthesize it.</p>
+      <blockquote>Policy professionals shouldn't spend their days doing what a well-designed system can do in seconds.</blockquote>
+      <p class="section-body">Every feature in PolicyPulse reflects a real workflow pain point: the time spent searching multiple ministry websites, manually formatting citations, assembling digest emails, or missing a key announcement buried in a Hansard release.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section id="cta" style="padding:100px 48px;max-width:100%;text-align:center;position:relative;overflow:hidden">
+  <div class="cta-bg-glow"></div>
+  <div class="cta-inner reveal">
+    <div class="section-eyebrow" style="justify-content:center;display:flex">Ready to begin</div>
+    <div class="cta-title">Policy intelligence<br>at your fingertips</div>
+    <p class="cta-sub">Enter PolicyPulse to start monitoring, analyzing, and briefing on BC and Canadian policy — free, live, and powered by AI.</p>
+    <div class="cta-actions">
+      <a href="app.html?enter=1" class="btn-primary-hero">Enter PolicyPulse &rarr;</a>
+      <a href="#features" class="btn-secondary-hero">&#x25B6; See Features</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-left">
+    <div class="footer-logo-mark">&#x1F4E1;</div>
+    <span class="footer-name">PolicyPulse</span>
+  </div>
+  <div class="footer-right">
+    Built by Anthony Coompson &bull; Vancouver, BC &bull; <a href="app.html?enter=1" style="color:#00c2ff;text-decoration:none">Enter App &rarr;</a>
+  </div>
+</footer>
+
+<script>
+// Scroll reveal
+var revealEls = document.querySelectorAll('.reveal');
+var observer = new IntersectionObserver(function(entries){
+  entries.forEach(function(e){
+    if(e.isIntersecting){ e.target.classList.add('visible'); observer.unobserve(e.target); }
+  });
+}, { threshold: 0.1 });
+revealEls.forEach(function(el){ observer.observe(el); });
+
+// Stagger feature cards
+document.querySelectorAll('.feature-card').forEach(function(card, i){
+  card.style.transitionDelay = (i * 0.07) + 's';
+});
+document.querySelectorAll('.domain-pill').forEach(function(pill, i){
+  pill.style.transitionDelay = (i * 0.04) + 's';
+});
+
+// Smooth nav highlight
+window.addEventListener('scroll', function(){
+  var nav = document.querySelector('nav');
+  if(window.scrollY > 60){
+    nav.style.borderBottomColor = 'rgba(255,255,255,0.08)';
+  } else {
+    nav.style.borderBottomColor = 'rgba(255,255,255,0.04)';
+  }
+});
+</script>
+</body>
+</html>
