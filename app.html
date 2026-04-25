@@ -527,7 +527,7 @@ tr:hover td{background:rgba(0,194,255,0.03)}
 /* FLAGGED ARTICLES */
 .article-card.flagged::before{opacity:1;background:linear-gradient(180deg,#ef4444,#dc2626)}
 .article-card.flagged{border-color:rgba(239,68,68,0.25)}
-.hbtn-flagged{color:#ef4444!important;background:rgba(239,68,68,0.1)!important}
+.hbtn-flagged{color:#ef4444!important;background:rgba(239,68,68,0.1)!important}.hbtn-notion{color:#a78bfa!important;border-color:rgba(167,139,250,.4)!important;background:rgba(167,139,250,.08)!important}.hbtn-notion:hover{background:rgba(167,139,250,.18)!important}
 
 /* FLAG INDICATOR IN FEED */
 .flag-indicator{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;color:#ef4444;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:4px;padding:1px 6px;text-transform:uppercase;letter-spacing:.06em}
@@ -683,7 +683,8 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
     <div id="preview-header">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
         <div style="flex:1">
-          <div id="preview-meta" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+          <div id="preview-meta" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"></div>
+          <div id="preview-dates" style="font-size:11px;color:var(--dim);margin-bottom:10px;display:flex;gap:16px;flex-wrap:wrap"></div>
           <div id="preview-title" style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--white);line-height:1.4;margin-bottom:10px"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <a id="preview-link" href="#" target="_blank" rel="noopener" class="btn btn-primary btn-sm">Open &#x2197;</a>
@@ -691,6 +692,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
             <button id="preview-stage-btn" class="btn btn-green btn-sm" onclick="previewStage()">+ Digest</button>
             <button id="preview-read-btn" class="btn btn-ghost btn-sm" onclick="previewRead()">&#x2713; Read</button>
             <button class="btn btn-ghost btn-sm" onclick="exportArticlePDF()">&#x1F4C4; Save PDF</button>
+            <button class="btn btn-ghost btn-sm" id="preview-notion-btn" onclick="saveArticleToNotion(_previewArticleId)" style="display:none">&#x1F5D2; Save to Notion</button>
           </div>
         </div>
         <button onclick="closePreview()" style="background:rgba(255,255,255,.07);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px;flex-shrink:0">&#x2715;</button>
@@ -763,6 +765,9 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
   <button class="nav-btn" onclick="showTab('notes')" id="tab-notes">&#x1F4DD; Notes</button>
   <button class="nav-btn" onclick="showTab('quickstart')" id="tab-quickstart">Quick Start</button>
   <button class="nav-btn" onclick="showTab('instructions')" id="tab-instructions">Reference Guide</button>
+  <button class="nav-btn" onclick="showTab('privacy')" id="tab-privacy">&#x1F512; Privacy</button>
+  <button class="nav-btn" onclick="showTab('notion')" id="tab-notion">&#x1F5D2; Notion</button>
+  <button class="nav-btn" onclick="showTab('research')" id="tab-research">&#x1F4DA; Research</button>
 </div>
 
 <div id="main">
@@ -912,6 +917,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
           <input class="filter-input" id="archive-search" placeholder="Full-text search archives…" oninput="renderArchive()">
           <select class="filter-select" id="archive-domain" onchange="renderArchive()"><option value="">All Domains</option><option>Higher Education</option><option>Research Funding</option><option>Indigenous</option><option>Reconciliation</option><option>Health</option><option>Budget</option><option>Legislation</option></select>
           <select class="filter-select" id="archive-juris" onchange="renderArchive()"><option value="">All Jurisdictions</option><option>Federal</option><option>BC</option><option>Municipal</option></select>
+          <select class="filter-select" id="archive-source" onchange="renderArchive()" style="max-width:200px"><option value="">All Sources</option></select>
         </div>
         <div id="archive-results"></div>
       </div>
@@ -948,6 +954,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-ghost" onclick="copyDigest()">⎘ Copy</button>
         <button class="btn btn-ghost" onclick="exportDigestPDF()">&#x1F4C4; Export PDF</button>
+        <button class="btn btn-ghost" id="notion-digest-btn" onclick="pushDigestToNotion()" style="display:none">&#x1F5D2; Push to Notion</button>
         <button class="btn btn-ghost" onclick="generatePublicUrl()">🔗 Public URL</button>
         <button class="btn btn-primary" onclick="sendDigest()">✉ Send Digest</button>
       </div>
@@ -1147,6 +1154,214 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
   </div>
 </div>
 
+  <!-- NOTION INTEGRATION TAB -->
+  <div id="page-notion" style="display:none" class="fade-in">
+    <div style="max-width:680px">
+      <div class="page-title">&#x1F5D2; Notion Integration</div>
+      <div class="page-subtitle" style="margin-bottom:20px">Push articles, digests, and notes directly to your Notion workspace</div>
+      <div id="notion-status-bar" style="margin-bottom:16px;padding:12px 16px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">
+        <span id="notion-status-icon">&#x26AA;</span>
+        <span id="notion-status-text" style="color:var(--muted)">Not connected — paste your Notion integration token below to get started</span>
+      </div>
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:14px;text-transform:uppercase;letter-spacing:.12em">Setup — Connect Your Notion Workspace</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:12px">
+          1. Go to <a href="https://www.notion.so/my-integrations" target="_blank" style="color:var(--cyan)">notion.so/my-integrations</a> and create a new integration<br>
+          2. Copy the integration token (starts with <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">ntn_</code>)<br>
+          3. Open each Notion database you want to use &rarr; Share &rarr; Invite your integration<br>
+          4. Copy each database ID from its URL: notion.so/.../<strong>this-32-char-id</strong>?v=...
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Integration Token</div>
+            <div style="display:flex;gap:8px">
+              <input id="notion-token-inp" type="password" class="filter-input" placeholder="ntn_xxxxxxxxxxxx" style="flex:1;font-family:monospace;font-size:12px">
+              <button class="btn btn-cyan" onclick="saveNotionSettings()">Save &amp; Test</button>
+              <button class="btn btn-ghost" onclick="clearNotionSettings()">Disconnect</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Articles Database ID</div>
+            <input id="notion-article-db-inp" class="filter-input" placeholder="32-character database ID from the URL" style="width:100%;font-family:monospace;font-size:12px">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Notes Database ID <span style="opacity:.6">(optional)</span></div>
+            <input id="notion-notes-db-inp" class="filter-input" placeholder="32-character database ID from the URL" style="width:100%;font-family:monospace;font-size:12px">
+          </div>
+        </div>
+        <div id="notion-test-result" style="margin-top:10px;font-size:12px;display:none"></div>
+      </div>
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:14px;text-transform:uppercase;letter-spacing:.12em">What Gets Pushed</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;background:rgba(0,194,255,0.04);border:1px solid rgba(0,194,255,0.1);border-radius:8px">
+            <span style="font-size:16px;flex-shrink:0">&#x1F4F0;</span>
+            <div><div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:2px">Articles &rarr; Notion Database</div><div style="font-size:11px;color:var(--muted)">Title, Source, Domain, Jurisdiction, Relevance, Sentiment, Summary, Why It Matters, URL, Published Date. Hover any article card and click <strong style="color:#a78bfa">&#x1F5D2; Notion</strong>.</div></div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;background:rgba(0,194,255,0.04);border:1px solid rgba(0,194,255,0.1);border-radius:8px">
+            <span style="font-size:16px;flex-shrink:0">&#x1F4CB;</span>
+            <div><div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:2px">Digest &rarr; Notion Page</div><div style="font-size:11px;color:var(--muted)">Full formatted digest as a Notion page with headings, summaries, and links. Use <strong style="color:#a78bfa">&#x1F5D2; Push to Notion</strong> in the Digest tab.</div></div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;background:rgba(0,194,255,0.04);border:1px solid rgba(0,194,255,0.1);border-radius:8px">
+            <span style="font-size:16px;flex-shrink:0">&#x1F4DD;</span>
+            <div><div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:2px">Notes &rarr; Notion Database</div><div style="font-size:11px;color:var(--muted)">Note title, content, linked article, and date. Use <strong style="color:#a78bfa">&#x1F5D2; Sync to Notion</strong> in the Notes tab.</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.12em">Required Notion Database Properties</div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:11px;font-weight:600;color:var(--white);margin-bottom:6px">Articles Database</div>
+            <div style="font-size:11px;color:var(--muted);line-height:2.2;font-family:monospace">
+              Name &rarr; Title (auto)<br>Source &rarr; Text<br>Domain &rarr; Select<br>Jurisdiction &rarr; Select<br>Relevance &rarr; Number<br>Sentiment &rarr; Select<br>URL &rarr; URL<br>Published &rarr; Date<br>Tags &rarr; Multi-select
+            </div>
+          </div>
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:11px;font-weight:600;color:var(--white);margin-bottom:6px">Notes Database</div>
+            <div style="font-size:11px;color:var(--muted);line-height:2.2;font-family:monospace">
+              Name &rarr; Title (auto)<br>Article &rarr; Text<br>Article URL &rarr; URL<br>Created &rarr; Date
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:12px 14px;background:rgba(240,165,0,0.06);border:1px solid rgba(240,165,0,0.2);border-radius:8px;font-size:12px;color:var(--muted);line-height:1.8">
+        <strong style="color:var(--gold)">&#x26A0; Requires Railway backend</strong> — The Notion API blocks direct browser requests (CORS restriction). PolicyPulse routes all Notion calls through your Railway backend, which forwards them to Notion. Your token travels with each request and is never stored server-side.
+      </div>
+    </div>
+  </div>
+
+  <!-- PRIVACY TAB -->
+  <div id="page-privacy" style="display:none" class="fade-in">
+    <div style="max-width:720px">
+      <div class="page-title">&#x1F512; Privacy &amp; Data</div>
+      <div class="page-subtitle" style="margin-bottom:20px">What PolicyPulse stores, where, and how to clear it</div>
+
+      <!-- ONE-LINE ANSWER -->
+      <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:14px 18px;margin-bottom:18px;font-size:13px;color:#34d399;line-height:1.7">
+        <strong style="color:#10b981">&#x2713; Short answer:</strong> PolicyPulse stores everything locally in <em>your browser only</em>. No personal data is sent to any server. No accounts, no tracking, no ads.
+      </div>
+
+      <!-- WHAT IS STORED LOCALLY -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:14px;text-transform:uppercase;letter-spacing:.12em">Stored in your browser (localStorage)</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.9">
+          The following data lives <strong style="color:var(--white)">only on this device, in this browser</strong>. It never leaves your computer unless you choose to export it.
+        </div>
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;background:rgba(0,194,255,0.04);border:1px solid rgba(0,194,255,0.1);border-radius:8px">
+            <span style="font-size:16px;flex-shrink:0">&#x1F4DD;</span>
+            <div><div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:2px">Notes</div><div style="font-size:11px;color:var(--muted)">All notes you write in the Notes tab, including any article-linked notes and PDF attachments. Stored under <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">pp_notes_data</code>.</div></div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;background:rgba(0,194,255,0.04);border:1px solid rgba(0,194,255,0.1);border-radius:8px">
+            <span style="font-size:16px;flex-shrink:0">&#x1F4DA;</span>
+            <div><div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:2px">Citations</div><div style="font-size:11px;color:var(--muted)">Your saved bibliography entries. Stored under <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">pp_citations</code>.</div></div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;background:rgba(0,194,255,0.04);border:1px solid rgba(0,194,255,0.1);border-radius:8px">
+            <span style="font-size:16px;flex-shrink:0">&#x1F916;</span>
+            <div><div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:2px">AI-generated summaries &amp; Why It Matters</div><div style="font-size:11px;color:var(--muted)">When you click Generate on an article, the result is saved locally so it persists if you close and reopen the article. Stored under <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">pp_gen_analysis</code>. The text is sent to Groq's API to generate the analysis — see the API Keys section below.</div></div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;background:rgba(0,194,255,0.04);border:1px solid rgba(0,194,255,0.1);border-radius:8px">
+            <span style="font-size:16px;flex-shrink:0">&#x1F50D;</span>
+            <div><div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:2px">Keyword watchlist &amp; saved searches</div><div style="font-size:11px;color:var(--muted)">Keywords you add to the watchlist and any saved search filters. Stored under <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">pp_saved_searches</code>. If a backend is connected, watchlist keywords are also synced there.</div></div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;background:rgba(0,194,255,0.04);border:1px solid rgba(0,194,255,0.1);border-radius:8px">
+            <span style="font-size:16px;flex-shrink:0">&#x23F0;</span>
+            <div><div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:2px">Digest schedule</div><div style="font-size:11px;color:var(--muted)">Your chosen day and time for auto-sending the digest. Stored under <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">pp_schedule</code>.</div></div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;background:rgba(0,194,255,0.04);border:1px solid rgba(0,194,255,0.1);border-radius:8px">
+            <span style="font-size:16px;flex-shrink:0">&#x1F319;</span>
+            <div><div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:2px">Theme preference</div><div style="font-size:11px;color:var(--muted)">Whether you've chosen dark or light mode. Stored under <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">pp_theme</code>.</div></div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;background:rgba(0,194,255,0.04);border:1px solid rgba(0,194,255,0.1);border-radius:8px">
+            <span style="font-size:16px;flex-shrink:0">&#x1F517;</span>
+            <div><div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:2px">Backend URL</div><div style="font-size:11px;color:var(--muted)">The Railway backend URL if you've entered a custom one. Stored under <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">pp_api_base</code>. This is only your own server address — no credentials.</div></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- SUBSCRIBER DATA — separate card, honest disclosure -->
+      <div class="card" style="margin-bottom:12px;border-color:rgba(240,165,0,0.2)">
+        <div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:14px;text-transform:uppercase;letter-spacing:.12em">&#x26A0; Subscriber data — important</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.9;margin-bottom:12px">
+          Subscriber <strong style="color:var(--white)">names and email addresses</strong> are the only personal data in PolicyPulse that belongs to other people. They are stored in two places:
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+          <div style="display:flex;gap:10px;align-items:flex-start;font-size:12px;color:var(--muted)">
+            <span style="color:var(--cyan);flex-shrink:0;margin-top:2px">&#x2192;</span>
+            <div><strong style="color:var(--white)">Your browser (localStorage)</strong> under <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">pp_subscribers</code> — so your list persists between sessions on this device.</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;font-size:12px;color:var(--muted)">
+            <span style="color:var(--cyan);flex-shrink:0;margin-top:2px">&#x2192;</span>
+            <div><strong style="color:var(--white)">Your Railway backend (SQLite)</strong> — if you've connected a backend, subscriber emails are synced there so digest sending works from the server.</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;font-size:12px;color:var(--muted)">
+            <span style="color:var(--cyan);flex-shrink:0;margin-top:2px">&#x2192;</span>
+            <div><strong style="color:var(--white)">Your SMTP provider</strong> (e.g. Gmail) — email addresses pass through your email server when digests are sent. This is standard for any email service.</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.8;padding:10px 12px;background:rgba(240,165,0,0.05);border:1px solid rgba(240,165,0,0.15);border-radius:7px">
+          <strong style="color:var(--white)">Recommended practice:</strong> Only add subscribers who have explicitly agreed to receive your digest. You are the data controller for subscriber information — you are responsible for managing consent, honouring unsubscribe requests, and complying with applicable privacy law (e.g. CASL in Canada).
+        </div>
+      </div>
+
+      <!-- SESSION STORAGE -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:14px;text-transform:uppercase;letter-spacing:.12em">Stored for this session only (sessionStorage)</div>
+        <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;background:rgba(240,165,0,0.04);border:1px solid rgba(240,165,0,0.15);border-radius:8px">
+          <span style="font-size:16px;flex-shrink:0">&#x1F511;</span>
+          <div><div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:2px">Groq API key</div><div style="font-size:11px;color:var(--muted)">Your Groq API key is stored in <strong style="color:var(--white)">sessionStorage only</strong> — it is automatically deleted when you close the browser tab. It is never written to localStorage, never sent to the PolicyPulse backend, and never logged. It is only used to make direct API calls from your browser to Groq's servers.</div></div>
+        </div>
+      </div>
+
+      <!-- WHAT IS NOT STORED -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:14px;text-transform:uppercase;letter-spacing:.12em">What is never collected</div>
+        <div style="font-size:12px;color:var(--muted);line-height:2">
+          <span style="color:var(--green)">&#x2715;</span> &nbsp;No login or user accounts — you don't need to sign up to use PolicyPulse<br>
+          <span style="color:var(--green)">&#x2715;</span> &nbsp;No usage tracking or analytics beyond basic Google Analytics page views (which you can block with any ad blocker)<br>
+          <span style="color:var(--green)">&#x2715;</span> &nbsp;No cookies for advertising or cross-site tracking<br>
+          <span style="color:var(--green)">&#x2715;</span> &nbsp;No personal data sent to the Railway backend — it only stores article metadata scraped from public government websites<br>
+          <span style="color:var(--green)">&#x2715;</span> &nbsp;No data shared with or sold to third parties
+        </div>
+      </div>
+
+      <!-- THIRD PARTY SERVICES -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:14px;text-transform:uppercase;letter-spacing:.12em">Third-party services used</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.9">
+          <div style="margin-bottom:10px"><strong style="color:var(--white)">Groq API</strong> — When you use Ask AI or the Generate button, your query or the article text is sent to <a href="https://groq.com" target="_blank" style="color:var(--cyan)">Groq's API</a> for processing. Groq's privacy policy applies to those requests. Your API key is never stored on any PolicyPulse server.</div>
+          <div style="margin-bottom:10px"><strong style="color:var(--white)">Google Analytics</strong> — Basic page-view analytics (which tab you're on, when you opened the app). No personal identifiers. You can opt out with any browser ad blocker.</div>
+          <div><strong style="color:var(--white)">allorigins.win</strong> — Used as a proxy to fetch article content when you click Generate. The article's public URL is passed through this proxy. No personal data is involved.</div>
+        </div>
+      </div>
+
+      <!-- CLEAR YOUR DATA -->
+      <div class="card">
+        <div style="font-size:10px;font-weight:700;color:var(--red);margin-bottom:14px;text-transform:uppercase;letter-spacing:.12em">Clear your data</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:14px">
+          All locally stored data can be cleared at any time. This will remove your notes, citations, saved searches, digest schedule, and generated analyses. <strong style="color:var(--white)">This cannot be undone.</strong>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="clearPrivacyData('analysis')" style="font-size:12px">Clear generated analyses</button>
+          <button class="btn btn-ghost" onclick="clearPrivacyData('notes')" style="font-size:12px">Clear notes</button>
+          <button class="btn btn-ghost" onclick="clearPrivacyData('citations')" style="font-size:12px">Clear citations</button>
+          <button class="btn btn-red" onclick="clearPrivacyData('all')" style="font-size:12px">&#x26A0; Clear all PolicyPulse data</button>
+        </div>
+        <div id="privacy-clear-status" style="margin-top:10px;font-size:12px;color:var(--green);display:none"></div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- CITATIONS PAGE -->
   <div id="page-citations" style="display:none" class="fade-in">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
@@ -1215,6 +1430,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
         <button class="btn btn-ghost" onclick="exportNotes()">&#x2B07; Export .txt</button>
         <button class="btn btn-ghost" onclick="exportCurrentNotePDF()">&#x1F4C4; Export PDF</button>
         <button class="btn btn-ghost btn-sm" onclick="document.getElementById('note-pdf-upload').click()" title="Upload a PDF article to this note">&#x1F4CE; Attach PDF</button>
+        <button class="btn btn-ghost btn-sm" id="notion-note-btn" onclick="syncNoteToNotion()" style="display:none">&#x1F5D2; Sync to Notion</button>
         <input type="file" id="note-pdf-upload" accept=".pdf" style="display:none" onchange="handlePdfUpload(this)">
       </div>
     </div>
@@ -1303,10 +1519,521 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
     </div>
   </div>
 
+  <!-- ═══════════════════════════════════════════════════
+       RESEARCH / SCHOLARLY TAB
+  ═══════════════════════════════════════════════════ -->
+  <div id="page-research" style="display:none" class="fade-in">
+    <style>
+      .research-db-badge{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+      .db-openalex{background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3)}
+      .db-semantic{background:rgba(16,185,129,0.12);color:#34d399;border:1px solid rgba(16,185,129,0.25)}
+      .db-doaj{background:rgba(245,158,11,0.12);color:#fbbf24;border:1px solid rgba(245,158,11,0.25)}
+      .db-pubmed{background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.25)}
+      .db-arxiv{background:rgba(0,194,255,0.12);color:#00c2ff;border:1px solid rgba(0,194,255,0.25)}
+      .db-thinktank{background:rgba(168,85,247,0.15);color:#c084fc;border:1px solid rgba(168,85,247,0.3)}
+      .db-other{background:rgba(100,116,139,0.12);color:#94a3b8;border:1px solid rgba(100,116,139,0.25)}
+      .db-canadian{background:rgba(220,38,38,0.12);color:#fca5a5;border:1px solid rgba(220,38,38,0.25)}
+      .oa-badge{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25)}
+      .research-card{background:linear-gradient(135deg,rgba(11,24,41,0.85),rgba(9,20,38,0.7));border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;transition:all .22s;overflow:hidden;backdrop-filter:blur(8px);position:relative}
+      .research-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,#6366f1,#8b5cf6);opacity:0.8}
+      .research-card.unread::before{opacity:1}
+      .research-card:hover{border-color:rgba(99,102,241,0.3);box-shadow:0 4px 24px rgba(0,0,0,.4)}
+      .research-abstract{font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:8px;font-style:italic}
+      .research-source-chip{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.04em}
+      .research-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+      .research-stat{background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(139,92,246,0.05));border:1px solid rgba(99,102,241,0.2);border-radius:var(--radius);padding:12px 14px;text-align:center}
+      .research-stat-val{font-size:24px;font-weight:700;color:var(--white);font-family:'IBM Plex Mono',monospace}
+      .research-stat-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+      .source-breakdown{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+      .scrape-progress{display:none;padding:12px 16px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:8px;margin-bottom:12px;font-size:12px;color:#a5b4fc}
+      body.light-mode .research-card{background:rgba(255,255,255,0.97);border-color:rgba(0,0,0,0.09)}
+      body.light-mode .research-card:hover{border-color:rgba(99,102,241,0.3)}
+      body.light-mode .research-abstract{color:#3a5a78}
+      body.light-mode .research-stat{background:rgba(99,102,241,0.06);border-color:rgba(99,102,241,0.15)}
+      body.light-mode .research-stat-val{color:#0f1f35}
+    </style>
+
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div class="page-title">&#x1F4DA; Research &amp; Scholarly Literature</div>
+        <div class="page-subtitle" id="research-subtitle">Peer-reviewed articles, working papers, and policy research from open-access databases</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-ghost btn-sm" onclick="exportResearchCSV()">&#x2B07; Export CSV</button>
+        <button class="btn btn-cyan" id="research-scrape-btn" onclick="triggerScholarlyScrape()">
+          &#x1F50D; Fetch New Research
+        </button>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="scrape-progress" id="research-progress">
+      <span class="spin" style="display:inline-block;margin-right:8px">&#8635;</span>
+      <strong>Fetching research</strong> — querying OpenAlex, Semantic Scholar, Canadian think-tanks, PubMed, DOAJ, arXiv&hellip; This takes 60&ndash;90 seconds. The feed will refresh automatically.
+    </div>
+
+    <!-- Stats row -->
+    <div class="research-stats-grid" id="research-stats-grid">
+      <div class="research-stat"><div class="research-stat-val" id="rs-total">—</div><div class="research-stat-label">Total Articles</div></div>
+      <div class="research-stat"><div class="research-stat-val" id="rs-unread" style="color:#a5b4fc">—</div><div class="research-stat-label">Unread</div></div>
+      <div class="research-stat"><div class="research-stat-val" id="rs-dbs">6</div><div class="research-stat-label">Databases</div></div>
+      <div class="research-stat"><div class="research-stat-val" id="rs-oa" style="color:#10b981">100%</div><div class="research-stat-label">Open Access</div></div>
+    </div>
+
+    <!-- Database legend -->
+    <div style="padding:10px 14px;background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
+      <div style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Data Sources</div>
+      <div class="source-breakdown" id="research-source-breakdown">
+        <span class="research-db-badge db-openalex">&#x1F30D; OpenAlex</span>
+        <span class="research-db-badge db-semantic">&#x1F9E0; Semantic Scholar</span>
+        <span class="research-db-badge db-pubmed">&#x1F9EA; PubMed Central</span>
+        <span class="research-db-badge db-doaj">&#x1F4D6; DOAJ</span>
+        <span class="research-db-badge db-arxiv">&#x1F4CA; arXiv</span>
+        <span class="research-db-badge db-canadian">&#x1F341; Canadian Think-Tanks</span>
+        <div style="width:100%;height:0"></div>
+        <span style="font-size:10px;color:var(--dim);align-self:center">All sources are freely accessible, open access, and scraping-permitted.</span>
+      </div>
+    </div>
+
+    <!-- Sub-tabs -->
+    <div class="sub-tabs" style="margin-bottom:12px">
+      <button class="sub-tab active" id="rst-feed" onclick="researchTab('feed')">Article Feed</button>
+      <button class="sub-tab" id="rst-search" onclick="researchTab('search')">Search & Filter</button>
+      <button class="sub-tab" id="rst-sources" onclick="researchTab('sources')">About Sources</button>
+    </div>
+
+    <!-- FEED PANEL -->
+    <div id="research-feed-panel">
+      <div class="filters" style="margin-bottom:10px">
+        <input class="filter-input" id="research-search-inp" placeholder="&#x1F50D; Search titles, abstracts, authors…" oninput="debounceResearchSearch()">
+        <select class="filter-select" id="research-filter-domain" onchange="renderResearchFeed()">
+          <option value="">All Domains</option>
+          <option>Higher Education</option><option>Research Funding</option><option>Indigenous</option>
+          <option>Reconciliation</option><option>Health</option><option>Budget</option>
+          <option>Legislation</option><option>Pharmacare</option><option>Other</option>
+        </select>
+        <select class="filter-select" id="research-filter-db" onchange="renderResearchFeed()">
+          <option value="">All Databases</option>
+          <option>OpenAlex</option><option>Semantic Scholar</option><option>PubMed Central</option>
+          <option>DOAJ</option><option>arXiv</option><option>Canadian Think Tank</option>
+        </select>
+        <select class="filter-select" id="research-sort" onchange="renderResearchFeed()">
+          <option value="date">&#x1F4C5; Newest First</option>
+          <option value="relevance">&#x1F525; Highest Relevance</option>
+        </select>
+      </div>
+      <div id="research-feed-list">
+        <div class="empty" style="padding:60px 20px">
+          <div class="empty-icon">&#x1F4DA;</div>
+          <div class="empty-text">No research articles yet.<br>Click <strong>Fetch New Research</strong> to pull from OpenAlex, PubMed, Semantic Scholar, and Canadian think-tanks.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEARCH PANEL -->
+    <div id="research-search-panel" style="display:none">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <input class="filter-input" id="research-adv-search" placeholder="Search by title, author, abstract, DOI…" style="flex:1">
+        <button class="btn btn-primary" onclick="runAdvancedResearchSearch()">Search</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px">
+        Or fetch new papers on a specific topic using the API:
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        <input class="filter-input" id="research-custom-kw" placeholder="Topic or keyword (e.g. 'OCAP data sovereignty')" style="flex:1;max-width:360px">
+        <button class="btn btn-cyan" onclick="fetchByKeyword()">&#x1F50D; Fetch from APIs</button>
+      </div>
+      <div id="research-adv-results"></div>
+    </div>
+
+    <!-- SOURCES PANEL -->
+    <div id="research-sources-panel" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:900px">
+
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span class="research-db-badge db-openalex">OpenAlex</span>
+            <span class="oa-badge">&#x1F513; Free</span>
+          </div>
+          <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:5px">OpenAlex</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">250M+ scholarly works. No API key required. Covers all disciplines. The most comprehensive free scholarly database available.</div>
+          <a href="https://openalex.org" target="_blank" style="font-size:10px;color:var(--cyan)">openalex.org &#x2197;</a>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span class="research-db-badge db-semantic">Semantic Scholar</span>
+            <span class="oa-badge">&#x1F513; Free</span>
+          </div>
+          <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:5px">Semantic Scholar</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">AI-powered academic search by Allen Institute. 220M papers with high-quality abstracts and author graphs. 100 req/min free.</div>
+          <a href="https://www.semanticscholar.org" target="_blank" style="font-size:10px;color:var(--cyan)">semanticscholar.org &#x2197;</a>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span class="research-db-badge db-pubmed">PubMed Central</span>
+            <span class="oa-badge">&#x1F513; Free</span>
+          </div>
+          <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:5px">PubMed Central (NCBI)</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">Full-text biomedical and health research. Especially relevant for Indigenous health policy, pharmacare, and FNHA-related research. Official NCBI E-utilities API.</div>
+          <a href="https://www.ncbi.nlm.nih.gov/pmc/" target="_blank" style="font-size:10px;color:var(--cyan)">ncbi.nlm.nih.gov/pmc &#x2197;</a>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span class="research-db-badge db-doaj">DOAJ</span>
+            <span class="oa-badge">&#x1F513; Free</span>
+          </div>
+          <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:5px">DOAJ — Directory of Open Access Journals</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">Indexes 20,000+ peer-reviewed open access journals. Rigorous quality criteria. Strong coverage of social sciences, law, and policy.</div>
+          <a href="https://doaj.org" target="_blank" style="font-size:10px;color:var(--cyan)">doaj.org &#x2197;</a>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span class="research-db-badge db-arxiv">arXiv</span>
+            <span class="oa-badge">&#x1F513; Free</span>
+          </div>
+          <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:5px">arXiv Preprints</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">Working papers and preprints in economics, social science, computer science (including AI policy). Often 6–12 months ahead of journal publication.</div>
+          <a href="https://arxiv.org" target="_blank" style="font-size:10px;color:var(--cyan)">arxiv.org &#x2197;</a>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span class="research-db-badge db-canadian">Canadian Think-Tanks</span>
+          </div>
+          <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:5px">Canadian Policy Research Organisations</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">
+            Publications from: <strong>Yellowhead Institute</strong> (Indigenous policy), <strong>CCPA</strong>, <strong>NCCIH</strong>, <strong>CD Howe Institute</strong>, <strong>Macdonald-Laurier Institute</strong>, <strong>Broadbent Institute</strong>. All freely accessible.
+          </div>
+        </div>
+
+      </div>
+
+      <div style="margin-top:16px;padding:12px 16px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.18);border-radius:8px;font-size:12px;color:var(--muted);line-height:1.8">
+        <strong style="color:var(--white)">&#x1F512; What we cannot access:</strong> JSTOR, Scopus, Web of Science, Elsevier, Springer, Wiley, and most Canadian political science journals require institutional subscriptions. PolicyPulse only fetches open access content and never scrapes paywalled material.
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   RESEARCH / SCHOLARLY MODULE
+═══════════════════════════════════════════════════ */
+
+var _researchArticles = [];
+var _researchPage = 0;
+var _researchPageSize = 20;
+var _researchSearchTimer = null;
+
+function researchTab(t){
+  ['feed','search','sources'].forEach(function(x){
+    document.getElementById('research-'+x+'-panel').style.display = x===t?'block':'none';
+    document.getElementById('rst-'+x).classList.toggle('active', x===t);
+  });
+  if(t==='feed') renderResearchFeed();
+}
+
+async function loadResearchArticles(){
+  if(!API_BASE) return;
+  var domain = (document.getElementById('research-filter-domain')||{}).value||'';
+  var db     = (document.getElementById('research-filter-db')||{}).value||'';
+  var search = (document.getElementById('research-search-inp')||{}).value||'';
+  var sort   = (document.getElementById('research-sort')||{}).value||'date';
+  var qs = [];
+  if(domain) qs.push('domain='+encodeURIComponent(domain));
+  if(db)     qs.push('database_name='+encodeURIComponent(db));
+  if(search) qs.push('search='+encodeURIComponent(search));
+  if(sort)   qs.push('sort='+sort);
+  qs.push('limit=200');
+  var d = await apiFetch('/scholarly'+(qs.length?'?'+qs.join('&'):''));
+  if(d && d.articles) _researchArticles = d.articles;
+}
+
+async function loadResearchStats(){
+  if(!API_BASE) return;
+  var d = await apiFetch('/scholarly/stats');
+  if(!d) return;
+  var te = document.getElementById('rs-total');
+  var ue = document.getElementById('rs-unread');
+  var de = document.getElementById('rs-dbs');
+  if(te) te.textContent = d.total || 0;
+  if(ue) ue.textContent = d.unread || 0;
+  if(de) de.textContent = d.databases ? d.databases.length : 0;
+  // Update source breakdown with counts
+  var bd = document.getElementById('research-source-breakdown');
+  if(bd && d.databases && d.databases.length){
+    var extras = d.databases.map(function(db){
+      var cls = dbBadgeClass(db.database_name);
+      return '<span class="research-db-badge '+cls+'">'+escHtml(db.database_name)+' ('+db.n+')</span>';
+    }).join('');
+    bd.innerHTML = extras + '<div style="width:100%;height:0"></div>'
+      + '<span style="font-size:10px;color:var(--dim);align-self:center">All sources are freely accessible, open access, and scraping-permitted.</span>';
+  }
+}
+
+function dbBadgeClass(name){
+  if(!name) return 'db-other';
+  var n = name.toLowerCase();
+  if(n.includes('openalex'))   return 'db-openalex';
+  if(n.includes('semantic'))   return 'db-semantic';
+  if(n.includes('pubmed')||n.includes('ncbi')) return 'db-pubmed';
+  if(n.includes('doaj'))       return 'db-doaj';
+  if(n.includes('arxiv'))      return 'db-arxiv';
+  if(n.includes('think tank')||n.includes('canadian')||
+     n.includes('yellowhead')||n.includes('ccpa')||
+     n.includes('howe')||n.includes('broadbent')||
+     n.includes('laurier')||n.includes('nccih')) return 'db-canadian';
+  return 'db-other';
+}
+
+function rEmoji_r(r){ return r>=9?'🔥':r>=7?'⭐':'📌'; }
+
+function buildResearchCard(a){
+  var dbClass = dbBadgeClass(a.database_name||'');
+  var abstract = (a.abstract||a.summary||'');
+  var shortAbs = abstract.length > 200 ? abstract.slice(0,200)+'…' : abstract;
+  var tags = (a.tags||'').split(',').filter(function(t){return t.trim();});
+  var pub = a.pub_date||'';
+  return '<div class="research-card '+(a.read?'':'unread')+'" id="rcard-'+a.id+'">'
+    +'<div class="article-inner" style="padding:14px 16px 12px 20px">'
+    +'<div class="article-meta" style="margin-bottom:7px;flex-wrap:wrap;gap:6px">'
+    +'<span class="research-db-badge '+dbClass+'">'+(a.database_name||'Database')+'</span>'
+    +(a.open_access?'<span class="oa-badge">&#x1F513; Open Access</span>':'')
+    +'<span class="article-source">'+escHtml(a.source||'')+'</span>'
+    +'</div>'
+    +'<div style="font-size:14px;font-weight:600;color:var(--white);line-height:1.45;margin-bottom:6px;cursor:pointer" onclick="openResearchPreview('+a.id+')">'
+    +escHtml(a.title)
+    +'</div>'
+    +(a.authors?'<div style="font-size:11px;color:var(--dim);margin-bottom:5px;font-family:\'IBM Plex Mono\',monospace">'+escHtml(a.authors)+'</div>':'')
+    +(shortAbs?'<div class="research-abstract">'+escHtml(shortAbs)+'</div>':'')
+    +(a.why_it_matters?'<div class="why-matters">&#x1F4A1; '+escHtml(a.why_it_matters)+'</div>':'')
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'
+    +(a.domain?'<span class="tag tag-domain">'+escHtml(a.domain)+'</span>':'')
+    +(a.jurisdiction?'<span class="tag tag-juris">'+escHtml(a.jurisdiction)+'</span>':'')
+    +(a.relevance?'<span class="relevance-badge">'+rEmoji_r(a.relevance)+' '+a.relevance+'/10</span>':'')
+    +tags.slice(0,3).map(function(t){return '<span class="tag" style="background:rgba(99,102,241,0.1);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25)">'+escHtml(t.trim())+'</span>';}).join('')
+    +'</div>'
+    +'<div class="article-footer">'
+    +(pub?'<span class="article-date">&#x1F4C5; '+pub+'</span>':'')
+    +(a.doi?'<a href="https://doi.org/'+encodeURIComponent(a.doi.replace('https://doi.org/',''))+'" target="_blank" style="font-size:10px;color:var(--cyan);font-family:\'IBM Plex Mono\',monospace">DOI &#x2197;</a>':'')
+    +'<a href="'+escHtml(a.url)+'" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="margin-left:auto">Open &#x2197;</a>'
+    +(a.read
+      ?'<button class="btn btn-ghost btn-sm" onclick="markResearchRead('+a.id+',false)">&#x21A9; Unread</button>'
+      :'<button class="btn btn-ghost btn-sm" onclick="markResearchRead('+a.id+',true)">&#x2713; Read</button>'
+    )
+    +'<button class="btn btn-cyan btn-sm" onclick="openResearchPreview('+a.id+')">&#x25BA; Preview</button>'
+    +'<button class="btn btn-ghost btn-sm" onclick="addResearchToCitations('+a.id+')" title="Add to bibliography">&#x1F4DA; Cite</button>'
+    +'</div>'
+    +'</div>'
+    +'</div>';
+}
+
+function renderResearchFeed(){
+  if(!API_BASE){ showResearchEmpty('feed-list'); return; }
+  var list = _researchArticles;
+  var container = document.getElementById('research-feed-list');
+  if(!container) return;
+  if(!list || !list.length){
+    container.innerHTML = '<div class="empty" style="padding:60px 20px"><div class="empty-icon">&#x1F4DA;</div><div class="empty-text">No research articles yet.<br>Click <strong>Fetch New Research</strong> to pull from OpenAlex, PubMed, Semantic Scholar, and Canadian think-tanks.</div></div>';
+    return;
+  }
+  container.innerHTML = list.slice(0, _researchPageSize * (_researchPage+1)).map(function(a){ return buildResearchCard(a); }).join('');
+  if(list.length > _researchPageSize * (_researchPage+1)){
+    container.innerHTML += '<div style="text-align:center;padding:12px"><button class="btn btn-ghost" onclick="_researchPage++;renderResearchFeed()">Load more ('+list.length+' total)</button></div>';
+  }
+}
+
+function showResearchEmpty(panel){
+  var el = document.getElementById('research-'+panel);
+  if(el) el.innerHTML = '<div style="text-align:center;padding:32px;background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:12px;margin-top:8px">'
+    +'<div style="font-size:40px;margin-bottom:10px">&#x1F4DA;</div>'
+    +'<div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:6px">Connect your Railway backend</div>'
+    +'<div style="font-size:12px;color:var(--muted);line-height:1.7">The scholarly scraper runs on your Railway backend and stores results in a separate SQLite table.</div>'
+    +'</div>';
+}
+
+function debounceResearchSearch(){
+  clearTimeout(_researchSearchTimer);
+  _researchSearchTimer = setTimeout(async function(){
+    await loadResearchArticles();
+    renderResearchFeed();
+  }, 400);
+}
+
+async function triggerScholarlyScrape(){
+  if(!API_BASE){ showToast('&#x128268;','No Backend','Connect your Railway backend to enable scholarly scraping.',5000); return; }
+  var btn = document.getElementById('research-scrape-btn');
+  var progress = document.getElementById('research-progress');
+  if(btn){ btn.disabled=true; btn.innerHTML='<span class="spin">&#8635;</span> Fetching…'; }
+  if(progress) progress.style.display='block';
+  showToast('&#x1F4DA;','Scholarly Scrape Started','Querying OpenAlex, Semantic Scholar, PubMed, DOAJ, arXiv and Canadian think-tanks. This takes ~90 seconds.',6000);
+
+  // Pull watchlist keywords to pass to the scholarly scraper
+  var kwResp = await apiFetch('/watchlist');
+  var extraKws = (kwResp && kwResp.keywords) ? kwResp.keywords : [];
+
+  var d = await apiFetch('/scholarly/scrape', {method:'POST', body:JSON.stringify({keywords:extraKws})});
+  if(d && d.ok){
+    showToast('&#x1F50D;','Research Fetch Started','Results will appear in ~90 seconds.',5000);
+    setTimeout(async function(){
+      await loadResearchArticles();
+      await loadResearchStats();
+      renderResearchFeed();
+      if(btn){ btn.disabled=false; btn.innerHTML='&#x1F50D; Fetch New Research'; }
+      if(progress) progress.style.display='none';
+      var count = _researchArticles.length;
+      showToast('&#x1F4DA;','Research Updated',count+' articles now in your research feed.',4000);
+    }, 90000);
+  } else {
+    if(btn){ btn.disabled=false; btn.innerHTML='&#x1F50D; Fetch New Research'; }
+    if(progress) progress.style.display='none';
+    showToast('&#x26A0;','Scrape Error','Could not reach backend. Check your Railway URL.',5000);
+  }
+  if(typeof gtag!=='undefined') gtag('event','scholarly_scrape',{event_category:'Research'});
+}
+
+async function fetchByKeyword(){
+  var inp = document.getElementById('research-custom-kw');
+  var kw = (inp&&inp.value||'').trim();
+  if(!kw){ showToast('&#x26A0;','Enter a keyword','Type a research topic first.',3000); return; }
+  if(!API_BASE){ showToast('&#x128268;','No Backend','Railway backend required.',4000); return; }
+  showToast('&#x1F50D;','Fetching…','Querying APIs for: '+kw,4000);
+  var d = await apiFetch('/scholarly/scrape', {method:'POST', body:JSON.stringify({keywords:[kw]})});
+  if(d && d.ok){
+    showToast('&#x1F4DA;','Fetch Started','Results for "'+kw+'" will appear shortly.',5000);
+    setTimeout(async function(){
+      await loadResearchArticles();
+      renderResearchFeed();
+    }, 90000);
+  }
+}
+
+function runAdvancedResearchSearch(){
+  var q = (document.getElementById('research-adv-search')||{}).value||'';
+  var container = document.getElementById('research-adv-results');
+  if(!q.trim() || !container) return;
+  var filtered = _researchArticles.filter(function(a){
+    var haystack = (a.title+' '+(a.abstract||'')+(a.authors||'')+(a.doi||'')).toLowerCase();
+    return haystack.includes(q.toLowerCase());
+  });
+  container.innerHTML = filtered.length
+    ? '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'+filtered.length+' results for "'+escHtml(q)+'"</div>'
+      + filtered.map(buildResearchCard).join('')
+    : '<div class="empty"><div class="empty-icon">&#x1F50D;</div><div class="empty-text">No matches for "'+escHtml(q)+'"</div></div>';
+}
+
+async function markResearchRead(id, read){
+  var a = _researchArticles.find(function(x){return x.id===id;});
+  if(a) a.read = read ? 1 : 0;
+  var card = document.getElementById('rcard-'+id);
+  if(card){ var tmp=document.createElement('div'); tmp.innerHTML=buildResearchCard(a); card.replaceWith(tmp.firstChild); }
+  if(API_BASE) await apiFetch('/scholarly/'+id+'/read', {method:'PATCH', body:JSON.stringify({read:read})});
+  loadResearchStats();
+}
+
+function openResearchPreview(id){
+  var a = _researchArticles.find(function(x){return x.id===id;});
+  if(!a) return;
+  // Reuse the main article preview modal with research data
+  _previewArticleId = null; // ensure no conflict
+  var modal = document.getElementById('preview-modal');
+  var metaEl = document.getElementById('preview-meta');
+  var titleEl = document.getElementById('preview-title');
+  var summaryEl = document.getElementById('preview-summary');
+  var whyEl = document.getElementById('preview-why');
+  var urlEl = document.getElementById('preview-url');
+  var linkEl = document.getElementById('preview-link');
+  var datesEl = document.getElementById('preview-dates');
+
+  var dbClass = dbBadgeClass(a.database_name||'');
+  metaEl.innerHTML = '<span class="research-db-badge '+dbClass+'">'+(a.database_name||'Database')+'</span>'
+    +(a.open_access?'<span class="oa-badge">&#x1F513; Open Access</span>':'')
+    +(a.domain?'<span class="tag tag-domain">'+escHtml(a.domain)+'</span>':'')
+    +(a.jurisdiction?'<span class="tag tag-juris">'+escHtml(a.jurisdiction)+'</span>':'')
+    +(a.relevance?'<span class="relevance-badge">'+rEmoji_r(a.relevance)+' '+a.relevance+'/10</span>':'');
+  if(datesEl) datesEl.innerHTML = (a.pub_date?'<span>&#x1F4C5; <strong style="color:var(--white)">Published:</strong> '+a.pub_date+'</span>':'')
+    + (a.authors?'<span>&#x270D; '+escHtml(a.authors)+'</span>':'');
+  titleEl.textContent = a.title;
+  summaryEl.textContent = a.summary || a.abstract || 'No summary available.';
+  whyEl.textContent = a.why_it_matters || '';
+  urlEl.textContent = a.url;
+  linkEl.href = a.url;
+
+  // Hide news-specific buttons
+  var stageBtn = document.getElementById('preview-stage-btn');
+  if(stageBtn) stageBtn.style.display = 'none';
+
+  document.getElementById('preview-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  markResearchRead(id, true);
+  // restore stage button when closed
+}
+
+function addResearchToCitations(id){
+  var a = _researchArticles.find(function(x){return x.id===id;});
+  if(!a) return;
+  var today = new Date().toISOString().slice(0,10);
+  var entry = {
+    id: Date.now(),
+    title: a.title,
+    author: a.authors||'',
+    source: a.source||a.database_name||'',
+    org: a.source||'',
+    date: a.pub_date||today,
+    url: a.url,
+    accessed: today,
+    fromFeed: true,
+    aiGenerated: false,
+    doi: a.doi||'',
+    formatted: {}
+  };
+  entry.formatted = buildAllFormats(entry);
+  _citations.push(entry);
+  saveCitations();
+  showToast('&#x1F4DA;','Added to Bibliography','"'+a.title.slice(0,55)+'…" added. Go to Citations tab.',3500);
+  if(typeof gtag!=='undefined') gtag('event','research_cited',{event_category:'Research'});
+}
+
+function exportResearchCSV(){
+  if(!_researchArticles.length){ showToast('&#x26A0;','Nothing to Export','Fetch some research first.',3000); return; }
+  var headers = ['Title','Authors','Source','Database','Domain','Jurisdiction','Relevance','Published','URL','DOI','Abstract'];
+  var rows = _researchArticles.map(function(a){
+    return [
+      '"'+(a.title||'').replace(/"/g,'""')+'"',
+      '"'+(a.authors||'').replace(/"/g,'""')+'"',
+      '"'+(a.source||'').replace(/"/g,'""')+'"',
+      '"'+(a.database_name||'').replace(/"/g,'""')+'"',
+      '"'+(a.domain||'').replace(/"/g,'""')+'"',
+      '"'+(a.jurisdiction||'').replace(/"/g,'""')+'"',
+      a.relevance||'',
+      '"'+(a.pub_date||'').replace(/"/g,'""')+'"',
+      '"'+(a.url||'').replace(/"/g,'""')+'"',
+      '"'+(a.doi||'').replace(/"/g,'""')+'"',
+      '"'+(a.abstract||'').slice(0,300).replace(/"/g,'""')+'"',
+    ].join(',');
+  });
+  var csv = [headers.join(',')].concat(rows).join('\n');
+  var blob = new Blob([csv], {type:'text/csv'});
+  var url = URL.createObjectURL(blob);
+  var link = document.createElement('a');
+  link.href = url; link.download='PolicyPulse-Research-'+new Date().toISOString().slice(0,10)+'.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast('&#x2B07;','CSV Exported',_researchArticles.length+' articles saved.',3000);
+}
+
+// Research state — read by the main showTab definition
+var _researchInitialized = false;
+
+</script>
+
 <script>
 
 /* === POLICYPULSE REAL BACKEND API === */
-var API_BASE = (localStorage.getItem('pp_api_base') || '').replace(/\/+$/, '');
+var API_BASE = (localStorage.getItem('pp_api_base') || 'https://your-actual-railway-url.up.railway.app').replace(/\/+$/, '');
 
 /* PERFORMANCE: cache + pagination */
 var _articleCache = [];
@@ -1329,9 +2056,10 @@ async function apiFetch(path, opts) {
 
 function normaliseArticle(a) {
   return Object.assign({}, a, {
-    pubDate: a.pub_date || a.pubDate || '',
-    whyItMatters: a.why_it_matters || a.whyItMatters || '',
-    read: a.read === 1 || a.read === true,
+    pubDate:      a.pub_date       || a.pubDate       || '',
+    scrapedDate:  a.processed_date || a.scrapedDate   || '',
+    whyItMatters: a.why_it_matters || a.whyItMatters  || '',
+    read:   a.read   === 1 || a.read   === true,
     staged: a.staged === 1 || a.staged === true,
   });
 }
@@ -1459,13 +2187,40 @@ const DS_DEF=[
 
 let articles=ARTICLES_SEED.map(a=>({...a}));
 let sources=SOURCES_SEED.map(s=>({...s}));
-let subscribers=SUBSCRIBERS_SEED.map(s=>({...s}));
-let digestHistory=DIGEST_HISTORY_SEED.map(d=>({...d}));
+// Load subscribers from localStorage, fall back to seed data on first run
+function loadSubscribers(){
+  try {
+    var stored = localStorage.getItem('pp_subscribers');
+    if(stored){
+      var parsed = JSON.parse(stored);
+      if(Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch(e){}
+  return SUBSCRIBERS_SEED.map(s=>({...s}));
+}
+function saveSubscribers(){
+  try { localStorage.setItem('pp_subscribers', JSON.stringify(subscribers)); } catch(e){}
+}
+let subscribers = loadSubscribers();
+function loadDigestHistory(){
+  try {
+    var stored = localStorage.getItem('pp_digest_history');
+    if(stored){ var p=JSON.parse(stored); if(Array.isArray(p)&&p.length) return p; }
+  } catch(e){}
+  return DIGEST_HISTORY_SEED.map(d=>({...d}));
+}
+function saveDigestHistory(){
+  try { localStorage.setItem('pp_digest_history',JSON.stringify(digestHistory)); } catch(e){}
+}
+let digestHistory=loadDigestHistory();
 let digestSections=DS_DEF.map(s=>({...s,items:[]}));
 let watchlist=["Indigenous","DRIPA","TRC","SSHRC","budget","pharmacare"];
 let showUnreadOnly=true;
 let chatHistory=[];
 let apiKey='';
+let notionToken = localStorage.getItem('pp_notion_token') || '';
+let notionArticleDbId = localStorage.getItem('pp_notion_article_db') || '';
+let notionNotesDbId = localStorage.getItem('pp_notion_notes_db') || '';
 
 
 
@@ -1568,10 +2323,19 @@ function openPreview(id, event){
     '<span class="tag tag-domain">'+a.domain+'</span>' +
     '<span class="tag tag-juris">'+(a.jurisdiction||'')+'</span>' +
     '<span class="relevance-badge">'+rEmoji(a.relevance)+' '+a.relevance+'/10</span>' +
-    '<span class="sentiment-badge">'+sIcon(a.sentiment)+' '+a.sentiment+'</span>' +
-    '<span style="font-size:10px;color:var(--dim);font-family:IBM Plex Mono,monospace">'+(a.pub_date||a.pubDate||'')+'</span>';
+    '<span class="sentiment-badge">'+sIcon(a.sentiment)+' '+a.sentiment+'</span>';
+  var datesEl = document.getElementById('preview-dates');
+  if(datesEl){
+    var _pub     = a.pubDate     || a.pub_date      || '';
+    var _scraped = a.scrapedDate || a.processed_date || '';
+    datesEl.innerHTML =
+      (_pub     ? '<span title="Date published by the original source">&#x1F4C5; <strong style="color:var(--white)">Published:</strong> '+_pub+'</span>' : '') +
+      (_scraped ? '<span title="Date PolicyPulse scraped this article"> &nbsp;&#x1F50D; <strong>Scraped:</strong> '+_scraped.slice(0,10)+'</span>' : '');
+  }
 
   document.getElementById('preview-title').textContent = a.title;
+  var notionPreviewBtn = document.getElementById('preview-notion-btn');
+  if(notionPreviewBtn) notionPreviewBtn.style.display = (notionToken && notionArticleDbId) ? 'inline-flex' : 'none';
   document.getElementById('preview-link').href = a.url;
   document.getElementById('preview-summary').textContent = a.summary || 'No summary available.';
   document.getElementById('preview-why').textContent = a.why_it_matters || a.whyItMatters || 'No analysis available.';
@@ -1871,6 +2635,7 @@ async function init(){
     await apiLoadDigests();
     await apiSyncWatchlist();
   }
+  applyStoredAnalyses(); // Restore any AI-generated summaries from localStorage
   updateFlagCount();
   renderDashboard(); updateBadges();
   setTimeout(function(){
@@ -1883,7 +2648,7 @@ async function showTab(n){
   // Remove active from home tab too
   var homeTab = document.getElementById('tab-home');
   if(homeTab) homeTab.classList.remove('active');
-  ['dashboard','quickstart','scraper','digest','subscribers','askai','instructions','citations','notes'].forEach(t=>{
+  ['dashboard','quickstart','scraper','digest','subscribers','askai','instructions','citations','notes','privacy','notion','research'].forEach(t=>{
     var pg=document.getElementById('page-'+t);
     var tb=document.getElementById('tab-'+t);
     if(pg) pg.style.display=t===n?'block':'none';
@@ -1912,6 +2677,15 @@ async function showTab(n){
   if(n==='subscribers') renderSubscribers();
   if(n==='citations'){ populateCiteSelect(); renderCitations(); }
   if(n==='notes'){ renderNotesList(); }
+  if(n==='notion'){ initNotionTab(); }
+  if(n==='research'){
+    if(API_BASE && !_researchInitialized){
+      _researchInitialized = true;
+      await loadResearchArticles();
+      await loadResearchStats();
+    }
+    renderResearchFeed();
+  }
 }
 
 function sIcon(s){return s==='Critical'?'🔴':s==='Supportive'?'🟢':'⚪';}
@@ -1941,7 +2715,7 @@ function buildCard(a,expanded){
       <input type="checkbox" class="article-chk" data-id="${a.id}" onchange="handleCheckbox(${a.id},this.checked)" onclick="event.stopPropagation()" style="position:absolute;top:10px;right:10px;width:15px;height:15px;cursor:pointer;accent-color:var(--cyan);z-index:2">
       <div class="article-meta" style="padding-right:22px">
         <span class="article-source">${a.source}</span>
-        ${(function(){var _d=a.pub_date||a.pubDate||'';var _age=(Date.now()-new Date(_d))/864e5;return _age<1?'<span class="age-badge age-today" title="Published today — highest priority for review">&#x1F7E2; Today</span>':_age<7?'<span class="age-badge age-week" title="Scraped within the last 7 days">&#x1F7E1; This week</span>':''})()}
+        ${(function(){var _d=a.pubDate||a.pub_date||'';var _age=(Date.now()-new Date(_d))/864e5;return _age<1?'<span class="age-badge age-today" title="Published today by the source">&#x1F7E2; Today</span>':_age<7?'<span class="age-badge age-week" title="Published within the last 7 days">&#x1F7E1; This week</span>':''})()}
         <span class="tag tag-domain">${a.domain}</span>
         <span class="tag tag-juris">${a.jurisdiction}</span>
         <span class="relevance-badge">${rEmoji(a.relevance)} ${a.relevance}/10</span>
@@ -1953,6 +2727,7 @@ function buildCard(a,expanded){
         <button class="hbtn" onclick="event.stopPropagation();toggleStage(${a.id})">${a.staged?'&#x2715; Unstage':'+&#x1F4C4; Stage'}</button>
         <button class="hbtn ${a.flagged?'hbtn-flagged':''}" onclick="event.stopPropagation();toggleFlag(${a.id})" title="${a.flagged?'Remove flag':'Flag article'}">${a.flagged?'&#x1F6A9;':'&#x2691;'} ${a.flagged?'Flagged':'Flag'}</button>
         <button class="hbtn" onclick="event.stopPropagation();shareArticle(${a.id})">&#x1F517; Share</button>
+        ${notionToken&&notionArticleDbId?'<button class="hbtn hbtn-notion" onclick="event.stopPropagation();saveArticleToNotion('+a.id+')" title="Save to Notion">&#x1F5D2; Notion</button>':''}
       </div>
       <div class="article-title-link" onclick="openPreview(${a.id},event)" style="cursor:pointer" title="Click to preview">${a.title}</div
       <div class="article-url-row">
@@ -1986,7 +2761,7 @@ function buildCard(a,expanded){
         </span>
       </div>
       <div class="article-footer">
-        <span class="article-date">${a.pub_date||a.pubDate||''}</span>
+        <span class="article-date" title="Published by source">&#x1F4C5; ${a.pubDate||a.pub_date||'—'}</span>${a.scrapedDate?'<span class="article-date" style="color:var(--dim);font-size:10px" title="Scraped: '+a.scrapedDate.slice(0,10)+'"> · found '+a.scrapedDate.slice(0,10)+'</span>':''}
         <span style="font-size:10px;color:var(--dim)">~${Math.max(1,Math.ceil((_sum.length/5)/200))} min read</span>
         ${a.read
           ?'<button class="btn btn-ghost btn-sm" onclick="markUnread('+a.id+')">↩ Unread</button>'
@@ -2215,36 +2990,73 @@ function archiveTab(t){
   if(t==='month')renderByMonth();if(t==='year')renderByYear();if(t==='domain')renderByDomain();
 }
 function renderArchive(){
-  const q=document.getElementById('archive-search').value.toLowerCase();
-  const dom=document.getElementById('archive-domain').value;
-  const jur=document.getElementById('archive-juris').value;
-  let list=articles.filter(a=>{
-    if(dom&&a.domain!==dom)return false;if(jur&&a.jurisdiction!==jur)return false;
-    if(q&&!a.title.toLowerCase().includes(q)&&!a.summary.toLowerCase().includes(q))return false;return true;
-  }).sort((a,b)=>new Date(b.pubDate)-new Date(a.pubDate));
-  document.getElementById('archive-results').innerHTML=list.length?list.map(a=>buildCard(a)).join(''):'<div class="empty"><div class="empty-icon">📂</div><div class="empty-text">No articles match.</div></div>';
+  const q   = document.getElementById('archive-search').value.toLowerCase();
+  const dom = document.getElementById('archive-domain').value;
+  const jur = document.getElementById('archive-juris').value;
+  var srcSel = document.getElementById('archive-source');
+  var src = srcSel ? srcSel.value : '';
+  if(srcSel){
+    var curSrc = srcSel.value;
+    var srcs = Array.from(new Set(articles.map(function(a){return a.source;}).filter(Boolean))).sort();
+    srcSel.innerHTML = '<option value="">All Sources</option>'
+      + srcs.map(function(s){ return '<option value="'+s+'"'+(s===curSrc?' selected':'')+'>'+s+'</option>'; }).join('');
+    srcSel.value = curSrc;
+    src = srcSel.value;
+  }
+  let list = articles.filter(a=>{
+    if(dom && a.domain       !== dom) return false;
+    if(jur && a.jurisdiction !== jur) return false;
+    if(src && a.source       !== src) return false;
+    if(q && !a.title.toLowerCase().includes(q) && !(a.summary||'').toLowerCase().includes(q)) return false;
+    return true;
+  }).sort((a,b)=>new Date(b.pubDate||b.pub_date)-new Date(a.pubDate||a.pub_date));
+  document.getElementById('archive-results').innerHTML = list.length
+    ? list.map(a=>buildCard(a)).join('')
+    : '<div class="empty"><div class="empty-icon">📂</div><div class="empty-text">No articles match.</div></div>';
 }
 function renderByMonth(){
-  // Generate last 6 months dynamically
-  const months = [];
-  const now = new Date();
-  for(let i=0;i<6;i++){
-    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
-    months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
-  }
-  const btnEl=document.getElementById('month-btns');
-  btnEl.innerHTML=months.map((m,i)=>`<button class="pill ${i===0?'active':''}" onclick="showMonth('${m}',this)">${m}</button>`).join('');
-  showMonth(months[0],btnEl.children[0]);
+  var monthSet = new Set();
+  articles.forEach(function(a){ var d=a.pubDate||a.pub_date||''; if(d.length>=7) monthSet.add(d.slice(0,7)); });
+  var months = Array.from(monthSet).sort(function(a,b){ return b.localeCompare(a); });
+  var btnEl = document.getElementById('month-btns');
+  if(!months.length){ btnEl.innerHTML='<span style="color:var(--dim);font-size:12px">No articles yet.</span>'; return; }
+  btnEl.innerHTML = months.map(function(m,i){
+    var label = new Date(m+'-02').toLocaleDateString('en-CA',{year:'numeric',month:'long'});
+    var count = articles.filter(function(a){ return (a.pubDate||a.pub_date||'').startsWith(m); }).length;
+    return '<button class="pill'+(i===0?' active':'')+'" onclick="showMonth(&apos;'+m+'&apos;,this)">'+label+' <span style="font-size:10px;opacity:.7">('+count+')</span></button>';
+  }).join('');
+  showMonth(months[0], btnEl.children[0]);
 }
-function showMonth(m,btn){document.querySelectorAll('#month-btns .pill').forEach(b=>b.classList.remove('active'));btn.classList.add('active');const list=articles.filter(a=>a.pubDate.startsWith(m)).sort((a,b)=>new Date(b.pubDate)-new Date(a.pubDate));document.getElementById('month-results').innerHTML=list.length?list.map(a=>buildCard(a)).join(''):'<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">No articles for this month.</div></div>';}
+function showMonth(m,btn){
+  document.querySelectorAll('#month-btns .pill').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  var list = articles.filter(function(a){ return (a.pubDate||a.pub_date||'').startsWith(m); })
+                     .sort(function(a,b){ return new Date(b.pubDate||b.pub_date)-new Date(a.pubDate||a.pub_date); });
+  document.getElementById('month-results').innerHTML = list.length
+    ? list.map(function(a){ return buildCard(a); }).join('')
+    : '<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">No articles published this month.</div></div>';
+}
 function renderByYear(){
-  const curYear = new Date().getFullYear();
-  const years = [curYear, curYear-1].map(String);
-  const btnEl=document.getElementById('year-btns');
-  btnEl.innerHTML=years.map((y,i)=>`<button class="pill ${i===0?'active':''}" onclick="showYear('${y}',this)">${y}</button>`).join('');
-  showYear(years[0],btnEl.children[0]);
+  var yearSet = new Set();
+  articles.forEach(function(a){ var d=a.pubDate||a.pub_date||''; if(d.length>=4) yearSet.add(d.slice(0,4)); });
+  var years = Array.from(yearSet).sort(function(a,b){ return b.localeCompare(a); });
+  var btnEl = document.getElementById('year-btns');
+  if(!years.length){ btnEl.innerHTML='<span style="color:var(--dim);font-size:12px">No articles yet.</span>'; return; }
+  btnEl.innerHTML = years.map(function(y,i){
+    var count = articles.filter(function(a){ return (a.pubDate||a.pub_date||'').startsWith(y); }).length;
+    return '<button class="pill'+(i===0?' active':'')+'" onclick="showYear(&apos;'+y+'&apos;,this)">'+y+' <span style="font-size:10px;opacity:.7">('+count+')</span></button>';
+  }).join('');
+  showYear(years[0], btnEl.children[0]);
 }
-function showYear(y,btn){document.querySelectorAll('#year-btns .pill').forEach(b=>b.classList.remove('active'));btn.classList.add('active');const list=articles.filter(a=>a.pubDate.startsWith(y)).sort((a,b)=>new Date(b.pubDate)-new Date(a.pubDate));document.getElementById('year-results').innerHTML=list.length?list.map(a=>buildCard(a)).join(''):'<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">No articles for this year.</div></div>';}
+function showYear(y,btn){
+  document.querySelectorAll('#year-btns .pill').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  var list = articles.filter(function(a){ return (a.pubDate||a.pub_date||'').startsWith(y); })
+                     .sort(function(a,b){ return new Date(b.pubDate||b.pub_date)-new Date(a.pubDate||a.pub_date); });
+  document.getElementById('year-results').innerHTML = list.length
+    ? list.map(function(a){ return buildCard(a); }).join('')
+    : '<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">No articles published this year.</div></div>';
+}
 function renderByDomain(){const domains=[...new Set(articles.map(a=>a.domain))];document.getElementById('domain-results').innerHTML=domains.map(d=>{const list=articles.filter(a=>a.domain===d).sort((a,b)=>new Date(b.pubDate)-new Date(a.pubDate));return`<div class="section-title">${d} <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:11px;letter-spacing:0">(${list.length})</span></div>${list.map(a=>buildCard(a)).join('')}`;}).join('');}
 
 async function scrapeNow(){
@@ -2319,13 +3131,110 @@ function renderDigestHistory(){
     <td><div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm">View</button><button class="btn btn-ghost btn-sm">Re-send</button></div></td>
   </tr>`).join('');
 }
-function sendDigest(){
-  const sc=stageCount();if(!sc){alert('No articles staged yet.');return;}
-  if(confirm('Send digest to '+subscribers.filter(s=>s.active).length+' active subscribers?')){
-    const token='pp-'+Math.random().toString(36).slice(2,8);
-    digestHistory.unshift({id:Date.now(),subject:'PolicyPulse Weekly — Apr 18, 2026',created:'2026-04-18',sent:'2026-04-18',recipients:subscribers.filter(s=>s.active).length,token});
-    renderDigestHistory();alert('✓ Digest sent!\n\nPublic URL:\npolicypulse.netlify.app/digest/'+token);
+async function sendDigest(){
+  const sc = stageCount();
+  if(!sc){ showToast('&#x26A0;','Nothing Staged','Add articles to your digest first.',3000); return; }
+
+  const active = subscribers.filter(s=>s.active);
+  if(!active.length){ showToast('&#x26A0;','No Subscribers','Add active subscribers in the Subscribers tab first.',3000); return; }
+
+  if(!confirm('Send digest to '+active.length+' active subscriber'+(active.length!==1?'s':'')+': '+active.map(s=>s.name).join(', ')+'?')) return;
+
+  const staged = articles.filter(a=>a.staged);
+  const subject = 'PolicyPulse Weekly — '+new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+  const html = buildDigestEmailHTML(staged, subject);
+
+  if(API_BASE){
+    // Real send via Railway backend
+    showToast('&#x2709;','Sending...','Delivering digest to '+active.length+' subscriber'+(active.length!==1?'s':'')+'.',3000);
+    try {
+      const resp = await apiFetch('/digests/send', {
+        method: 'POST',
+        body: JSON.stringify({
+          subject: subject,
+          html_content: html,
+          recipients: active.map(s=>({name:s.name, email:s.email}))
+        })
+      });
+      if(resp && resp.ok){
+        const token = resp.token || 'pp-'+Math.random().toString(36).slice(2,8);
+        digestHistory.unshift({id:Date.now(),subject,created:new Date().toISOString().slice(0,10),sent:new Date().toISOString().slice(0,10),recipients:resp.sent||active.length,token});
+        saveDigestHistory();
+        renderDigestHistory();
+        const errNote = resp.errors && resp.errors.length ? ' ('+resp.errors.length+' failed)' : '';
+        showToast('&#x2709;','Digest Sent','Delivered to '+(resp.sent||active.length)+' subscriber'+(active.length!==1?'s':'')+errNote+'.',5000);
+      } else {
+        showToast('&#x26A0;','Send Failed','Check that SMTP is configured in your Railway environment variables. See Reference Guide.',6000);
+      }
+    } catch(e){
+      showToast('&#x26A0;','Send Failed',e.message,5000);
+    }
+  } else {
+    // No backend — copy to clipboard as fallback
+    const plain = staged.map(a=>a.title+'\n'+a.source+' | '+(a.pub_date||a.pubDate||'')+'\n'+(a.summary||'')+'\n\u1F4A1 '+(a.whyItMatters||a.why_it_matters||'')+'\n'+a.url+'\n').join('\n---\n\n');
+    navigator.clipboard.writeText(subject+'\n'+'='.repeat(subject.length)+'\n\n'+plain).then(function(){
+      showToast('&#x2702;','Digest Copied','No backend connected — digest copied to clipboard. Paste into Gmail or Outlook to send manually.',6000);
+    });
   }
+}
+
+function buildDigestEmailHTML(staged, subject){
+  const sections = [
+    {id:'headline', label:'&#x1F5DE; Headline of the Week'},
+    {id:'federal',  label:'&#x1F341; Federal Policy Watch'},
+    {id:'provincial',label:'&#x1F3D4; Provincial Policy Watch'},
+    {id:'regulatory',label:'&#x1F4CB; Regulatory &amp; Funding Updates'},
+    {id:'radar',    label:'&#x1F4E1; On Our Radar'},
+  ];
+  const sectionMap = {};
+  digestSections.forEach(function(s){ sectionMap[s.id] = s.items; });
+  // Group staged articles by section; ungrouped go to radar
+  const placed = new Set();
+  let sectionsHTML = '';
+  sections.forEach(function(sec){
+    const ids = sectionMap[sec.id] || [];
+    const arts = ids.map(id=>staged.find(a=>a.id===id)).filter(Boolean);
+    arts.forEach(a=>placed.add(a.id));
+    if(!arts.length) return;
+    sectionsHTML += '<h2 style="color:#003366;font-size:15px;border-bottom:2px solid #003366;padding-bottom:6px;margin:28px 0 14px">'+sec.label+'</h2>';
+    arts.forEach(function(a){
+      sectionsHTML += '<div style="margin-bottom:20px;padding:14px 16px;background:#f8faff;border-left:4px solid #1d4ed8;border-radius:0 6px 6px 0">'
+        +'<div style="font-size:13px;font-weight:700;color:#0f1f35;margin-bottom:4px"><a href="'+a.url+'" style="color:#1d4ed8;text-decoration:none">'+a.title+'</a></div>'
+        +'<div style="font-size:11px;color:#6b8aaa;margin-bottom:8px">'+a.source+' &bull; '+(a.jurisdiction||'')+' &bull; '+(a.pub_date||a.pubDate||'')+'</div>'
+        +(a.summary?'<div style="font-size:12px;color:#334d6b;line-height:1.7;margin-bottom:6px">'+a.summary+'</div>':'')
+        +((a.whyItMatters||a.why_it_matters)?'<div style="font-size:12px;color:#0a4d6e;font-style:italic;padding:5px 10px;background:rgba(0,119,170,0.06);border-left:2px solid rgba(0,119,170,0.3)">&#x1F4A1; '+(a.whyItMatters||a.why_it_matters)+'</div>':'')
+        +'</div>';
+    });
+  });
+  // Any staged articles not placed in a section
+  const unplaced = staged.filter(a=>!placed.has(a.id));
+  if(unplaced.length){
+    sectionsHTML += '<h2 style="color:#003366;font-size:15px;border-bottom:2px solid #003366;padding-bottom:6px;margin:28px 0 14px">&#x1F4E1; Also This Week</h2>';
+    unplaced.forEach(function(a){
+      sectionsHTML += '<div style="margin-bottom:16px;padding:12px 14px;background:#f8faff;border-left:3px solid #6b8aaa;border-radius:0 4px 4px 0">'
+        +'<div style="font-size:13px;font-weight:600;color:#0f1f35"><a href="'+a.url+'" style="color:#1d4ed8;text-decoration:none">'+a.title+'</a></div>'
+        +'<div style="font-size:11px;color:#6b8aaa;margin-top:4px">'+a.source+' &bull; '+(a.pub_date||a.pubDate||'')+'</div>'
+        +'</div>';
+    });
+  }
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
+    +'<body style="font-family:Georgia,serif;background:#f2f5fa;margin:0;padding:20px">'
+    +'<div style="max-width:640px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)">'
+    +'<div style="background:linear-gradient(135deg,#003366,#1d4ed8);padding:28px 32px">'
+    +'<div style="font-family:Georgia,serif;font-size:24px;font-weight:700;color:#fff;margin-bottom:4px">PolicyPulse</div>'
+    +'<div style="font-size:12px;color:rgba(255,255,255,.7);letter-spacing:.08em;text-transform:uppercase">Policy Intelligence Digest</div>'
+    +'</div>'
+    +'<div style="padding:28px 32px">'
+    +'<p style="font-size:13px;color:#334d6b;margin:0 0 4px">'+subject+'</p>'
+    +'<p style="font-size:12px;color:#6b8aaa;margin:0 0 20px">'+staged.length+' article'+(staged.length!==1?'s':'')+' this week</p>'
+    +sectionsHTML
+    +'</div>'
+    +'<div style="background:#f8faff;padding:20px 32px;border-top:1px solid #e8eef4;font-size:11px;color:#6b8aaa;text-align:center">'
+    +'PolicyPulse Intelligence Platform &bull; Built by Anthony Coompson &bull; Vancouver, BC<br>'
+    +'<a href="#unsubscribe" style="color:#6b8aaa">Unsubscribe</a>'
+    +'</div>'
+    +'</div>'
+    +'</body></html>';
 }
 function copyDigest(){
   const staged=articles.filter(a=>a.staged);if(!staged.length){alert('No articles staged yet.');return;}
@@ -2344,9 +3253,9 @@ function renderSubscribers(){
     <td><div style="display:flex;gap:6px"><button class="btn ${s.active?'btn-red':'btn-green'} btn-sm" onclick="toggleSub(${s.id})">${s.active?'Deactivate':'Activate'}</button><button class="btn btn-ghost btn-sm" onclick="removeSub(${s.id})">Remove</button></div></td>
   </tr>`).join('');
 }
-function toggleSub(id){const s=subscribers.find(x=>x.id===id);if(s)s.active=!s.active;renderSubscribers();}
-function removeSub(id){if(confirm('Remove this subscriber?')){subscribers=subscribers.filter(x=>x.id!==id);renderSubscribers();}}
-function addSubscriber(){const name=prompt('Full name:');if(!name)return;const email=prompt('Email:');if(!email)return;const role=prompt('Role (Admin/Reader):')||'Reader';subscribers.push({id:Date.now(),name,email,role,active:true,added:new Date().toISOString().slice(0,10)});renderSubscribers();}
+function toggleSub(id){const s=subscribers.find(x=>x.id===id);if(s)s.active=!s.active;saveSubscribers();renderSubscribers();}
+function removeSub(id){if(confirm('Remove this subscriber?')){subscribers=subscribers.filter(x=>x.id!==id);saveSubscribers();renderSubscribers();}}
+function addSubscriber(){const name=prompt('Full name:');if(!name)return;const email=prompt('Email:');if(!email||!email.includes('@')){alert('Please enter a valid email address.');return;}const role=prompt('Role (Admin/Reader):')||'Reader';subscribers.push({id:Date.now(),name:name.trim(),email:email.trim().toLowerCase(),role,active:true,added:new Date().toISOString().slice(0,10)});saveSubscribers();renderSubscribers();showToast('&#x2705;','Subscriber Added',name+' added to your list.',2500);}
 
 function appendMsg(text,type){const el=document.getElementById('chat-messages');const div=document.createElement('div');div.className=type;div.textContent=text;el.appendChild(div);el.scrollTop=el.scrollHeight;return div;}
 function askSuggestion(btn){document.getElementById('chat-input').value=btn.textContent;sendChat();}
@@ -2507,6 +3416,47 @@ async function aiReadArticle(){
 }
 
 /* === GENERATE WHY IT MATTERS === */
+/* ═══ GENERATED ANALYSIS PERSISTENCE ═══
+   Saves AI-generated summary + why_it_matters to localStorage keyed by article id.
+   This means closing the preview and reopening it shows the same generated content,
+   even across page refreshes when no backend is connected.
+   Storage key: pp_gen_analysis  →  { "articleId": { summary, whyItMatters, ts } }
+*/
+function saveGeneratedAnalysis(articleId, summary, whyItMatters){
+  try {
+    var store = JSON.parse(localStorage.getItem('pp_gen_analysis') || '{}');
+    store[String(articleId)] = {
+      summary: summary || '',
+      whyItMatters: whyItMatters || '',
+      ts: new Date().toISOString()
+    };
+    localStorage.setItem('pp_gen_analysis', JSON.stringify(store));
+  } catch(e){ console.warn('Could not save analysis to localStorage:', e); }
+}
+
+function loadGeneratedAnalysis(articleId){
+  try {
+    var store = JSON.parse(localStorage.getItem('pp_gen_analysis') || '{}');
+    return store[String(articleId)] || null;
+  } catch(e){ return null; }
+}
+
+/* Apply any locally-stored generated analysis back onto the articles array.
+   Called once during init() so all articles carry their persisted content. */
+function applyStoredAnalyses(){
+  try {
+    var store = JSON.parse(localStorage.getItem('pp_gen_analysis') || '{}');
+    Object.keys(store).forEach(function(idStr){
+      var saved = store[idStr];
+      var a = articles.find(function(x){ return String(x.id) === idStr; });
+      if(a){
+        if(saved.summary)      a.summary = saved.summary;
+        if(saved.whyItMatters){ a.whyItMatters = saved.whyItMatters; a.why_it_matters = saved.whyItMatters; }
+      }
+    });
+  } catch(e){}
+}
+
 async function generateWhyItMatters(){
   var a = articles.find(function(x){ return x.id === _previewArticleId; });
   if(!a) return;
@@ -2566,6 +3516,10 @@ async function generateWhyItMatters(){
     // Update the article object in memory
     if(parsed.whyItMatters){ a.whyItMatters = parsed.whyItMatters; a.why_it_matters = parsed.whyItMatters; }
     if(parsed.summary){ a.summary = parsed.summary; }
+
+    // Persist to localStorage so the generated content survives closing/reopening
+    // the article preview and even page refreshes (when no backend is connected)
+    saveGeneratedAnalysis(a.id, a.summary, a.whyItMatters);
 
     // Update the preview UI
     if(whyEl) whyEl.textContent = a.whyItMatters || '';
@@ -3215,7 +4169,7 @@ function showLanding(){
   // Mark home tab as active
   var homeTab = document.getElementById('tab-home');
   if(homeTab) homeTab.classList.add('active');
-  ['dashboard','quickstart','scraper','digest','subscribers','askai','instructions','citations','notes'].forEach(function(t){
+  ['dashboard','quickstart','scraper','digest','subscribers','askai','instructions','citations','notes','privacy','notion','research'].forEach(function(t){
     var tb = document.getElementById('tab-'+t);
     if(tb) tb.classList.remove('active');
   });
@@ -3250,8 +4204,8 @@ var _tourSteps = [
   {tab:'digest',icon:'&#x1F4C4;',title:'Digest Builder',body:'Stage articles into structured briefing sections: Headline of the Week, Federal Watch, Provincial Watch, and On Our Radar. Add "Why It Matters" notes then export as PDF or send by email.',anchor:null},
   {tab:'citations',icon:'&#x1F4DA;',title:'Citations & Bibliography',body:'Auto-generate APA, MLA, and Chicago citations for any article in your feed. Use AI Auto-Generate to have Groq format all citations to academic standards in seconds.',anchor:null},
   {tab:'askai',icon:'&#x1F916;',title:'Ask AI',body:'Chat with Groq AI about your article database. Ask "What should go in this week\'s digest?", "Summarize reconciliation news this month", or "What are the most urgent items?".',anchor:null},
-  {tab:'dashboard',icon:'&#x2705;',title:'You\'re Ready!',body:'PolicyPulse is ready to use. Connect your Railway backend in any feed panel to enable live scraping and persistent data. Enter your free Groq API key to activate AI features.',anchor:null},
   {tab:'instructions',icon:'&#x1F4D6;',title:'Reference Guide',body:'The Reference Guide tab has colour codes, sentiment tags, relevance scores, flag and staging explanations, and digest send notes. The Quick Start tab walks you through setup step by step.',anchor:null},
+  {tab:'dashboard',icon:'&#x2705;',title:'You\'re Ready!',body:'PolicyPulse is ready to use. Connect your Railway backend in any feed panel to enable live scraping and persistent data. Enter your free Groq API key to activate AI features.',anchor:null},
 ];
 var _tourStep = 0;
 var _tourActive = false;
@@ -3260,6 +4214,8 @@ function startTour(){
   // Close landing if open
   var lp = document.getElementById('landing-page');
   if(lp && lp.style.display!=='none') enterApp();
+  // Always hide API modal so it doesn't appear over the tour
+  document.getElementById('api-modal').classList.remove('show');
   _tourStep = 0;
   _tourActive = true;
   document.getElementById('tour-overlay').style.display='block';
@@ -3303,9 +4259,9 @@ function positionTourCard(tab){
   var card = document.getElementById('tour-card');
   var tabBtn = document.getElementById('tab-'+tab);
   if(!card) return;
-  card.style.top='80px';
+  card.style.top='50%';
   card.style.left='50%';
-  card.style.transform='translateX(-50%)';
+  card.style.transform='translate(-50%, -50%)';
 }
 
 /* ═══ SHARE ARTICLE ═══ */
@@ -3794,6 +4750,445 @@ function updateFlagCount(){
   var el = document.getElementById('dash-subtitle');
   if(el) el.textContent = 'Policy intelligence overview · '+new Date().toLocaleDateString('en-CA',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 })();
+function clearPrivacyData(type){
+  var keys = {
+    analysis: ['pp_gen_analysis'],
+    notes:     ['pp_notes_data','pp_notes'],
+    citations: ['pp_citations'],
+    all:       ['pp_gen_analysis','pp_notes_data','pp_notes','pp_citations',
+                 'pp_saved_searches','pp_schedule','pp_theme','pp_tour_done',
+                 'pp_visited','pp_api_base','pp_last_auto_sent','pp_subscribers','pp_digest_history','pp_notion_token','pp_notion_article_db','pp_notion_notes_db']
+  };
+  var toDelete = keys[type] || [];
+  toDelete.forEach(function(k){ localStorage.removeItem(k); });
+  var statusEl = document.getElementById('privacy-clear-status');
+  if(statusEl){
+    var label = {analysis:'Generated analyses', notes:'Notes', citations:'Citations', all:'All PolicyPulse data'};
+    statusEl.textContent = '\u2713 ' + (label[type]||'Data') + ' cleared.';
+    statusEl.style.display = 'block';
+    setTimeout(function(){ statusEl.style.display='none'; }, 3000);
+  }
+  if(type === 'all') showToast('&#x26A0;','Data Cleared','All local PolicyPulse data has been removed.',4000);
+}
+
+
+/* ═══════════════════════════════════════════════════
+   NOTION INTEGRATION
+   All calls proxied through Railway: POST /notion/push
+   Token stored in localStorage, never server-side.
+═══════════════════════════════════════════════════ */
+
+function saveNotionSettings(){
+  var token   = document.getElementById('notion-token-inp').value.trim();
+  var artDb   = document.getElementById('notion-article-db-inp').value.trim().replace(/-/g,'');
+  var notesDb = document.getElementById('notion-notes-db-inp').value.trim().replace(/-/g,'');
+  if(!token || token.startsWith('\u2022')){ showToast('\u26A0','Missing Token','Paste your Notion integration token first.',3000); return; }
+  notionToken       = token;
+  notionArticleDbId = artDb;
+  notionNotesDbId   = notesDb;
+  localStorage.setItem('pp_notion_token',      token);
+  localStorage.setItem('pp_notion_article_db', artDb);
+  localStorage.setItem('pp_notion_notes_db',   notesDb);
+  testNotionConnection();
+}
+
+function clearNotionSettings(){
+  notionToken = ''; notionArticleDbId = ''; notionNotesDbId = '';
+  ['pp_notion_token','pp_notion_article_db','pp_notion_notes_db'].forEach(function(k){ localStorage.removeItem(k); });
+  document.getElementById('notion-token-inp').value = '';
+  document.getElementById('notion-article-db-inp').value = '';
+  document.getElementById('notion-notes-db-inp').value = '';
+  updateNotionStatusBar('disconnected');
+  updateNotionButtons();
+  showToast('\u1F5D2','Notion Disconnected','Settings cleared.',2500);
+}
+
+async function testNotionConnection(){
+  if(!notionToken){ updateNotionStatusBar('disconnected'); return; }
+  if(!API_BASE){ updateNotionStatusBar('no-backend'); return; }
+  updateNotionStatusBar('testing');
+  try {
+    var res = await apiFetch('/notion/test', {
+      method: 'POST',
+      body: JSON.stringify({ token: notionToken })
+    });
+    if(res && res.ok){
+      updateNotionStatusBar('connected', res.workspace || 'Connected');
+      updateNotionButtons();
+      showToast('\u2705','Notion Connected','Integration working. Buttons are now active.',3000);
+    } else {
+      updateNotionStatusBar('error', (res && res.detail) || 'Token rejected by Notion');
+    }
+  } catch(e){
+    updateNotionStatusBar('error', e.message);
+  }
+}
+
+function updateNotionStatusBar(state, detail){
+  var icon = document.getElementById('notion-status-icon');
+  var text = document.getElementById('notion-status-text');
+  var states = {
+    disconnected: ['&#x26AA;','Not connected — paste your integration token and click Save & Test', 'var(--muted)'],
+    testing:      ['&#x1F7E1;','Testing connection to Notion...', 'var(--muted)'],
+    connected:    ['&#x1F7E2;','Connected to Notion'+(detail?' — '+detail:''), 'var(--green)'],
+    'no-backend': ['&#x1F7E0;','Railway backend required — connect your backend first', '#fb923c'],
+    error:        ['&#x1F534;','Connection failed: '+(detail||'unknown error'), '#f87171'],
+  };
+  var m = states[state] || states.disconnected;
+  if(icon) icon.innerHTML = m[0];
+  if(text){ text.textContent = m[1]; text.style.color = m[2]; }
+}
+
+function updateNotionButtons(){
+  var active    = !!(notionToken && notionArticleDbId && API_BASE);
+  var notesActive = !!(notionToken && notionNotesDbId && API_BASE);
+  var digestBtn = document.getElementById('notion-digest-btn');
+  var noteBtn   = document.getElementById('notion-note-btn');
+  if(digestBtn) digestBtn.style.display = active      ? 'inline-flex' : 'none';
+  if(noteBtn)   noteBtn.style.display   = notesActive ? 'inline-flex' : 'none';
+}
+
+async function notionProxy(endpoint, payload){
+  if(!API_BASE)     throw new Error('Railway backend not connected — connect your backend first');
+  if(!notionToken)  throw new Error('Notion token not set — go to the Notion tab to connect');
+  var res = await apiFetch('/notion/push', {
+    method: 'POST',
+    body: JSON.stringify({ token: notionToken, endpoint: endpoint, payload: payload })
+  });
+  if(!res || res.error) throw new Error((res && (res.detail || res.error)) || 'Notion API error');
+  return res;
+}
+
+async function saveArticleToNotion(articleId){
+  var a = articles.find(function(x){ return x.id === articleId; });
+  if(!a){ showToast('\u26A0','Error','Article not found.',2500); return; }
+  if(!notionToken || !notionArticleDbId){
+    showToast('\u1F5D2','Notion Not Set Up','Go to the Notion tab to connect your workspace.',4000);
+    return;
+  }
+  showToast('\u1F5D2','Saving to Notion',a.title.slice(0,60)+'...',2500);
+  try {
+    var tagList = (a.tags||'').split(',').filter(function(t){ return t.trim(); })
+                              .map(function(t){ return {name:t.trim()}; });
+    var pubDate = (a.pubDate||a.pub_date||'').slice(0,10);
+    var props = {
+      'Name':         { title:     [{ text:{ content: a.title||'' } }] },
+      'Source':       { rich_text: [{ text:{ content: a.source||'' } }] },
+      'Domain':       { select:    { name: a.domain||'Other' } },
+      'Jurisdiction': { select:    { name: a.jurisdiction||'Unknown' } },
+      'Relevance':    { number:    a.relevance||0 },
+      'Sentiment':    { select:    { name: a.sentiment||'Neutral' } },
+      'URL':          { url:       a.url||null },
+    };
+    if(pubDate) props['Published'] = { date: { start: pubDate } };
+    if(tagList.length) props['Tags'] = { multi_select: tagList };
+
+    await notionProxy('pages', {
+      parent: { database_id: notionArticleDbId },
+      properties: props,
+      children: [
+        { object:'block', type:'heading_2', heading_2:{ rich_text:[{text:{content:'Summary'}}] } },
+        { object:'block', type:'paragraph', paragraph:{ rich_text:[{text:{content:a.summary||'No summary available.'}}] } },
+        { object:'block', type:'heading_2', heading_2:{ rich_text:[{text:{content:'Why It Matters'}}] } },
+        { object:'block', type:'quote',     quote:    { rich_text:[{text:{content:a.whyItMatters||a.why_it_matters||'No analysis available.'}}] } },
+        { object:'block', type:'bookmark',  bookmark: { url: a.url||'' } },
+      ]
+    });
+    showToast('\u2705','Saved to Notion',a.title.slice(0,60)+'\u2026',3500);
+  } catch(e){
+    showToast('\u26A0','Notion Error',e.message,5000);
+  }
+}
+
+async function pushDigestToNotion(){
+  var staged = articles.filter(function(a){ return a.staged; });
+  if(!staged.length){ showToast('\u26A0','Nothing Staged','Add articles to your digest first.',3000); return; }
+  if(!notionToken || !API_BASE){
+    showToast('\u1F5D2','Not Connected','Set up Notion integration in the Notion tab first.',4000);
+    return;
+  }
+  var subject = 'PolicyPulse Weekly \u2014 '+new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+  showToast('\u1F5D2','Pushing to Notion','Creating digest page...',3000);
+  try {
+    var children = [
+      { object:'block', type:'callout', callout:{
+          rich_text:[{text:{content:'PolicyPulse Intelligence Digest \u2014 '+staged.length+' article'+(staged.length!==1?'s':'')}}],
+          icon:{emoji:'\uD83D\uDCE1'}
+        }
+      },
+      { object:'block', type:'divider', divider:{} },
+    ];
+    staged.forEach(function(a){
+      children.push({ object:'block', type:'heading_3', heading_3:{ rich_text:[{text:{content:a.title||'',link:a.url?{url:a.url}:null}}] } });
+      children.push({ object:'block', type:'paragraph', paragraph:{ rich_text:[{text:{content:(a.source||'')+(a.jurisdiction?' \u00B7 '+a.jurisdiction:'')+(a.pubDate?' \u00B7 '+a.pubDate:''), annotations:{italic:true,color:'gray'}}}] } });
+      if(a.summary) children.push({ object:'block', type:'paragraph', paragraph:{ rich_text:[{text:{content:a.summary}}] } });
+      if(a.whyItMatters||a.why_it_matters) children.push({ object:'block', type:'quote', quote:{ rich_text:[{text:{content:'\uD83D\uDCA1 '+(a.whyItMatters||a.why_it_matters)}}] } });
+      children.push({ object:'block', type:'divider', divider:{} });
+    });
+    // Notion allows max 100 blocks per create call
+    await notionProxy('pages', {
+      parent: { database_id: notionArticleDbId },
+      properties: { Name: { title:[{text:{content:subject}}] } },
+      children: children.slice(0,100)
+    });
+    showToast('\u2705','Digest in Notion',subject,4000);
+  } catch(e){
+    showToast('\u26A0','Notion Error',e.message,5000);
+  }
+}
+
+async function syncNoteToNotion(){
+  if(!notionNotesDbId){
+    showToast('\u1F5D2','Notes DB Not Set','Add your Notes Database ID in the Notion tab.',4000);
+    return;
+  }
+  var note = _notes_data.find(function(n){ return n.id === _currentNoteId; });
+  if(!note){ showToast('\u26A0','No Note Open','Open a note first, then sync it.',3000); return; }
+  showToast('\u1F5D2','Syncing to Notion',note.title||'Untitled',2500);
+  try {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = note.content || '';
+    var plainText = (tmp.innerText||tmp.textContent||'').trim().slice(0,2000);
+    var noteDate  = (note.created||new Date().toISOString()).slice(0,10);
+    var props = {
+      'Name':    { title:     [{ text:{ content: note.title||'Untitled Note' } }] },
+      'Article': { rich_text: [{ text:{ content: note.linkedArticleTitle||'' } }] },
+      'Created': { date:      { start: noteDate } },
+    };
+    if(note.linkedArticleUrl) props['Article URL'] = { url: note.linkedArticleUrl };
+    await notionProxy('pages', {
+      parent: { database_id: notionNotesDbId },
+      properties: props,
+      children: plainText ? [
+        { object:'block', type:'paragraph', paragraph:{ rich_text:[{text:{content:plainText}}] } }
+      ] : []
+    });
+    showToast('\u2705','Note Synced to Notion',note.title||'Untitled',3500);
+  } catch(e){
+    showToast('\u26A0','Notion Error',e.message,5000);
+  }
+}
+
+function initNotionTab(){
+  var ti = document.getElementById('notion-token-inp');
+  var ai = document.getElementById('notion-article-db-inp');
+  var ni = document.getElementById('notion-notes-db-inp');
+  if(ti) ti.value = notionToken ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : '';
+  if(ai) ai.value = notionArticleDbId || '';
+  if(ni) ni.value = notionNotesDbId   || '';
+  if(notionToken && API_BASE) updateNotionStatusBar('connected');
+  else if(notionToken)        updateNotionStatusBar('no-backend');
+  else                        updateNotionStatusBar('disconnected');
+  updateNotionButtons();
+}
+
+
+/* ═══════════════════════════════════════════════════
+   NOTION INTEGRATION
+   All calls proxied through Railway: POST /notion/push
+   Token stored in localStorage, never server-side.
+═══════════════════════════════════════════════════ */
+
+function saveNotionSettings(){
+  var token   = (document.getElementById('notion-token-inp').value||'').trim();
+  var artDb   = (document.getElementById('notion-article-db-inp').value||'').trim().replace(/-/g,'');
+  var notesDb = (document.getElementById('notion-notes-db-inp').value||'').trim().replace(/-/g,'');
+  if(!token || token.startsWith('•')){
+    showToast('⚠','Missing Token','Paste your Notion integration token first.',3000); return;
+  }
+  notionToken       = token;
+  notionArticleDbId = artDb;
+  notionNotesDbId   = notesDb;
+  localStorage.setItem('pp_notion_token',      token);
+  localStorage.setItem('pp_notion_article_db', artDb);
+  localStorage.setItem('pp_notion_notes_db',   notesDb);
+  testNotionConnection();
+}
+
+function clearNotionSettings(){
+  notionToken = ''; notionArticleDbId = ''; notionNotesDbId = '';
+  ['pp_notion_token','pp_notion_article_db','pp_notion_notes_db'].forEach(function(k){
+    localStorage.removeItem(k);
+  });
+  var ti=document.getElementById('notion-token-inp');
+  var ai=document.getElementById('notion-article-db-inp');
+  var ni=document.getElementById('notion-notes-db-inp');
+  if(ti) ti.value=''; if(ai) ai.value=''; if(ni) ni.value='';
+  updateNotionStatusBar('disconnected');
+  updateNotionButtons();
+  showToast('🗒','Notion Disconnected','Settings cleared.',2500);
+}
+
+async function testNotionConnection(){
+  if(!notionToken){ updateNotionStatusBar('disconnected'); return; }
+  if(!API_BASE){ updateNotionStatusBar('no-backend'); return; }
+  updateNotionStatusBar('testing');
+  try {
+    var res = await apiFetch('/notion/test', {
+      method: 'POST',
+      body: JSON.stringify({ token: notionToken })
+    });
+    if(res && res.ok){
+      updateNotionStatusBar('connected', res.workspace || 'Connected');
+      updateNotionButtons();
+      showToast('✅','Notion Connected','Integration working. Buttons are now active.',3000);
+    } else {
+      updateNotionStatusBar('error', (res && res.detail) || 'Token rejected by Notion');
+    }
+  } catch(e){ updateNotionStatusBar('error', e.message); }
+}
+
+function updateNotionStatusBar(state, detail){
+  var icon = document.getElementById('notion-status-icon');
+  var text = document.getElementById('notion-status-text');
+  var s = {
+    disconnected: ['⚪','Not connected — paste your integration token and click Save & Test','var(--muted)'],
+    testing:      ['🟡','Testing connection to Notion...','var(--muted)'],
+    connected:    ['🟢','Connected — '+(detail||'workspace'),'var(--green)'],
+    'no-backend': ['🟠','Railway backend required — connect your backend first','#fb923c'],
+    error:        ['🔴','Connection failed: '+(detail||'unknown error'),'#f87171'],
+  };
+  var m = s[state] || s.disconnected;
+  if(icon) icon.innerHTML = m[0];
+  if(text){ text.textContent = m[1]; text.style.color = m[2]; }
+}
+
+function updateNotionButtons(){
+  var active     = !!(notionToken && notionArticleDbId && API_BASE);
+  var notesActive= !!(notionToken && notionNotesDbId   && API_BASE);
+  var db = document.getElementById('notion-digest-btn');
+  var nb = document.getElementById('notion-note-btn');
+  if(db) db.style.display = active      ? 'inline-flex' : 'none';
+  if(nb) nb.style.display = notesActive ? 'inline-flex' : 'none';
+}
+
+async function notionProxy(endpoint, payload){
+  if(!API_BASE)    throw new Error('Railway backend not connected');
+  if(!notionToken) throw new Error('Notion token not set');
+  var res = await apiFetch('/notion/push', {
+    method: 'POST',
+    body: JSON.stringify({ token: notionToken, endpoint: endpoint, payload: payload })
+  });
+  if(!res || (!res.ok && !res.id)) throw new Error((res && res.detail) || 'Notion API error');
+  return res;
+}
+
+async function saveArticleToNotion(articleId){
+  var a = articles.find(function(x){ return x.id === articleId; });
+  if(!a){ showToast('⚠','Error','Article not found.',2500); return; }
+  if(!notionToken || !notionArticleDbId){
+    showToast('🗒','Notion Not Set Up','Go to the Notion tab to connect your workspace.',4000); return;
+  }
+  showToast('🗒','Saving to Notion',a.title.slice(0,60)+'...',2500);
+  try {
+    var tagList = (a.tags||'').split(',').filter(function(t){ return t.trim(); })
+                              .map(function(t){ return { name: t.trim() }; });
+    var pub = (a.pubDate||a.pub_date||'').slice(0,10);
+    var props = {
+      'Name':         { title:     [{ text: { content: a.title||'' } }] },
+      'Source':       { rich_text: [{ text: { content: a.source||'' } }] },
+      'Domain':       { select:    { name: a.domain||'Other' } },
+      'Jurisdiction': { select:    { name: a.jurisdiction||'Unknown' } },
+      'Relevance':    { number:    a.relevance||0 },
+      'Sentiment':    { select:    { name: a.sentiment||'Neutral' } },
+      'URL':          { url:       a.url||null },
+    };
+    if(pub)            props['Published']  = { date: { start: pub } };
+    if(tagList.length) props['Tags']       = { multi_select: tagList };
+    await notionProxy('pages', {
+      parent: { database_id: notionArticleDbId },
+      properties: props,
+      children: [
+        { object:'block', type:'heading_2',  heading_2:{ rich_text:[{ text:{ content:'Summary' } }] } },
+        { object:'block', type:'paragraph',  paragraph:{ rich_text:[{ text:{ content: a.summary||'No summary available.' } }] } },
+        { object:'block', type:'heading_2',  heading_2:{ rich_text:[{ text:{ content:'Why It Matters' } }] } },
+        { object:'block', type:'quote',      quote:    { rich_text:[{ text:{ content: a.whyItMatters||a.why_it_matters||'No analysis.' } }] } },
+        { object:'block', type:'bookmark',   bookmark: { url: a.url||'' } },
+      ]
+    });
+    showToast('✅','Saved to Notion',a.title.slice(0,60)+'...',3500);
+  } catch(e){ showToast('⚠','Notion Error',e.message,5000); }
+}
+
+async function pushDigestToNotion(){
+  var staged = articles.filter(function(a){ return a.staged; });
+  if(!staged.length){ showToast('⚠','Nothing Staged','Add articles to your digest first.',3000); return; }
+  if(!notionToken || !notionArticleDbId){
+    showToast('🗒','Notion Not Set Up','Go to the Notion tab to connect your workspace.',4000); return;
+  }
+  var subject = 'PolicyPulse Weekly — '
+    + new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+  showToast('🗒','Pushing to Notion','Creating digest page...',3000);
+  try {
+    var children = [
+      { object:'block', type:'callout', callout:{
+          rich_text:[{ text:{ content: subject+' — '+staged.length+' article'+(staged.length!==1?'s':'') } }],
+          icon:{ emoji:'📡' }, color:'blue_background'
+      }},
+      { object:'block', type:'divider', divider:{} },
+    ];
+    staged.forEach(function(a){
+      children.push({ object:'block', type:'heading_3',
+        heading_3:{ rich_text:[{ text:{ content: a.title||'', link: a.url ? { url: a.url } : null } }] } });
+      var meta = [a.source, a.jurisdiction, a.pubDate||a.pub_date].filter(Boolean).join(' · ');
+      children.push({ object:'block', type:'paragraph',
+        paragraph:{ rich_text:[{ text:{ content: meta }, annotations:{ italic:true, color:'gray' } }] } });
+      if(a.summary) children.push({ object:'block', type:'paragraph',
+        paragraph:{ rich_text:[{ text:{ content: a.summary } }] } });
+      var why = a.whyItMatters||a.why_it_matters||'';
+      if(why) children.push({ object:'block', type:'quote',
+        quote:{ rich_text:[{ text:{ content: '💡 '+why } }] } });
+      children.push({ object:'block', type:'divider', divider:{} });
+    });
+    await notionProxy('pages', {
+      parent:     { database_id: notionArticleDbId },
+      properties: { 'Name': { title:[{ text:{ content: subject } }] } },
+      children:   children.slice(0,100)
+    });
+    showToast('✅','Digest Pushed to Notion', subject, 4000);
+  } catch(e){ showToast('⚠','Notion Error', e.message, 5000); }
+}
+
+async function syncNoteToNotion(){
+  if(!notionToken || !notionNotesDbId){
+    showToast('🗒','Notion Not Set Up','Set up the Notion integration and add your Notes Database ID.',4000); return;
+  }
+  var note = _notes_data.find(function(n){ return n.id === _currentNoteId; });
+  if(!note){ showToast('⚠','No Note Open','Open a note first, then sync it.',3000); return; }
+  showToast('🗒','Syncing to Notion', note.title||'Untitled', 2500);
+  try {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = note.content||'';
+    var plain = (tmp.innerText||tmp.textContent||'').trim().slice(0,2000);
+    var props = {
+      'Name':    { title:     [{ text:{ content: note.title||'Untitled Note' } }] },
+      'Article': { rich_text: [{ text:{ content: note.linkedArticleTitle||'' } }] },
+      'Created': { date:      { start: (note.created||new Date().toISOString()).slice(0,10) } },
+    };
+    if(note.linkedArticleUrl) props['Article URL'] = { url: note.linkedArticleUrl };
+    await notionProxy('pages', {
+      parent:     { database_id: notionNotesDbId },
+      properties: props,
+      children: plain ? [{ object:'block', type:'paragraph',
+        paragraph:{ rich_text:[{ text:{ content: plain } }] } }] : []
+    });
+    showToast('✅','Note Synced to Notion', note.title||'Untitled', 3500);
+  } catch(e){ showToast('⚠','Notion Error', e.message, 5000); }
+}
+
+function initNotionTab(){
+  var ti = document.getElementById('notion-token-inp');
+  var ai = document.getElementById('notion-article-db-inp');
+  var ni = document.getElementById('notion-notes-db-inp');
+  if(ti) ti.value = notionToken        ? '••••••••••••' : '';
+  if(ai) ai.value = notionArticleDbId  || '';
+  if(ni) ni.value = notionNotesDbId    || '';
+  if(notionToken && API_BASE) updateNotionStatusBar('connected');
+  else if(notionToken)        updateNotionStatusBar('no-backend');
+  else                        updateNotionStatusBar('disconnected');
+  updateNotionButtons();
+}
+
 const storedKey=sessionStorage.getItem('pp_groq_key');
 if(storedKey){apiKey=storedKey;document.getElementById('api-modal').classList.remove('show');init();}
 </script>

@@ -1,0 +1,824 @@
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  POLICYPULSE — ARTICLE READER PANEL  — frontend patch for app(2).html
+  ══════════════════════════════════════════════════════════════════════════════
+
+  HOW TO APPLY
+  ─────────────
+  1. CSS  → paste the <style> block below into your existing <style> tag
+             (anywhere after the existing note styles, before the closing </style>)
+
+  2. HTML → replace the entire <div id="page-notes" …> … </div> block in app(2).html
+             with the HTML block below.
+
+  3. JS   → paste the <script> block anywhere after your existing notes JS
+             (before the closing </script> tag of your main script block).
+             It replaces/extends: openNote(), openNoteForArticle(), showNoteEmpty().
+
+  Nothing else in app(2).html needs to change.
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     STEP 1 — ADD THIS INSIDE YOUR EXISTING <style> TAG
+═══════════════════════════════════════════════════════════════════════════════ -->
+<style id="reader-panel-styles">
+
+/* ── THREE-COLUMN NOTES LAYOUT ─────────────────────────────────────────────── */
+.notes-layout {
+  display: grid;
+  /* default: sidebar + editor, no reader */
+  grid-template-columns: 290px 1fr 0px;
+  gap: 12px;
+  min-height: calc(100vh - 220px);
+  transition: grid-template-columns 0.35s cubic-bezier(.4,0,.2,1);
+}
+.notes-layout.reader-open {
+  grid-template-columns: 290px 1fr 420px;
+}
+@media(max-width: 900px) {
+  .notes-layout.reader-open {
+    grid-template-columns: 290px 1fr 340px;
+  }
+}
+@media(max-width: 700px) {
+  .notes-layout {
+    grid-template-columns: 1fr !important;
+  }
+  .notes-layout.reader-open .reader-panel {
+    display: block;
+    width: 100%;
+  }
+}
+
+/* ── READER PANEL SHELL ──────────────────────────────────────────────────────*/
+.reader-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  max-height: calc(100vh - 220px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  min-width: 0; /* prevent grid blowout */
+}
+.notes-layout.reader-open .reader-panel {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* ── READER HEADER ───────────────────────────────────────────────────────────*/
+.reader-header {
+  flex-shrink: 0;
+  padding: 11px 14px 10px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(90deg, rgba(0,194,255,0.04), transparent);
+  position: relative;
+}
+.reader-header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+}
+.reader-header-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.reader-favicon {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: contain;
+  flex-shrink: 0;
+  /* hide broken images gracefully */
+}
+.reader-favicon-fallback {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.reader-source-name {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reader-close-btn {
+  background: rgba(255,255,255,.06);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 5px;
+  padding: 3px 9px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all .15s;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+.reader-close-btn:hover { background: rgba(255,255,255,.12); color: var(--text); }
+
+.reader-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--white);
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+.reader-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.reader-pub-date {
+  font-size: 10px;
+  color: var(--dim);
+  font-family: 'IBM Plex Mono', monospace;
+}
+.reader-open-link {
+  font-size: 10px;
+  color: var(--cyan);
+  margin-left: auto;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: opacity .15s;
+}
+.reader-open-link:hover { opacity: .75; text-decoration: underline; }
+
+/* ── READER CONTENT AREA ─────────────────────────────────────────────────────*/
+.reader-content-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 22px 28px;
+  scroll-behavior: smooth;
+}
+
+/* ── READER TYPOGRAPHY (scoped to .reader-content-area) ─────────────────────*/
+/* These rules only apply inside the fetched article HTML, so they can't
+   conflict with anything else in the app. */
+.reader-content-area h1,
+.reader-content-area h2,
+.reader-content-area h3,
+.reader-content-area h4 {
+  font-family: 'Playfair Display', serif;
+  color: var(--white);
+  line-height: 1.35;
+  margin: 1.4em 0 .6em;
+}
+.reader-content-area h1 { font-size: 20px; margin-top: 0; }
+.reader-content-area h2 { font-size: 17px; }
+.reader-content-area h3 { font-size: 15px; }
+.reader-content-area h4 { font-size: 13px; color: var(--text); }
+.reader-content-area p  {
+  font-size: 13.5px;
+  line-height: 1.9;
+  color: var(--text);
+  margin-bottom: 1.1em;
+  max-width: 62ch;
+}
+.reader-content-area a {
+  color: var(--cyan);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.reader-content-area a:hover { opacity: .8; }
+.reader-content-area blockquote {
+  border-left: 3px solid var(--cyan);
+  margin: 1em 0;
+  padding: 6px 14px;
+  background: rgba(0,194,255,.05);
+  border-radius: 0 6px 6px 0;
+  color: #5ba3d4;
+  font-style: italic;
+  font-size: 13px;
+  line-height: 1.75;
+}
+.reader-content-area ul,
+.reader-content-area ol {
+  padding-left: 20px;
+  margin-bottom: 1em;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.85;
+}
+.reader-content-area li { margin-bottom: .35em; }
+.reader-content-area img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 12px 0;
+  display: block;
+}
+.reader-content-area figure {
+  margin: 16px 0;
+}
+.reader-content-area figcaption {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: 5px;
+  line-height: 1.5;
+}
+.reader-content-area table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 12px;
+}
+.reader-content-area th {
+  background: rgba(0,0,0,.3);
+  color: var(--muted);
+  padding: 7px 10px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.reader-content-area td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,.03);
+  color: var(--text);
+  line-height: 1.5;
+}
+.reader-content-area hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.6em 0;
+}
+
+/* light-mode overrides for reader */
+body.light-mode .reader-panel {
+  background: rgba(255,255,255,.97);
+  border-color: rgba(0,0,0,.09);
+}
+body.light-mode .reader-header {
+  background: linear-gradient(90deg,rgba(0,119,170,0.05),transparent);
+}
+body.light-mode .reader-title { color: #0f1f35; }
+body.light-mode .reader-content-area h1,
+body.light-mode .reader-content-area h2,
+body.light-mode .reader-content-area h3,
+body.light-mode .reader-content-area h4 { color: #0f1f35; }
+body.light-mode .reader-content-area p  { color: #334d6b; }
+body.light-mode .reader-content-area blockquote {
+  background: rgba(0,119,170,0.05);
+  color: #0a4d6e;
+  border-left-color: rgba(0,119,170,0.4);
+}
+body.light-mode .reader-content-area a { color: #0077aa; }
+body.light-mode .reader-content-area ul,
+body.light-mode .reader-content-area ol { color: #334d6b; }
+
+/* ── READER FALLBACK (summary/why when fetch fails) ─────────────────────────*/
+.reader-fallback {
+  padding: 20px;
+}
+.reader-fallback-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.reader-fallback-summary {
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+.reader-fallback-why {
+  font-size: 12px;
+  color: #5ba3d4;
+  font-style: italic;
+  padding: 7px 12px;
+  background: rgba(0,194,255,0.05);
+  border-left: 2px solid rgba(0,194,255,0.3);
+  border-radius: 0 5px 5px 0;
+  line-height: 1.65;
+}
+.reader-error-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 13px;
+  background: rgba(244,63,94,0.06);
+  border: 1px solid rgba(244,63,94,0.2);
+  border-radius: 7px;
+  font-size: 11px;
+  color: #fb7185;
+  margin-bottom: 14px;
+}
+
+/* ── READER SKELETON LOADER ──────────────────────────────────────────────────*/
+.reader-skeleton-wrap { padding: 20px; }
+.reader-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,.04) 25%,
+    rgba(255,255,255,.08) 50%,
+    rgba(255,255,255,.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+</style>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     STEP 2 — REPLACE YOUR ENTIRE <div id="page-notes"> BLOCK WITH THIS
+═══════════════════════════════════════════════════════════════════════════════ -->
+<div id="page-notes" style="display:none" class="fade-in">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <div>
+      <div class="page-title">📝 Notes</div>
+      <div class="page-subtitle">Private workspace — notes are linked to articles and stored locally in this browser</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="addNote()">+ New Note</button>
+      <button class="btn btn-ghost" onclick="exportNotes()">⬇ Export .txt</button>
+      <button class="btn btn-ghost" onclick="exportCurrentNotePDF()">📄 Export PDF</button>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('note-pdf-upload').click()" title="Upload a PDF article to this note">📎 Attach PDF</button>
+      <button class="btn btn-ghost btn-sm" id="notion-note-btn" onclick="syncNoteToNotion()" style="display:none">🗒 Sync to Notion</button>
+      <input type="file" id="note-pdf-upload" accept=".pdf" style="display:none" onchange="handlePdfUpload(this)">
+    </div>
+  </div>
+
+  <!-- THREE-COLUMN GRID: sidebar | editor | reader -->
+  <div class="notes-layout" id="notes-layout">
+
+    <!-- ── SIDEBAR ─────────────────────────────────────────────────────────── -->
+    <div style="display:flex;flex-direction:column;gap:8px;overflow-y:auto;max-height:calc(100vh - 220px)">
+      <input class="filter-input" id="notes-search" placeholder="🔍 Search notes..." oninput="filterNotes(this.value)" style="flex-shrink:0">
+      <div style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="tag-chip active" id="notes-filter-all"       onclick="filterNotesByType('all',this)"        style="font-size:9px">All</button>
+        <button class="tag-chip"        id="notes-filter-article"    onclick="filterNotesByType('article',this)"    style="font-size:9px">📰 Article</button>
+        <button class="tag-chip"        id="notes-filter-standalone" onclick="filterNotesByType('standalone',this)" style="font-size:9px">📝 Standalone</button>
+      </div>
+      <div id="notes-list" style="display:flex;flex-direction:column;gap:6px;overflow-y:auto"></div>
+    </div>
+
+    <!-- ── EDITOR ─────────────────────────────────────────────────────────── -->
+    <div id="note-editor-panel" style="display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;max-height:calc(100vh - 220px)">
+      <div id="note-editor-empty" style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:12px;color:var(--dim);min-height:400px">
+        <div style="font-size:40px;opacity:.4">📝</div>
+        <div style="font-size:13px">Select a note or create a new one</div>
+        <button class="btn btn-primary" onclick="addNote()">+ New Note</button>
+      </div>
+      <div id="note-editor-active" style="display:none;flex-direction:column;height:100%">
+        <!-- Article link banner -->
+        <div id="note-article-banner" style="display:none;padding:6px 16px;background:rgba(0,194,255,0.06);border-bottom:1px solid rgba(0,194,255,0.15)">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:10px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:.1em">📰 Linked Article</span>
+            <span id="note-article-title-link" style="font-size:11px;color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span>
+            <a id="note-article-url-link" href="#" target="_blank" style="font-size:10px;color:var(--cyan);white-space:nowrap">Open ↗</a>
+            <!-- Reader panel toggle -->
+            <button id="reader-toggle-btn" onclick="toggleReaderPanel()" style="font-size:10px;font-weight:600;color:var(--cyan);background:rgba(0,194,255,0.08);border:1px solid rgba(0,194,255,0.25);border-radius:4px;padding:2px 8px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;white-space:nowrap;display:none">
+              📖 Read Article
+            </button>
+          </div>
+        </div>
+        <!-- Toolbar -->
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;gap:8px">
+          <input id="note-title-inp" class="filter-input" placeholder="Note title..." style="flex:1;font-size:14px;font-weight:600;min-width:150px" oninput="saveCurrentNote()">
+          <select id="note-tag-sel" class="filter-select" onchange="setNoteTag(this.value)" style="width:auto">
+            <option value="">No tag</option>
+            <option value="policy">📋 Policy</option>
+            <option value="meeting">🤝 Meeting</option>
+            <option value="research">🔍 Research</option>
+            <option value="draft">✏ Draft</option>
+            <option value="urgent">⚠ Urgent</option>
+            <option value="idea">💡 Idea</option>
+          </select>
+          <button class="btn btn-red btn-sm" onclick="deleteCurrentNote()">✕ Delete</button>
+        </div>
+        <!-- Format toolbar -->
+        <div style="padding:6px 16px;border-bottom:1px solid var(--border);display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;align-items:center">
+          <button class="note-fmt-btn" onclick="fmtNote('bold')"     title="Bold"><strong>B</strong></button>
+          <button class="note-fmt-btn" onclick="fmtNote('italic')"   title="Italic"><em>I</em></button>
+          <button class="note-fmt-btn" onclick="fmtNote('h1')"       title="Heading 1"  style="font-size:10px">H1</button>
+          <button class="note-fmt-btn" onclick="fmtNote('h2')"       title="Heading 2"  style="font-size:10px">H2</button>
+          <button class="note-fmt-btn" onclick="fmtNote('h3')"       title="Heading 3"  style="font-size:10px">H3</button>
+          <button class="note-fmt-btn" onclick="fmtNote('bullet')"   title="Bullet">• List</button>
+          <button class="note-fmt-btn" onclick="fmtNote('numbered')" title="Numbered">1. List</button>
+          <button class="note-fmt-btn" onclick="fmtNote('highlight')" title="Highlight" style="background:rgba(240,165,0,0.15);color:var(--gold);border-color:rgba(240,165,0,0.3)">🟡 Highlight</button>
+          <button class="note-fmt-btn" onclick="fmtNote('quote')"    title="Blockquote">&ldquo; Quote</button>
+          <button class="note-fmt-btn" onclick="fmtNote('divider')"  title="Divider">—</button>
+          <button class="note-fmt-btn" onclick="fmtNote('link')"     title="Insert link">🔗</button>
+          <span style="width:1px;height:14px;background:var(--border);margin:0 4px;flex-shrink:0"></span>
+          <select class="filter-select" onchange="setNoteFontSize(this.value)" id="note-font-size-sel" style="width:auto;padding:2px 6px;font-size:10px;height:24px" title="Font size">
+            <option value="11">Small</option>
+            <option value="13" selected>Normal</option>
+            <option value="15">Large</option>
+            <option value="17">X-Large</option>
+          </select>
+          <span style="font-size:10px;color:var(--dim);align-self:center;margin-left:auto" id="note-saved-indicator"></span>
+        </div>
+        <!-- PDF attachment area -->
+        <div id="note-pdf-area" style="display:none;padding:8px 16px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.15)">
+          <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">📎 Attached PDFs</div>
+          <div id="note-pdf-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+        </div>
+        <textarea id="note-body-inp"
+          placeholder="Start writing your note here...&#10;&#10;Use the toolbar above for formatting (bold, italic, headings, lists, highlights).&#10;&#10;Tip: Link this note to an article by clicking 'Open in Notes' from the article preview. Then click '📖 Read Article' to open the article inline alongside your notes."
+          style="flex:1;background:transparent;border:none;outline:none;padding:18px;font-size:13px;color:var(--text);line-height:1.8;resize:none;font-family:'IBM Plex Sans',sans-serif"
+          oninput="saveCurrentNote()"></textarea>
+        <div style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;flex-wrap:wrap;gap:6px">
+          <span id="note-meta" style="font-size:10px;color:var(--dim);font-family:'IBM Plex Mono',monospace"></span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span id="note-word-count" style="font-size:10px;color:var(--dim)"></span>
+            <button class="btn btn-ghost btn-sm" onclick="exportCurrentNotePDF()" style="font-size:10px;padding:2px 8px">📄 PDF</button>
+          </div>
+        </div>
+      </div>
+    </div><!-- /editor -->
+
+    <!-- ── READER PANEL ────────────────────────────────────────────────────── -->
+    <div class="reader-panel" id="reader-panel">
+      <!-- Header -->
+      <div class="reader-header" id="reader-header">
+        <div class="reader-header-top">
+          <img id="reader-favicon" class="reader-favicon" src="" alt="" onerror="this.style.display='none';document.getElementById('reader-favicon-fb').style.display='flex'">
+          <div id="reader-favicon-fb" class="reader-favicon-fallback" style="display:none">📄</div>
+          <span class="reader-source-name" id="reader-source"></span>
+          <a id="reader-open-link" href="#" target="_blank" rel="noopener" class="reader-open-link">Open original ↗</a>
+          <button class="reader-close-btn" onclick="closeReaderPanel()">✕</button>
+        </div>
+        <div class="reader-title" id="reader-title">Loading article…</div>
+        <div class="reader-meta-row">
+          <span class="reader-pub-date" id="reader-pub-date"></span>
+          <span class="tag tag-domain"  id="reader-domain"  style="display:none"></span>
+          <span class="tag tag-juris"   id="reader-juris"   style="display:none"></span>
+        </div>
+      </div>
+      <!-- Scrollable content -->
+      <div class="reader-content-area" id="reader-content-area">
+        <!-- Skeleton shown while loading -->
+        <div class="reader-skeleton-wrap" id="reader-skeleton">
+          <div class="reader-skeleton" style="height:22px;width:75%;margin-bottom:16px"></div>
+          <div class="reader-skeleton" style="height:13px;width:100%"></div>
+          <div class="reader-skeleton" style="height:13px;width:95%"></div>
+          <div class="reader-skeleton" style="height:13px;width:88%"></div>
+          <div class="reader-skeleton" style="height:13px;width:92%;margin-bottom:20px"></div>
+          <div class="reader-skeleton" style="height:13px;width:100%"></div>
+          <div class="reader-skeleton" style="height:13px;width:90%"></div>
+          <div class="reader-skeleton" style="height:13px;width:96%"></div>
+          <div class="reader-skeleton" style="height:13px;width:80%"></div>
+        </div>
+        <!-- Real content injected here -->
+        <div id="reader-html-content" style="display:none"></div>
+        <!-- Fallback (summary + why) shown when fetch fails -->
+        <div class="reader-fallback" id="reader-fallback" style="display:none">
+          <div class="reader-error-note" id="reader-error-note" style="display:none">
+            ⚠ <span id="reader-error-text">Could not load full article. Showing cached summary.</span>
+          </div>
+          <div class="reader-fallback-label">Summary</div>
+          <div class="reader-fallback-summary" id="reader-fallback-summary"></div>
+          <div class="reader-fallback-label" style="margin-top:12px">Why It Matters</div>
+          <div class="reader-fallback-why" id="reader-fallback-why"></div>
+        </div>
+      </div><!-- /reader-content-area -->
+    </div><!-- /reader-panel -->
+
+  </div><!-- /notes-layout -->
+</div><!-- /page-notes -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     STEP 3 — PASTE THIS JAVASCRIPT BLOCK INSIDE YOUR MAIN <script> TAG
+               (replaces/extends openNote, openNoteForArticle, showNoteEmpty)
+═══════════════════════════════════════════════════════════════════════════════ -->
+<script id="reader-panel-js">
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   READER PANEL STATE
+══════════════════════════════════════════════════════════════════════════════ */
+
+var _readerOpen        = false;
+var _readerArticleId   = null;   // article id whose content is loaded
+var _readerFetchCache  = {};     // { articleId: responseData } — avoid re-fetching
+
+/* ── Open / close ──────────────────────────────────────────────────────────── */
+
+function openReaderPanel() {
+  var layout = document.getElementById('notes-layout');
+  var panel  = document.getElementById('reader-panel');
+  if (!layout || !panel) return;
+  layout.classList.add('reader-open');
+  _readerOpen = true;
+  var btn = document.getElementById('reader-toggle-btn');
+  if (btn) btn.textContent = '✕ Close Reader';
+}
+
+function closeReaderPanel() {
+  var layout = document.getElementById('notes-layout');
+  if (layout) layout.classList.remove('reader-open');
+  _readerOpen = false;
+  var btn = document.getElementById('reader-toggle-btn');
+  if (btn) btn.textContent = '📖 Read Article';
+}
+
+function toggleReaderPanel() {
+  if (_readerOpen) {
+    closeReaderPanel();
+  } else {
+    var note = _notes_data.find(function(n) { return n.id === _currentNoteId; });
+    if (note && note.articleId) {
+      openReaderPanel();
+      loadReaderContent(note.articleId);
+    }
+  }
+}
+
+/* ── Load content into the panel ──────────────────────────────────────────── */
+
+function showReaderSkeleton() {
+  document.getElementById('reader-skeleton').style.display      = 'block';
+  document.getElementById('reader-html-content').style.display  = 'none';
+  document.getElementById('reader-fallback').style.display      = 'none';
+}
+
+function showReaderHTML(html) {
+  document.getElementById('reader-skeleton').style.display     = 'none';
+  document.getElementById('reader-fallback').style.display     = 'none';
+  var contentEl = document.getElementById('reader-html-content');
+  contentEl.innerHTML  = html;
+  contentEl.style.display = 'block';
+  // Scroll reader area back to top
+  document.getElementById('reader-content-area').scrollTop = 0;
+}
+
+function showReaderFallback(article, errorMsg) {
+  document.getElementById('reader-skeleton').style.display      = 'none';
+  document.getElementById('reader-html-content').style.display  = 'none';
+  var fb = document.getElementById('reader-fallback');
+  fb.style.display = 'block';
+
+  var errEl = document.getElementById('reader-error-note');
+  var errTxt = document.getElementById('reader-error-text');
+  if (errorMsg) {
+    errEl.style.display = 'flex';
+    if (errTxt) errTxt.textContent = errorMsg;
+  } else {
+    errEl.style.display = 'none';
+  }
+
+  var sum = article ? (article.summary || '') : '';
+  var why = article ? (article.why_it_matters || article.whyItMatters || '') : '';
+  document.getElementById('reader-fallback-summary').textContent = sum || 'No summary available.';
+  document.getElementById('reader-fallback-why').textContent     = why || '';
+  document.getElementById('reader-content-area').scrollTop = 0;
+}
+
+function populateReaderHeader(data) {
+  // favicon
+  var faviconEl = document.getElementById('reader-favicon');
+  var faviconFb = document.getElementById('reader-favicon-fb');
+  if (data.favicon) {
+    faviconEl.src = data.favicon;
+    faviconEl.style.display = 'block';
+    faviconFb.style.display = 'none';
+  } else {
+    faviconEl.style.display = 'none';
+    faviconFb.style.display = 'flex';
+  }
+  // source, title, date, link
+  document.getElementById('reader-source').textContent = data.source || '';
+  document.getElementById('reader-title').textContent  = data.title  || '';
+  var dateEl = document.getElementById('reader-pub-date');
+  if (dateEl) dateEl.textContent = data.pub_date ? '📅 ' + data.pub_date : '';
+  var linkEl = document.getElementById('reader-open-link');
+  if (linkEl) linkEl.href = data.url || '#';
+  // domain / juris tags
+  var domEl  = document.getElementById('reader-domain');
+  var jurEl  = document.getElementById('reader-juris');
+  if (domEl) { domEl.textContent = data.domain || ''; domEl.style.display = data.domain ? '' : 'none'; }
+  if (jurEl) { jurEl.textContent = data.jurisdiction || ''; jurEl.style.display = data.jurisdiction ? '' : 'none'; }
+}
+
+async function loadReaderContent(articleId) {
+  if (!articleId) return;
+
+  // Already loaded? Use cache.
+  if (_readerFetchCache[articleId]) {
+    var cached = _readerFetchCache[articleId];
+    populateReaderHeader(cached);
+    if (cached.ok && cached.html) {
+      showReaderHTML(cached.html);
+    } else {
+      var article = articles.find(function(a) { return a.id === articleId; });
+      showReaderFallback(article, cached.reason || null);
+    }
+    return;
+  }
+
+  // Show skeleton while fetching
+  showReaderSkeleton();
+  _readerArticleId = articleId;
+
+  // Populate header immediately from local article data (faster UX)
+  var localArticle = articles.find(function(a) { return a.id === articleId; });
+  if (localArticle) {
+    populateReaderHeader({
+      source:       localArticle.source       || '',
+      title:        localArticle.title        || '',
+      pub_date:     localArticle.pubDate      || localArticle.pub_date || '',
+      url:          localArticle.url          || '',
+      favicon:      localArticle.url ? 'https://' + (new URL(localArticle.url)).hostname + '/favicon.ico' : '',
+      domain:       localArticle.domain       || '',
+      jurisdiction: localArticle.jurisdiction || '',
+    });
+  }
+
+  // No backend? fall back immediately.
+  if (!API_BASE) {
+    showReaderFallback(localArticle, 'Connect your Railway backend to enable the full article reader.');
+    return;
+  }
+
+  // Fetch from backend
+  try {
+    var resp = await fetch(API_BASE + '/articles/' + articleId + '/reader', {
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+
+    // Cache result
+    _readerFetchCache[articleId] = data;
+
+    // Check we're still viewing the same article (user may have switched)
+    if (_readerArticleId !== articleId) return;
+
+    populateReaderHeader(data);
+
+    if (data.ok && data.html) {
+      showReaderHTML(data.html);
+    } else {
+      showReaderFallback(localArticle, data.reason || 'Could not load full article — showing cached summary.');
+    }
+  } catch (e) {
+    if (_readerArticleId !== articleId) return;
+    var reason = 'Could not load full article';
+    if (e.name === 'TimeoutError') reason = 'Request timed out — article server is slow.';
+    else if (e.message)            reason = e.message;
+    _readerFetchCache[articleId] = { ok: false, reason: reason };
+    showReaderFallback(localArticle, reason);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   UPDATED openNote() — shows "Read Article" button and auto-opens reader
+   if the note has a linked article. Replaces the original openNote().
+══════════════════════════════════════════════════════════════════════════════ */
+
+function openNote(id) {
+  var note = _notes_data.find(function(n) { return n.id === id; });
+  if (!note) return;
+  _currentNoteId = id;
+
+  // Update sidebar selection
+  document.querySelectorAll('.note-list-item').forEach(function(el) {
+    el.classList.toggle('active', parseInt(el.getAttribute('data-id')) === id);
+  });
+
+  // Show editor
+  var emptyEl  = document.getElementById('note-editor-empty');
+  var activeEl = document.getElementById('note-editor-active');
+  if (emptyEl)  emptyEl.style.display  = 'none';
+  if (activeEl) activeEl.style.display = 'flex';
+
+  // Article link banner + reader toggle button
+  var banner    = document.getElementById('note-article-banner');
+  var titleLink = document.getElementById('note-article-title-link');
+  var urlLink   = document.getElementById('note-article-url-link');
+  var readerBtn = document.getElementById('reader-toggle-btn');
+
+  if (banner) {
+    if (note.articleTitle) {
+      banner.style.display = 'block';
+      if (titleLink) titleLink.textContent = note.articleTitle;
+      if (urlLink)   urlLink.href = note.articleUrl || '#';
+      // Show "Read Article" only when a backend is connected
+      if (readerBtn) readerBtn.style.display = note.articleId ? 'inline-flex' : 'none';
+    } else {
+      banner.style.display = 'none';
+      if (readerBtn) readerBtn.style.display = 'none';
+    }
+  }
+
+  // Close reader if this note has no linked article
+  if (!note.articleId) {
+    closeReaderPanel();
+  }
+  // If reader is already open and article changed, reload
+  if (_readerOpen && note.articleId && note.articleId !== _readerArticleId) {
+    loadReaderContent(note.articleId);
+  }
+
+  // Populate editor fields
+  var titleInp   = document.getElementById('note-title-inp');
+  var bodyInp    = document.getElementById('note-body-inp');
+  var tagSel     = document.getElementById('note-tag-sel');
+  var metaEl     = document.getElementById('note-meta');
+  var wcEl       = document.getElementById('note-word-count');
+  var savedEl    = document.getElementById('note-saved-indicator');
+  var fontSizeSel= document.getElementById('note-font-size-sel');
+
+  if (titleInp)    titleInp.value    = note.title;
+  if (bodyInp)     { bodyInp.value = note.body; bodyInp.style.fontSize = (note.fontSize || 13) + 'px'; }
+  if (tagSel)      tagSel.value      = note.tag || '';
+  if (metaEl)      metaEl.textContent = 'Created: ' + note.created.slice(0,10) + ' · Updated: ' + note.updated.slice(0,10);
+  if (savedEl)     savedEl.textContent = '';
+  if (fontSizeSel) fontSizeSel.value  = String(note.fontSize || 13);
+
+  var words = (note.body || '').split(/\s+/).filter(Boolean).length;
+  if (wcEl) wcEl.textContent = words + ' words';
+
+  renderNotePdfs(note);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   UPDATED openNoteForArticle() — now also opens reader panel automatically
+   Replaces the original openNoteForArticle().
+══════════════════════════════════════════════════════════════════════════════ */
+
+function openNoteForArticle() {
+  var a = articles.find(function(x) { return x.id === _previewArticleId; });
+  if (!a) return;
+
+  var existingNote = _notes_data.find(function(n) { return n.articleId === a.id; });
+  if (!existingNote) {
+    var newNote = {
+      id:           Date.now(),
+      title:        a.title,
+      body:         '## ' + a.title + '\n\n**Source:** ' + a.source
+                    + '\n**Date:** ' + (a.pubDate || a.pub_date || '')
+                    + '\n\n---\n\n',
+      tag:          'policy',
+      articleId:    a.id,
+      articleTitle: a.title,
+      articleUrl:   a.url,
+      created:      new Date().toISOString(),
+      updated:      new Date().toISOString(),
+      wordCount:    0,
+    };
+    _notes_data.unshift(newNote);
+    saveNotesData();
+    existingNote = newNote;
+  }
+
+  closePreview();
+  showTab('notes');
+
+  setTimeout(function() {
+    renderNotesList();
+    openNote(existingNote.id);
+    // Auto-open reader panel for the linked article
+    if (existingNote.articleId) {
+      openReaderPanel();
+      loadReaderContent(existingNote.articleId);
+    }
+  }, 100);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   UPDATED showNoteEmpty() — also closes reader
+══════════════════════════════════════════════════════════════════════════════ */
+
+function showNoteEmpty() {
+  var emptyEl  = document.getElementById('note-editor-empty');
+  var activeEl = document.getElementById('note-editor-active');
+  if (emptyEl)  emptyEl.style.display  = 'flex';
+  if (activeEl) activeEl.style.display = 'none';
+  closeReaderPanel();
+}
+
+</script>

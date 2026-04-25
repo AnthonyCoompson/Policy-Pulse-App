@@ -870,6 +870,781 @@ footer {
 
 <div class="divider"></div>
 
+<!-- ═══════════════════════════════════════════════════════════════
+     LIVE DEMO SECTION
+     Five contextual animated demos, each paired with its feature
+     ═══════════════════════════════════════════════════════════════ -->
+<section id="demos" style="padding:100px 48px;max-width:100%">
+  <div style="max-width:1200px;margin:0 auto">
+
+    <div style="text-align:center;margin-bottom:72px">
+      <div class="section-eyebrow" style="justify-content:center;display:flex">See it in action</div>
+      <div class="section-title" style="font-size:clamp(36px,5vw,52px)">Five features. <em>Live.</em></div>
+      <p class="section-body" style="margin:0 auto;text-align:center;max-width:500px">Every widget below is an animated simulation of the actual product — showing the exact moment each feature does its job.</p>
+    </div>
+
+    <!-- ─── DEMO 1: LIVE SCRAPER ─── -->
+    <div class="demo-block reveal" style="display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;margin-bottom:100px">
+      <div>
+        <div class="section-eyebrow">Demo 1 of 5</div>
+        <h3 style="font-family:'Cormorant Garamond',serif;font-size:clamp(28px,3.5vw,42px);font-weight:600;color:#fff;line-height:1.15;letter-spacing:-0.01em;margin-bottom:14px">Watch the scraper<br>bring articles in <em>live</em></h3>
+        <p style="font-size:15px;color:#8a9bbf;line-height:1.8;font-weight:300;margin-bottom:20px">20+ government sources are checked every morning. Each article arrives with an AI-assigned relevance score, sentiment tag, and jurisdiction. High-relevance items light up the cyan bar instantly.</p>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#6b8aaa">
+          <span style="width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 6px #10b981;flex-shrink:0;animation:pulse-live 2s infinite"></span>
+          Loops every 8 seconds
+        </div>
+      </div>
+      <div class="demo-widget-wrap">
+        <div class="demo-label">Live Policy Scraper</div>
+        <div id="demo-scraper" class="demo-surface"></div>
+      </div>
+    </div>
+
+    <!-- ─── DEMO 2: AI SCORING ─── -->
+    <div class="demo-block reveal" style="display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;margin-bottom:100px">
+      <div class="demo-widget-wrap" style="order:1">
+        <div class="demo-label">AI Article Analysis</div>
+        <div id="demo-ai" class="demo-surface"></div>
+      </div>
+      <div style="order:2">
+        <div class="section-eyebrow">Demo 2 of 5</div>
+        <h3 style="font-family:'Cormorant Garamond',serif;font-size:clamp(28px,3.5vw,42px);font-weight:600;color:#fff;line-height:1.15;letter-spacing:-0.01em;margin-bottom:14px">AI reads every article<br>so <em>you don't have to</em></h3>
+        <p style="font-size:15px;color:#8a9bbf;line-height:1.8;font-weight:300;margin-bottom:20px">Groq AI assigns domain, jurisdiction, relevance score, and sentiment — then writes a "Why It Matters" analysis grounded in BC policy context. Watch it type the analysis out in real time.</p>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#6b8aaa">
+          <span style="width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 6px #10b981;flex-shrink:0;animation:pulse-live 2s infinite"></span>
+          Loops every 10 seconds
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── DEMO 3: DIGEST BUILDER ─── -->
+    <div class="demo-block reveal" style="display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;margin-bottom:100px">
+      <div>
+        <div class="section-eyebrow">Demo 3 of 5</div>
+        <h3 style="font-family:'Cormorant Garamond',serif;font-size:clamp(28px,3.5vw,42px);font-weight:600;color:#fff;line-height:1.15;letter-spacing:-0.01em;margin-bottom:14px">Articles sort themselves<br>into the right <em>sections</em></h3>
+        <p style="font-size:15px;color:#8a9bbf;line-height:1.8;font-weight:300;margin-bottom:20px">Click "Add to Digest" and the article drops into the correct section automatically — Federal articles go to Federal Watch, BC ones to Provincial Watch. Then one click sends it to your entire distribution list.</p>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#6b8aaa">
+          <span style="width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 6px #10b981;flex-shrink:0;animation:pulse-live 2s infinite"></span>
+          Loops every 9 seconds
+        </div>
+      </div>
+      <div class="demo-widget-wrap">
+        <div class="demo-label">Digest Builder</div>
+        <div id="demo-digest" class="demo-surface"></div>
+      </div>
+    </div>
+
+    <!-- ─── DEMO 4: ASK AI ─── -->
+    <div class="demo-block reveal" style="display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;margin-bottom:100px">
+      <div class="demo-widget-wrap" style="order:1">
+        <div class="demo-label">Ask AI</div>
+        <div id="demo-chat" class="demo-surface"></div>
+      </div>
+      <div style="order:2">
+        <div class="section-eyebrow">Demo 4 of 5</div>
+        <h3 style="font-family:'Cormorant Garamond',serif;font-size:clamp(28px,3.5vw,42px);font-weight:600;color:#fff;line-height:1.15;letter-spacing:-0.01em;margin-bottom:14px">Ask your database<br>anything, in <em>plain English</em></h3>
+        <p style="font-size:15px;color:#8a9bbf;line-height:1.8;font-weight:300;margin-bottom:20px">Groq AI has context on every article in your feed. Ask it to surface urgent items, summarize a policy area, or draft which articles should go in this week's briefing note — and get a real answer in seconds.</p>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#6b8aaa">
+          <span style="width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 6px #10b981;flex-shrink:0;animation:pulse-live 2s infinite"></span>
+          Loops every 12 seconds
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── DEMO 5: CITATIONS ─── -->
+    <div class="demo-block reveal" style="display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center">
+      <div>
+        <div class="section-eyebrow">Demo 5 of 5</div>
+        <h3 style="font-family:'Cormorant Garamond',serif;font-size:clamp(28px,3.5vw,42px);font-weight:600;color:#fff;line-height:1.15;letter-spacing:-0.01em;margin-bottom:14px">A full bibliography<br><em>assembled in seconds</em></h3>
+        <p style="font-size:15px;color:#8a9bbf;line-height:1.8;font-weight:300;margin-bottom:20px">One click adds any article to your bibliography. Switch between APA, MLA, and Chicago with one click. The AI Auto-Generate button refines every entry to academic standards — then export the whole thing as a formatted PDF.</p>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#6b8aaa">
+          <span style="width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 6px #10b981;flex-shrink:0;animation:pulse-live 2s infinite"></span>
+          Loops every 9 seconds
+        </div>
+      </div>
+      <div class="demo-widget-wrap">
+        <div class="demo-label">Citations &amp; Bibliography</div>
+        <div id="demo-cite" class="demo-surface"></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<style>
+/* ── DEMO SECTION SHARED STYLES ── */
+.demo-widget-wrap {
+  position: relative;
+}
+.demo-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #00c2ff;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.demo-label::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #00c2ff;
+  animation: pulse-live 2s infinite;
+}
+.demo-surface {
+  background: linear-gradient(135deg, rgba(11,20,38,0.95), rgba(15,26,50,0.9));
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 20px;
+  height: 300px;
+  position: relative;
+  overflow: hidden;
+}
+.demo-surface::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #00c2ff, transparent);
+  opacity: 0.5;
+}
+
+/* ── DEMO: ARTICLE CARD ── */
+.d-article {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 9px;
+  padding: 12px 14px 10px 18px;
+  margin-bottom: 10px;
+  position: relative;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.4s ease, transform 0.4s ease, border-color 0.3s;
+}
+.d-article.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.d-article::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  border-radius: 3px 0 0 3px;
+  background: #00c2ff;
+  transform: scaleY(0);
+  transition: transform 0.4s ease 0.2s;
+}
+.d-article.visible::before {
+  transform: scaleY(1);
+}
+.d-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.d-source { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b8aaa; }
+.d-tag { display: inline-flex; font-size: 9px; font-weight: 700; padding: 1px 7px; border-radius: 3px; letter-spacing: 0.06em; text-transform: uppercase; }
+.d-tag-dom { background: rgba(37,99,235,0.15); color: #60a5fa; border: 1px solid rgba(37,99,235,0.2); }
+.d-tag-bc { background: rgba(184,134,11,0.12); color: #fbbf24; border: 1px solid rgba(184,134,11,0.2); }
+.d-tag-fed { background: rgba(16,185,129,0.1); color: #34d399; border: 1px solid rgba(16,185,129,0.2); }
+.d-tag-crit { background: rgba(244,63,94,0.1); color: #fb7185; border: 1px solid rgba(244,63,94,0.2); }
+.d-tag-sup { background: rgba(16,185,129,0.1); color: #34d399; border: 1px solid rgba(16,185,129,0.2); }
+.d-rel { font-size: 10px; font-weight: 700; color: #f0a500; }
+.d-title { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.88); line-height: 1.4; margin-bottom: 5px; }
+.d-sum { font-size: 10px; color: rgba(255,255,255,0.4); line-height: 1.55; }
+.d-footer { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,0.05); }
+.d-date { font-size: 9px; color: rgba(255,255,255,0.3); font-family: monospace; }
+.d-btn { font-size: 9px; font-weight: 700; padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.3); color: #10b981; background: rgba(16,185,129,0.08); letter-spacing: 0.04em; margin-left: auto; }
+
+/* ── DEMO: AI PANEL ── */
+.d-ai-panel {
+  background: rgba(0,194,255,0.05);
+  border: 1px solid rgba(0,194,255,0.2);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.d-ai-panel.visible { opacity: 1; transform: translateY(0); }
+.d-ai-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #00c2ff; margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
+.d-ai-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.d-ai-row { background: rgba(0,0,0,0.2); border-radius: 5px; padding: 5px 8px; }
+.d-ai-key { font-size: 8px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.35); margin-bottom: 2px; }
+.d-ai-val { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.85); }
+.d-ai-why { font-size: 10px; color: #5ba3d4; font-style: italic; line-height: 1.6; padding-top: 6px; border-top: 1px solid rgba(0,194,255,0.12); }
+
+/* ── DEMO: DIGEST ── */
+.d-section-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px;
+  background: linear-gradient(90deg, rgba(0,194,255,0.06), transparent);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 7px;
+  margin-bottom: 6px;
+}
+.d-section-name { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #00c2ff; opacity: 0.85; }
+.d-section-count { font-size: 9px; color: rgba(255,255,255,0.35); font-family: monospace; }
+.d-staged-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(240,165,0,0.15);
+  border-left: 3px solid #f0a500;
+  border-radius: 0 7px 7px 0;
+  margin-bottom: 6px;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.d-staged-item.visible { opacity: 1; transform: translateX(0); }
+.d-staged-title { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.82); line-height: 1.35; flex: 1; }
+.d-staged-meta { font-size: 9px; color: rgba(255,255,255,0.35); margin-top: 2px; }
+.d-send-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 10px; margin-top: 10px;
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  border-radius: 7px; border: none;
+  font-size: 11px; font-weight: 700; color: #fff;
+  letter-spacing: 0.04em;
+  opacity: 0; transform: translateY(4px);
+  transition: opacity 0.4s ease, transform 0.4s ease, box-shadow 0.3s;
+}
+.d-send-btn.visible { opacity: 1; transform: translateY(0); }
+.d-send-btn.pulse { box-shadow: 0 0 0 4px rgba(37,99,235,0.3), 0 4px 16px rgba(37,99,235,0.4); }
+
+/* ── DEMO: CHAT ── */
+.d-chat-msgs { display: flex; flex-direction: column; gap: 8px; height: 180px; overflow: hidden; }
+.d-msg-user {
+  align-self: flex-end;
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  color: #fff; padding: 8px 12px;
+  border-radius: 10px 10px 3px 10px;
+  max-width: 85%; font-size: 11px; line-height: 1.5;
+  opacity: 0; transform: translateX(10px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.d-msg-user.visible { opacity: 1; transform: translateX(0); }
+.d-typing {
+  align-self: flex-start;
+  background: rgba(15,32,64,0.8);
+  border: 1px solid rgba(0,194,255,0.15);
+  padding: 8px 14px; border-radius: 10px 10px 10px 3px;
+  opacity: 0; transition: opacity 0.3s ease;
+  display: flex; align-items: center; gap: 3px;
+}
+.d-typing.visible { opacity: 1; }
+.d-dot-1, .d-dot-2, .d-dot-3 {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: rgba(0,194,255,0.5);
+  animation: chat-bounce 1.2s infinite;
+}
+.d-dot-2 { animation-delay: 0.2s; }
+.d-dot-3 { animation-delay: 0.4s; }
+@keyframes chat-bounce { 0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)} }
+.d-msg-ai {
+  align-self: flex-start;
+  background: linear-gradient(135deg, rgba(15,32,64,0.9), rgba(11,24,41,0.8));
+  border: 1px solid rgba(0,194,255,0.12);
+  color: rgba(255,255,255,0.85);
+  padding: 10px 13px;
+  border-radius: 10px 10px 10px 3px;
+  max-width: 92%; font-size: 11px; line-height: 1.7;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  white-space: pre-wrap;
+}
+.d-msg-ai.visible { opacity: 1; }
+.d-chat-inp-row {
+  display: flex; gap: 6px; margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.d-chat-inp {
+  flex: 1; background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 7px; padding: 7px 11px;
+  font-size: 11px; color: rgba(255,255,255,0.6);
+  font-family: inherit;
+}
+.d-chat-send {
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  border: none; color: #fff; border-radius: 7px;
+  padding: 7px 13px; font-size: 11px; font-weight: 700;
+  font-family: inherit; cursor: default;
+}
+
+/* ── DEMO: CITATIONS ── */
+.d-cite-toolbar {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 12px;
+}
+.d-cite-style {
+  font-size: 10px; font-weight: 700; padding: 4px 10px;
+  border-radius: 5px; border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.4); background: transparent; letter-spacing: 0.05em;
+  cursor: default; transition: all 0.25s;
+}
+.d-cite-style.active {
+  background: rgba(0,194,255,0.15);
+  border-color: rgba(0,194,255,0.4);
+  color: #00c2ff;
+}
+.d-cite-gen {
+  margin-left: auto; font-size: 10px; font-weight: 700;
+  padding: 4px 10px; border-radius: 5px;
+  background: rgba(0,194,255,0.1); border: 1px solid rgba(0,194,255,0.25);
+  color: #00c2ff; cursor: default; letter-spacing: 0.04em;
+  transition: background 0.2s;
+}
+.d-cite-gen.active { background: rgba(0,194,255,0.22); }
+.d-cite-entry {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px; padding: 14px 16px;
+  margin-bottom: 8px;
+  opacity: 0; transform: translateY(6px);
+  transition: opacity 0.4s ease, transform 0.4s ease, border-color 0.3s;
+}
+.d-cite-entry.visible { opacity: 1; transform: translateY(0); }
+.d-cite-entry.generating { border-color: rgba(0,194,255,0.4); }
+.d-cite-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: rgba(0,194,255,0.1); color: #00c2ff;
+  font-size: 9px; font-weight: 700; margin-right: 6px;
+}
+.d-cite-text { font-size: 11px; color: rgba(255,255,255,0.8); line-height: 1.75; }
+.d-cite-meta { display: flex; gap: 6px; margin-top: 7px; align-items: center; }
+.d-cite-badge { font-size: 8px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; }
+.d-cite-style-tag { background: rgba(0,194,255,0.08); color: #00c2ff; border: 1px solid rgba(0,194,255,0.18); }
+.d-cite-ai-tag { background: rgba(16,185,129,0.08); color: #10b981; border: 1px solid rgba(16,185,129,0.18); opacity: 0; transition: opacity 0.4s ease; }
+.d-cite-ai-tag.visible { opacity: 1; }
+
+/* ── CURSOR BLINK ── */
+.blink-cursor::after {
+  content: '|';
+  animation: blink 0.7s step-end infinite;
+  color: #00c2ff;
+  margin-left: 1px;
+}
+@keyframes blink { 0%,100%{opacity:1}50%{opacity:0} }
+
+/* ── MOBILE DEMO ── */
+@media (max-width: 768px) {
+  .demo-block { grid-template-columns: 1fr !important; gap: 32px !important; }
+  .demo-block > div[style*="order:1"] { order: 2 !important; }
+  .demo-block > div[style*="order:2"] { order: 1 !important; }
+}
+</style>
+
+<script>
+(function(){
+
+/* ── HELPERS ── */
+function el(tag, cls, style, html){
+  var d = document.createElement(tag);
+  if(cls) d.className = cls;
+  if(style) d.style.cssText = style;
+  if(html !== undefined) d.innerHTML = html;
+  return d;
+}
+function delay(ms){ return new Promise(function(r){setTimeout(r,ms);}); }
+
+/* typeText: types into el.textContent only — no DOM node tricks */
+function typeText(targetEl, text, speed){
+  return new Promise(function(resolve){
+    var i = 0;
+    targetEl.textContent = '';
+    function tick(){
+      if(i < text.length){
+        targetEl.textContent += text[i++];
+        setTimeout(tick, speed || 22);
+      } else { resolve(); }
+    }
+    tick();
+  });
+}
+
+/* ── CANCEL TOKEN: each demo loop checks this to bail early ── */
+var _tokens = {};
+function newToken(id){
+  _tokens[id] = (_tokens[id] || 0) + 1;
+  return _tokens[id];
+}
+function isCurrent(id, tok){ return _tokens[id] === tok; }
+
+/* ── VISIBILITY MAP: track which demos are in-view ── */
+var _visible = {};
+var _running = {};
+
+/* ════ DEMO 1: SCRAPER ════ */
+var scraperData = [
+  { title:'DRIPA Action Plan Year 3 Progress Report Released', source:'Indigenous Relations & Reconciliation', domain:'Reconciliation', juris:'BC', jurisType:'bc', rel:9, relEmoji:'🔥', sent:'Supportive', sentType:'sup', date:'2026-04-18' },
+  { title:'Federal Budget 2026: Research Infrastructure Cuts Raise Alarm', source:'University Affairs Canada', domain:'Budget', juris:'Federal', jurisType:'fed', rel:10, relEmoji:'🔥', sent:'Critical', sentType:'crit', date:'2026-04-17' },
+  { title:'BC Announces $340M Indigenous Post-Secondary Investment Framework', source:'BC Ministry of Post-Secondary Education', domain:'Indigenous', juris:'BC', jurisType:'bc', rel:9, relEmoji:'🔥', sent:'Supportive', sentType:'sup', date:'2026-04-16' }
+];
+
+async function runScraperDemo(tok){
+  var wrap = document.getElementById('demo-scraper');
+  if(!wrap || !isCurrent('scraper', tok)) return;
+  wrap.innerHTML = '';
+
+  var hdr = el('div','','display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.06)');
+  hdr.innerHTML = '<span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#00c2ff;display:flex;align-items:center;gap:5px"><span style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block;animation:pulse-live 2s infinite"></span>Scraping sources...</span><span style="font-size:10px;color:rgba(255,255,255,0.3);font-family:monospace">07:06 AM</span>';
+  wrap.appendChild(hdr);
+
+  for(var i=0;i<scraperData.length;i++){
+    if(!isCurrent('scraper', tok)) return;
+    var d = scraperData[i];
+    var card = el('div','d-article');
+    card.innerHTML =
+      '<div class="d-meta"><span class="d-source">'+d.source+'</span><span class="d-tag d-tag-dom">'+d.domain+'</span><span class="d-tag d-tag-'+d.jurisType+'">'+d.juris+'</span><span class="d-rel">'+d.relEmoji+' '+d.rel+'/10</span><span class="d-tag d-tag-'+d.sentType+'">'+d.sent+'</span></div>' +
+      '<div class="d-title">'+d.title+'</div>' +
+      '<div class="d-footer"><span class="d-date">'+d.date+'</span><span class="d-btn">+ Digest</span></div>';
+    wrap.appendChild(card);
+    await delay(200);
+    if(!isCurrent('scraper', tok)) return;
+    card.classList.add('visible');
+    await delay(700);
+    if(!isCurrent('scraper', tok)) return;
+  }
+  var ft = el('div','','text-align:center;padding-top:6px;font-size:10px;color:rgba(255,255,255,0.25);font-family:monospace');
+  ft.textContent = '3 new articles · relevance >= 6';
+  wrap.appendChild(ft);
+
+  await delay(4000);
+  if(!isCurrent('scraper', tok)) return;
+  wrap.style.transition='opacity 0.5s'; wrap.style.opacity='0';
+  await delay(500);
+  if(!isCurrent('scraper', tok)) return;
+  wrap.style.opacity='1';
+  runScraperDemo(tok);
+}
+
+/* ════ DEMO 2: AI ANALYSIS ════ */
+async function runAIDemo(tok){
+  var wrap = document.getElementById('demo-ai');
+  if(!wrap || !isCurrent('ai', tok)) return;
+  wrap.innerHTML = '';
+
+  var card = el('div','d-article');
+  card.innerHTML =
+    '<div class="d-meta"><span class="d-source">BC Legislature</span><span class="d-tag d-tag-bc">BC</span></div>' +
+    '<div class="d-title">Bill 22 — Post-Secondary Institutions Amendment Act Introduced</div>';
+  wrap.appendChild(card);
+  await delay(200); if(!isCurrent('ai', tok)) return;
+  card.classList.add('visible');
+  await delay(600); if(!isCurrent('ai', tok)) return;
+
+  var scanning = el('div','','font-size:10px;color:#00c2ff;margin:8px 0 6px;opacity:0;transition:opacity 0.3s;display:flex;align-items:center;gap:5px');
+  scanning.innerHTML = '<span style="display:inline-block;animation:spin 0.8s linear infinite;font-size:12px">⟳</span> AI reading article...';
+  wrap.appendChild(scanning);
+  await delay(100); scanning.style.opacity='1';
+  await delay(1200); if(!isCurrent('ai', tok)) return;
+  scanning.style.opacity='0';
+  await delay(300); if(!isCurrent('ai', tok)) return;
+  scanning.remove();
+
+  var panel = el('div','d-ai-panel');
+  panel.innerHTML =
+    '<div class="d-ai-label">🤖 AI Analysis</div>' +
+    '<div class="d-ai-rows">' +
+      '<div class="d-ai-row"><div class="d-ai-key">Domain</div><div class="d-ai-val" style="color:#60a5fa">Legislation</div></div>' +
+      '<div class="d-ai-row"><div class="d-ai-key">Jurisdiction</div><div class="d-ai-val" style="color:#fbbf24">BC</div></div>' +
+      '<div class="d-ai-row"><div class="d-ai-key">Relevance</div><div class="d-ai-val" style="color:#f0a500">🔥 9/10</div></div>' +
+      '<div class="d-ai-row"><div class="d-ai-key">Sentiment</div><div class="d-ai-val" style="color:#94a3b8">⚪ Neutral</div></div>' +
+    '</div>' +
+    '<div class="d-ai-why"><span id="demo-why-text" class="blink-cursor"></span></div>';
+  wrap.appendChild(panel);
+  await delay(100); if(!isCurrent('ai', tok)) return;
+  panel.classList.add('visible');
+  await delay(300); if(!isCurrent('ai', tok)) return;
+
+  var whyEl = document.getElementById('demo-why-text');
+  var whyText = 'May require bylaw amendments and board recruitment strategy revisions if passed in current form — worth flagging for Legal before second reading.';
+  await typeText(whyEl, whyText, 18);
+  if(!isCurrent('ai', tok)) return;
+  whyEl.classList.remove('blink-cursor');
+
+  await delay(4000); if(!isCurrent('ai', tok)) return;
+  wrap.style.transition='opacity 0.5s'; wrap.style.opacity='0';
+  await delay(500); if(!isCurrent('ai', tok)) return;
+  wrap.style.opacity='1';
+  runAIDemo(tok);
+}
+
+/* ════ DEMO 3: DIGEST BUILDER ════ */
+async function runDigestDemo(tok){
+  var wrap = document.getElementById('demo-digest');
+  if(!wrap || !isCurrent('digest', tok)) return;
+  wrap.innerHTML = '';
+
+  var sections = [
+    { id:'hl',   label:'🗞 Headline of the Week',    max:1, count:0 },
+    { id:'fed',  label:'🍁 Federal Policy Watch',    max:3, count:0 },
+    { id:'prov', label:'🏔 Provincial Policy Watch', max:3, count:0 },
+  ];
+  var items = [
+    { section:'hl',   title:'Federal Budget 2026: Research Cuts Raise Alarm',        meta:'University Affairs · Federal · 🔥 10/10' },
+    { section:'fed',  title:'SSHRC Partnership Development Grants — Spring 2026',     meta:'Government of Canada · Federal · ⭐ 8/10' },
+    { section:'prov', title:'DRIPA Action Plan Year 3 Progress Report Released',      meta:'Indigenous Relations · BC · 🔥 9/10' },
+  ];
+
+  var countEls = {};
+  sections.forEach(function(s){
+    var hdr = el('div','d-section-hdr');
+    var countEl = el('span','d-section-count'); countEl.textContent = '0/'+s.max;
+    hdr.innerHTML = '<span class="d-section-name">'+s.label+'</span>';
+    hdr.appendChild(countEl);
+    wrap.appendChild(hdr);
+    countEls[s.id] = countEl;
+    var slot = el('div','','margin-bottom:6px');
+    slot.id = 'slot-'+s.id;
+    wrap.appendChild(slot);
+  });
+
+  for(var i=0;i<items.length;i++){
+    await delay(1100); if(!isCurrent('digest', tok)) return;
+    var item = items[i];
+    var slot = document.getElementById('slot-'+item.section);
+    var sec = sections.find(function(s){return s.id===item.section;});
+    sec.count++;
+    countEls[item.section].textContent = sec.count+'/'+sec.max;
+    var card = el('div','d-staged-item');
+    card.innerHTML = '<div><div class="d-staged-title">'+item.title+'</div><div class="d-staged-meta">'+item.meta+'</div></div>';
+    slot.appendChild(card);
+    await delay(50); if(!isCurrent('digest', tok)) return;
+    card.classList.add('visible');
+  }
+
+  await delay(700); if(!isCurrent('digest', tok)) return;
+  var sendBtn = el('div','d-send-btn');
+  sendBtn.innerHTML = '✉ Send Digest to 4 Subscribers';
+  wrap.appendChild(sendBtn);
+  await delay(50); if(!isCurrent('digest', tok)) return;
+  sendBtn.classList.add('visible');
+  await delay(400);  sendBtn.classList.add('pulse');
+  await delay(1000); sendBtn.classList.remove('pulse');
+  await delay(800);  sendBtn.classList.add('pulse');
+  await delay(1000); sendBtn.classList.remove('pulse');
+
+  await delay(2000); if(!isCurrent('digest', tok)) return;
+  wrap.style.transition='opacity 0.5s'; wrap.style.opacity='0';
+  await delay(500); if(!isCurrent('digest', tok)) return;
+  wrap.style.opacity='1';
+  runDigestDemo(tok);
+}
+
+/* ════ DEMO 4: ASK AI CHAT ════ */
+async function runChatDemo(tok){
+  var wrap = document.getElementById('demo-chat');
+  if(!wrap || !isCurrent('chat', tok)) return;
+  wrap.innerHTML = '';
+
+  var msgs = el('div','d-chat-msgs');
+  wrap.appendChild(msgs);
+  var inpRow = el('div','d-chat-inp-row');
+  inpRow.innerHTML = '<div class="d-chat-inp" id="demo-chat-inp" style="color:rgba(255,255,255,0.3)">Ask a policy question...</div><button class="d-chat-send">Send</button>';
+  wrap.appendChild(inpRow);
+
+  await delay(600); if(!isCurrent('chat', tok)) return;
+
+  var inpEl = document.getElementById('demo-chat-inp');
+  var question = "Which articles should go in this week's digest?";
+  inpEl.style.color = 'rgba(255,255,255,0.75)';
+  for(var i=0;i<=question.length;i++){
+    if(!isCurrent('chat', tok)) return;
+    inpEl.textContent = question.slice(0,i);
+    await delay(35);
+  }
+  await delay(250); if(!isCurrent('chat', tok)) return;
+
+  var userMsg = el('div','d-msg-user');
+  userMsg.textContent = question;
+  msgs.appendChild(userMsg);
+  inpEl.textContent = ''; inpEl.style.color = 'rgba(255,255,255,0.3)';
+  await delay(50); if(!isCurrent('chat', tok)) return;
+  userMsg.classList.add('visible');
+  await delay(500); if(!isCurrent('chat', tok)) return;
+
+  var typing = el('div','d-typing');
+  typing.innerHTML = '<span class="d-dot-1"></span><span class="d-dot-2"></span><span class="d-dot-3"></span>';
+  msgs.appendChild(typing);
+  await delay(50); typing.classList.add('visible');
+  await delay(1800); if(!isCurrent('chat', tok)) return;
+  typing.remove();
+
+  var aiMsg = el('div','d-msg-ai');
+  aiMsg.textContent = '';
+  msgs.appendChild(aiMsg);
+  await delay(100); if(!isCurrent('chat', tok)) return;
+  aiMsg.classList.add('visible');
+
+  var response = "Based on your feed, I'd recommend 3 articles:\n\n1. Federal Budget cuts — 10/10, Critical. Lead your Headline section.\n\n2. DRIPA Year 3 Report — 9/10, Supportive. Strong for Provincial Watch.\n\n3. SSHRC Spring Grants — 8/10. Good for Regulatory & Funding.";
+  await typeText(aiMsg, response, 10);
+  if(!isCurrent('chat', tok)) return;
+
+  await delay(3500); if(!isCurrent('chat', tok)) return;
+  wrap.style.transition='opacity 0.5s'; wrap.style.opacity='0';
+  await delay(500); if(!isCurrent('chat', tok)) return;
+  wrap.style.opacity='1';
+  runChatDemo(tok);
+}
+
+/* ════ DEMO 5: CITATIONS ════ */
+var citeStyles = ['APA','MLA','Chicago'];
+/* Plain text only — no HTML tags that would bleed into textContent */
+var citeTexts = {
+  APA:     'BC Ministry of Post-Secondary Education. (2026, April 17). BC announces $340M Indigenous post-secondary investment framework. Government of British Columbia. https://www2.gov.bc.ca',
+  MLA:     'BC Ministry of Post-Secondary Education. "BC Announces $340M Indigenous Post-Secondary Investment Framework." Government of British Columbia, 17 Apr. 2026, https://www2.gov.bc.ca. Accessed 18 Apr. 2026.',
+  Chicago: 'BC Ministry of Post-Secondary Education. "BC Announces $340M Indigenous Post-Secondary Investment Framework." Government of British Columbia. April 17, 2026. https://www2.gov.bc.ca (accessed April 18, 2026).'
+};
+
+async function runCiteDemo(tok){
+  var wrap = document.getElementById('demo-cite');
+  if(!wrap || !isCurrent('cite', tok)) return;
+  wrap.innerHTML = '';
+
+  /* toolbar */
+  var tb = el('div','d-cite-toolbar');
+  var styleBtns = {};
+  citeStyles.forEach(function(s,i){
+    var btn = el('button','d-cite-style'+(i===0?' active':''));
+    btn.textContent = s;
+    styleBtns[s] = btn;
+    tb.appendChild(btn);
+  });
+  var genBtn = el('button','d-cite-gen');
+  genBtn.textContent = '🤖 AI Refine';
+  tb.appendChild(genBtn);
+  wrap.appendChild(tb);
+
+  /* entry 1 — already present, appears immediately */
+  var entry1 = el('div','d-cite-entry');
+  entry1.innerHTML =
+    '<div style="display:flex;align-items:flex-start;gap:8px">' +
+      '<span class="d-cite-num">1</span>' +
+      '<div style="flex:1">' +
+        '<div class="d-cite-text">Universities Canada. (2026). Pre-budget submission: Science strategy renewal. Universities Canada. https://univcan.ca</div>' +
+        '<div class="d-cite-meta">' +
+          '<span class="d-cite-badge d-cite-style-tag">APA</span>' +
+          '<span class="d-cite-badge d-cite-ai-tag visible">🤖 AI Enhanced</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  wrap.appendChild(entry1);
+  await delay(150); if(!isCurrent('cite', tok)) return;
+  entry1.classList.add('visible');
+
+  /* entry 2 — types in */
+  await delay(800); if(!isCurrent('cite', tok)) return;
+  var entry2 = el('div','d-cite-entry');
+  var textSpan = el('span','d-cite-text blink-cursor');
+  var styleTag = el('span','d-cite-badge d-cite-style-tag');
+  styleTag.textContent = 'APA';
+  var aiTag2 = el('span','d-cite-badge d-cite-ai-tag');
+  aiTag2.textContent = '🤖 AI Enhanced';
+
+  var metaRow = el('div','d-cite-meta');
+  metaRow.appendChild(styleTag);
+  metaRow.appendChild(aiTag2);
+
+  var inner = el('div','','flex:1');
+  inner.appendChild(textSpan);
+  inner.appendChild(metaRow);
+
+  var row = el('div','','display:flex;align-items:flex-start;gap:8px');
+  var num2 = el('span','d-cite-num'); num2.textContent = '2';
+  row.appendChild(num2);
+  row.appendChild(inner);
+  entry2.appendChild(row);
+  wrap.appendChild(entry2);
+  await delay(50); if(!isCurrent('cite', tok)) return;
+  entry2.classList.add('visible');
+
+  /* type APA text character by character — textContent only, no em tags */
+  await typeText(textSpan, citeTexts.APA, 12);
+  if(!isCurrent('cite', tok)) return;
+  textSpan.classList.remove('blink-cursor');
+
+  /* AI refine pulse */
+  await delay(600); if(!isCurrent('cite', tok)) return;
+  genBtn.classList.add('active');
+  entry2.classList.add('generating');
+  await delay(900); if(!isCurrent('cite', tok)) return;
+  genBtn.classList.remove('active');
+  entry2.classList.remove('generating');
+  aiTag2.classList.add('visible');
+
+  /* style switching */
+  await delay(1200); if(!isCurrent('cite', tok)) return;
+  for(var si=1;si<citeStyles.length;si++){
+    var st = citeStyles[si];
+    styleBtns[citeStyles[si-1]].classList.remove('active');
+    styleBtns[st].classList.add('active');
+    styleTag.textContent = st;
+    textSpan.textContent = citeTexts[st];
+    await delay(1800); if(!isCurrent('cite', tok)) return;
+  }
+
+  await delay(1200); if(!isCurrent('cite', tok)) return;
+  wrap.style.transition='opacity 0.5s'; wrap.style.opacity='0';
+  await delay(500); if(!isCurrent('cite', tok)) return;
+  wrap.style.opacity='1';
+  runCiteDemo(tok);
+}
+
+/* ── SPIN KEYFRAME ── */
+var spinStyle = document.createElement('style');
+spinStyle.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+document.head.appendChild(spinStyle);
+
+/* ════ VISIBILITY-DRIVEN ORCHESTRATION ════
+   Each demo only runs when its surface is at least 15% visible.
+   When a demo scrolls out of view it gets cancelled via token bump.
+   At most one demo plays at a time isn't enforced — each plays independently
+   but only while the user is near it, so in practice only 1-2 run.
+*/
+var demoMap = {
+  'demo-scraper': { key:'scraper', fn: runScraperDemo },
+  'demo-ai':      { key:'ai',      fn: runAIDemo      },
+  'demo-digest':  { key:'digest',  fn: runDigestDemo  },
+  'demo-chat':    { key:'chat',    fn: runChatDemo    },
+  'demo-cite':    { key:'cite',    fn: runCiteDemo    },
+};
+
+Object.keys(demoMap).forEach(function(id){
+  var cfg = demoMap[id];
+  var surfaceEl = document.getElementById(id);
+  if(!surfaceEl) return;
+
+  var obs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){
+        /* entering view — start a new loop */
+        var tok = newToken(cfg.key);
+        cfg.fn(tok);
+      } else {
+        /* leaving view — cancel current loop by bumping token */
+        newToken(cfg.key);
+        /* clear the surface so it resets cleanly next time */
+        setTimeout(function(){
+          surfaceEl.style.transition = '';
+          surfaceEl.style.opacity = '1';
+        }, 100);
+      }
+    });
+  }, { threshold: 0.15 });
+
+  obs.observe(surfaceEl);
+});
+
+})();
+</script>
+
+<div class="divider"></div>
+
 <!-- HOW IT WORKS -->
 <section id="how" style="padding:100px 48px;max-width:100%">
   <div class="how-steps" style="max-width:1200px;margin:0 auto">
