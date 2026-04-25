@@ -141,6 +141,59 @@ body.light-mode .sort-toggle-btn{color:#3a5a78}
 body.light-mode .sort-toggle-btn.active{background:rgba(0,119,170,0.12);color:#0077aa}
 body.light-mode body::before{background:radial-gradient(ellipse 80% 50% at 20% 10%,rgba(0,100,200,0.03),transparent),radial-gradient(ellipse 60% 40% at 80% 80%,rgba(0,80,160,0.03),transparent)}
 body.light-mode .schedule-row{background:rgba(0,119,170,0.05);border-color:rgba(0,119,170,0.15)}
+
+/* ── ADDITIONAL LIGHT MODE FIXES (preview + research) ── */
+body.light-mode #preview-modal{background:rgba(0,0,0,0.5)}
+body.light-mode #preview-box{background:#ffffff;border-color:rgba(0,0,0,0.12)}
+body.light-mode #preview-header{background:linear-gradient(135deg,#f0f7ff,#e8f4ff);border-bottom-color:rgba(0,0,0,0.1)}
+body.light-mode #preview-title{color:#0f1f35 !important}
+body.light-mode #preview-summary{color:#334d6b !important}
+body.light-mode #preview-why{color:#0a4d6e !important}
+body.light-mode .preview-ai-label{color:#0077aa !important}
+body.light-mode #preview-dates span{color:#3a5a78 !important}
+body.light-mode #preview-dates strong{color:#0f1f35 !important}
+body.light-mode #preview-url{color:#3a5a78 !important}
+body.light-mode #preview-body{background:#ffffff}
+body.light-mode .preview-section-label{color:#3a5a78 !important}
+body.light-mode #preview-notes{background:rgba(255,255,255,0.95);border-color:rgba(0,0,0,0.12);color:#0f1f35}
+body.light-mode #preview-chat{background:rgba(0,0,0,0.03);border-color:rgba(0,0,0,0.1)}
+body.light-mode .preview-ai-section{background:rgba(0,119,170,0.05);border-color:rgba(0,119,170,0.15)}
+body.light-mode #preview-ai-read-content{color:#0f1f35}
+/* Research card light mode */
+body.light-mode .research-card{background:rgba(255,255,255,0.97);border-color:rgba(0,0,0,0.09)}
+body.light-mode .research-card:hover{border-color:rgba(99,102,241,0.3);box-shadow:0 4px 16px rgba(0,0,30,.1)}
+body.light-mode .research-card > div > div[style*="font-size:14px"]{color:#0f1f35 !important}
+body.light-mode .research-abstract{color:#3a5a78 !important}
+body.light-mode .research-source-chip{color:#3a5a78}
+body.light-mode .research-stat{background:rgba(99,102,241,0.06);border-color:rgba(99,102,241,0.15)}
+body.light-mode .research-stat-val{color:#0f1f35 !important}
+body.light-mode .research-stat-label{color:#3a5a78}
+body.light-mode .scrape-progress{background:rgba(99,102,241,0.06);border-color:rgba(99,102,241,0.2);color:#3730a3}
+body.light-mode .oa-badge{background:rgba(4,120,87,0.1);color:#065f46;border-color:rgba(4,120,87,0.25)}
+body.light-mode .research-db-badge.db-openalex{background:rgba(99,102,241,0.1);color:#4338ca;border-color:rgba(99,102,241,0.25)}
+body.light-mode .research-db-badge.db-semantic{background:rgba(4,120,87,0.1);color:#065f46;border-color:rgba(4,120,87,0.25)}
+body.light-mode .research-db-badge.db-pubmed{background:rgba(185,28,28,0.08);color:#991b1b;border-color:rgba(185,28,28,0.2)}
+body.light-mode .research-db-badge.db-doaj{background:rgba(161,98,7,0.08);color:#92400e;border-color:rgba(161,98,7,0.2)}
+body.light-mode .research-db-badge.db-arxiv{background:rgba(0,119,170,0.1);color:#0077aa;border-color:rgba(0,119,170,0.25)}
+body.light-mode .research-db-badge.db-canadian{background:rgba(185,28,28,0.08);color:#991b1b;border-color:rgba(185,28,28,0.2)}
+body.light-mode .research-db-badge.db-other{background:rgba(75,85,99,0.08);color:#374151;border-color:rgba(75,85,99,0.2)}
+/* Card headings in light mode */
+body.light-mode .card > div[style*="color:var(--white)"]{color:#0f1f35 !important}
+body.light-mode .research-sources-panel .card{background:rgba(255,255,255,0.97);border-color:rgba(0,0,0,0.09)}
+/* Article URL row in light mode */
+body.light-mode .article-url-row{background:rgba(0,0,0,0.04);border-color:rgba(0,0,0,0.08)}
+body.light-mode .article-url-text{color:#3a5a78}
+body.light-mode .btn-copy-url{background:rgba(0,119,170,0.08);border-color:rgba(0,119,170,0.2);color:#0077aa}
+/* Empty state in light mode */
+body.light-mode .empty{color:#3a5a78}
+body.light-mode .empty-text{color:#3a5a78}
+/* Why matters light mode fix */  
+body.light-mode .why-matters{background:rgba(0,119,170,0.06);border-left-color:rgba(0,119,170,0.3);color:#0a4d6e}
+/* Research source breakdown text in light mode */
+body.light-mode #research-source-breakdown span:last-child{color:#3a5a78 !important}
+/* Preview modal research link */
+body.light-mode #preview-link{background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff}
+
 html,body{height:100%;overflow:hidden}
 body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--text);font-size:13px;display:flex;flex-direction:column}
 button{font-family:'IBM Plex Sans',sans-serif;cursor:pointer;border:none;outline:none}
@@ -685,7 +738,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
         <div style="flex:1">
           <div id="preview-meta" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"></div>
           <div id="preview-dates" style="font-size:11px;color:var(--dim);margin-bottom:10px;display:flex;gap:16px;flex-wrap:wrap"></div>
-          <div id="preview-title" style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--white);line-height:1.4;margin-bottom:10px"></div>
+          <div id="preview-title" style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:10px"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <a id="preview-link" href="#" target="_blank" rel="noopener" class="btn btn-primary btn-sm">Open &#x2197;</a>
             <button id="preview-ai-read-btn" class="btn btn-cyan btn-sm" onclick="aiReadArticle()">&#x1F916; AI Read</button>
@@ -702,14 +755,14 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
       <div id="preview-ai-read-section" style="display:none;margin-bottom:12px"><div class="preview-ai-section" style="border-color:rgba(0,194,255,0.3)"><div class="preview-ai-label">&#x1F916; Full Article Analysis</div><div id="preview-ai-read-content" style="font-size:13px;color:var(--text);line-height:1.8;white-space:pre-wrap"></div></div></div>
       <div class="preview-ai-section">
         <div class="preview-ai-label">&#x1F4A1; AI Summary</div>
-        <div id="preview-summary" style="font-size:13px;color:var(--text);line-height:1.7"></div>
+        <div id="preview-summary" class="preview-content-text" style="font-size:13px;color:var(--text);line-height:1.7"></div>
       </div>
       <div class="preview-ai-section">
         <div class="preview-ai-label" style="display:flex;align-items:center;justify-content:space-between">
           <span>&#x1F3AF; Why It Matters</span>
           <button id="generate-why-btn" class="btn btn-cyan btn-sm" onclick="generateWhyItMatters()" style="font-size:10px;padding:3px 10px">&#x1F504; Generate</button>
         </div>
-        <div id="preview-why" style="font-size:13px;color:var(--text);line-height:1.7"></div>
+        <div id="preview-why" class="preview-content-text" style="font-size:13px;color:var(--text);line-height:1.7"></div>
       </div>
       <div id="preview-ask-section" class="preview-ai-section" style="margin-bottom:0">
         <div class="preview-ai-label">&#x1F916; Ask AI About This Article</div>
@@ -1538,19 +1591,20 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
       .research-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,#6366f1,#8b5cf6);opacity:0.8}
       .research-card.unread::before{opacity:1}
       .research-card:hover{border-color:rgba(99,102,241,0.3);box-shadow:0 4px 24px rgba(0,0,0,.4)}
+      .research-card-title{color:var(--text)}
       .research-abstract{font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:8px;font-style:italic}
       .research-source-chip{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.04em}
       .research-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
       .research-stat{background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(139,92,246,0.05));border:1px solid rgba(99,102,241,0.2);border-radius:var(--radius);padding:12px 14px;text-align:center}
-      .research-stat-val{font-size:24px;font-weight:700;color:var(--white);font-family:'IBM Plex Mono',monospace}
+      .research-stat-val{font-size:24px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace}
       .research-stat-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:4px}
       .source-breakdown{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-      .scrape-progress{display:none;padding:12px 16px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:8px;margin-bottom:12px;font-size:12px;color:#a5b4fc}
+      .scrape-progress{display:none;padding:12px 16px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:8px;margin-bottom:12px;font-size:12px;color:var(--text)}
       body.light-mode .research-card{background:rgba(255,255,255,0.97);border-color:rgba(0,0,0,0.09)}
       body.light-mode .research-card:hover{border-color:rgba(99,102,241,0.3)}
       body.light-mode .research-abstract{color:#3a5a78}
       body.light-mode .research-stat{background:rgba(99,102,241,0.06);border-color:rgba(99,102,241,0.15)}
-      body.light-mode .research-stat-val{color:#0f1f35}
+      body.light-mode .research-stat-val{color:#0f1f35 !important}
     </style>
 
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
@@ -1569,7 +1623,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
     <!-- Progress bar -->
     <div class="scrape-progress" id="research-progress">
       <span class="spin" style="display:inline-block;margin-right:8px">&#8635;</span>
-      <strong>Fetching research</strong> — querying OpenAlex, Semantic Scholar, Canadian think-tanks, PubMed, DOAJ, arXiv&hellip; This takes 60&ndash;90 seconds. The feed will refresh automatically.
+      <strong style="color:var(--text)">Fetching research</strong> <span style="color:var(--muted)">— querying OpenAlex, Semantic Scholar, Canadian think-tanks, PubMed, DOAJ, arXiv&hellip; This takes 60&ndash;90 seconds. The feed will refresh automatically.</span>
     </div>
 
     <!-- Stats row -->
@@ -1648,6 +1702,35 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
 
     <!-- SOURCES PANEL -->
     <div id="research-sources-panel" style="display:none">
+      <!-- HOW THE RESEARCH SCRAPER WORKS -->
+      <div style="background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(139,92,246,0.05));border:1px solid rgba(99,102,241,0.2);border-radius:12px;padding:20px 22px;margin-bottom:20px;max-width:900px;position:relative;overflow:hidden">
+        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#6366f1,#8b5cf6,transparent);opacity:0.7"></div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#818cf8;margin-bottom:14px;display:flex;align-items:center;gap:6px">
+          <span style="font-size:14px">&#x2699;&#xFE0F;</span> How the Research Scraper Works
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:16px">
+          <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:12px 14px">
+            <div style="font-size:11px;font-weight:700;color:#a5b4fc;margin-bottom:5px;display:flex;align-items:center;gap:5px">&#x1F50D; Step 1 — Keyword Matching</div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.7">The scraper uses your <strong style="color:var(--text)">Keyword Watchlist</strong> (from the Scraper tab) plus a set of default policy topics to query each database. It automatically targets terms like &ldquo;Indigenous policy Canada&rdquo;, &ldquo;DRIPA UNDRIP&rdquo;, &ldquo;pharmacare&rdquo;, and &ldquo;post-secondary education Canada&rdquo;.</div>
+          </div>
+          <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:12px 14px">
+            <div style="font-size:11px;font-weight:700;color:#a5b4fc;margin-bottom:5px;display:flex;align-items:center;gap:5px">&#x1F4E1; Step 2 — Multi-Database Query</div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.7">Six open-access databases are queried in parallel: <strong style="color:var(--text)">OpenAlex</strong> (250M works), <strong style="color:var(--text)">Semantic Scholar</strong> (220M papers), <strong style="color:var(--text)">PubMed Central</strong> (biomedical), <strong style="color:var(--text)">DOAJ</strong> (peer-reviewed journals), <strong style="color:var(--text)">arXiv</strong> (preprints), and <strong style="color:var(--text)">6 Canadian think-tanks</strong>. No API keys required.</div>
+          </div>
+          <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:12px 14px">
+            <div style="font-size:11px;font-weight:700;color:#a5b4fc;margin-bottom:5px;display:flex;align-items:center;gap:5px">&#x1F916; Step 3 — AI Relevance Scoring</div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.7">Every article is passed through <strong style="color:var(--text)">Gemini AI</strong> which scores it 1–10 for relevance to BC/Canadian policy. Only articles scoring <strong style="color:#10b981">6 or higher</strong> are saved. Low-relevance academic noise is automatically discarded.</div>
+          </div>
+          <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:12px 14px">
+            <div style="font-size:11px;font-weight:700;color:#a5b4fc;margin-bottom:5px;display:flex;align-items:center;gap:5px">&#x1F4C5; Step 4 — Scheduled Weekly</div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.7">The research scraper runs <strong style="color:var(--text)">every Monday at 8:00 AM</strong> (Vancouver time) automatically via the Railway backend scheduler. You can also trigger it manually with <strong style="color:var(--text)">Fetch New Research</strong> above. Results appear in the Article Feed within ~90 seconds.</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:8px;padding:10px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:7px">
+          <span style="font-size:14px;flex-shrink:0;margin-top:1px">&#x1F513;</span>
+          <div style="font-size:11px;color:var(--muted);line-height:1.7"><strong style="color:var(--text)">100% Open Access:</strong> PolicyPulse only indexes freely available research. Every article in the Research feed can be opened and read without a subscription. The scraper never touches paywalled content — JSTOR, Scopus, and Elsevier are explicitly excluded.</div>
+        </div>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:900px">
 
         <div class="card">
@@ -1655,7 +1738,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
             <span class="research-db-badge db-openalex">OpenAlex</span>
             <span class="oa-badge">&#x1F513; Free</span>
           </div>
-          <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:5px">OpenAlex</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px">OpenAlex</div>
           <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">250M+ scholarly works. No API key required. Covers all disciplines. The most comprehensive free scholarly database available.</div>
           <a href="https://openalex.org" target="_blank" style="font-size:10px;color:var(--cyan)">openalex.org &#x2197;</a>
         </div>
@@ -1665,7 +1748,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
             <span class="research-db-badge db-semantic">Semantic Scholar</span>
             <span class="oa-badge">&#x1F513; Free</span>
           </div>
-          <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:5px">Semantic Scholar</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px">Semantic Scholar</div>
           <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">AI-powered academic search by Allen Institute. 220M papers with high-quality abstracts and author graphs. 100 req/min free.</div>
           <a href="https://www.semanticscholar.org" target="_blank" style="font-size:10px;color:var(--cyan)">semanticscholar.org &#x2197;</a>
         </div>
@@ -1675,7 +1758,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
             <span class="research-db-badge db-pubmed">PubMed Central</span>
             <span class="oa-badge">&#x1F513; Free</span>
           </div>
-          <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:5px">PubMed Central (NCBI)</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px">PubMed Central (NCBI)</div>
           <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">Full-text biomedical and health research. Especially relevant for Indigenous health policy, pharmacare, and FNHA-related research. Official NCBI E-utilities API.</div>
           <a href="https://www.ncbi.nlm.nih.gov/pmc/" target="_blank" style="font-size:10px;color:var(--cyan)">ncbi.nlm.nih.gov/pmc &#x2197;</a>
         </div>
@@ -1685,7 +1768,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
             <span class="research-db-badge db-doaj">DOAJ</span>
             <span class="oa-badge">&#x1F513; Free</span>
           </div>
-          <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:5px">DOAJ — Directory of Open Access Journals</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px">DOAJ — Directory of Open Access Journals</div>
           <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">Indexes 20,000+ peer-reviewed open access journals. Rigorous quality criteria. Strong coverage of social sciences, law, and policy.</div>
           <a href="https://doaj.org" target="_blank" style="font-size:10px;color:var(--cyan)">doaj.org &#x2197;</a>
         </div>
@@ -1695,7 +1778,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
             <span class="research-db-badge db-arxiv">arXiv</span>
             <span class="oa-badge">&#x1F513; Free</span>
           </div>
-          <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:5px">arXiv Preprints</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px">arXiv Preprints</div>
           <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">Working papers and preprints in economics, social science, computer science (including AI policy). Often 6–12 months ahead of journal publication.</div>
           <a href="https://arxiv.org" target="_blank" style="font-size:10px;color:var(--cyan)">arxiv.org &#x2197;</a>
         </div>
@@ -1704,7 +1787,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
             <span class="research-db-badge db-canadian">Canadian Think-Tanks</span>
           </div>
-          <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:5px">Canadian Policy Research Organisations</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px">Canadian Policy Research Organisations</div>
           <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">
             Publications from: <strong>Yellowhead Institute</strong> (Indigenous policy), <strong>CCPA</strong>, <strong>NCCIH</strong>, <strong>CD Howe Institute</strong>, <strong>Macdonald-Laurier Institute</strong>, <strong>Broadbent Institute</strong>. All freely accessible.
           </div>
@@ -1713,7 +1796,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
       </div>
 
       <div style="margin-top:16px;padding:12px 16px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.18);border-radius:8px;font-size:12px;color:var(--muted);line-height:1.8">
-        <strong style="color:var(--white)">&#x1F512; What we cannot access:</strong> JSTOR, Scopus, Web of Science, Elsevier, Springer, Wiley, and most Canadian political science journals require institutional subscriptions. PolicyPulse only fetches open access content and never scrapes paywalled material.
+        <strong style="color:var(--text)">&#x1F512; What we cannot access:</strong> JSTOR, Scopus, Web of Science, Elsevier, Springer, Wiley, and most Canadian political science journals require institutional subscriptions. PolicyPulse only fetches open access content and never scrapes paywalled material.
       </div>
     </div>
   </div>
@@ -1804,7 +1887,7 @@ function buildResearchCard(a){
     +(a.open_access?'<span class="oa-badge">&#x1F513; Open Access</span>':'')
     +'<span class="article-source">'+escHtml(a.source||'')+'</span>'
     +'</div>'
-    +'<div style="font-size:14px;font-weight:600;color:var(--white);line-height:1.45;margin-bottom:6px;cursor:pointer" onclick="openResearchPreview('+a.id+')">'
+    +'<div class="research-card-title" style="font-size:14px;font-weight:600;color:var(--text);line-height:1.45;margin-bottom:6px;cursor:pointer" onclick="openResearchPreview('+a.id+')">'
     +escHtml(a.title)
     +'</div>'
     +(a.authors?'<div style="font-size:11px;color:var(--dim);margin-bottom:5px;font-family:\'IBM Plex Mono\',monospace">'+escHtml(a.authors)+'</div>':'')
@@ -1850,7 +1933,7 @@ function showResearchEmpty(panel){
   var el = document.getElementById('research-'+panel);
   if(el) el.innerHTML = '<div style="text-align:center;padding:32px;background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:12px;margin-top:8px">'
     +'<div style="font-size:40px;margin-bottom:10px">&#x1F4DA;</div>'
-    +'<div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:6px">Connect your Railway backend</div>'
+    +'<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">Connect your Railway backend</div>'
     +'<div style="font-size:12px;color:var(--muted);line-height:1.7">The scholarly scraper runs on your Railway backend and stores results in a separate SQLite table.</div>'
     +'</div>';
 }
@@ -1934,12 +2017,13 @@ async function markResearchRead(id, read){
   loadResearchStats();
 }
 
+var _researchPreviewId = null;
 function openResearchPreview(id){
   var a = _researchArticles.find(function(x){return x.id===id;});
   if(!a) return;
+  _researchPreviewId = id;
   // Reuse the main article preview modal with research data
-  _previewArticleId = null; // ensure no conflict
-  var modal = document.getElementById('preview-modal');
+  _previewArticleId = null; // clear news article id to avoid conflicts
   var metaEl = document.getElementById('preview-meta');
   var titleEl = document.getElementById('preview-title');
   var summaryEl = document.getElementById('preview-summary');
@@ -1954,22 +2038,38 @@ function openResearchPreview(id){
     +(a.domain?'<span class="tag tag-domain">'+escHtml(a.domain)+'</span>':'')
     +(a.jurisdiction?'<span class="tag tag-juris">'+escHtml(a.jurisdiction)+'</span>':'')
     +(a.relevance?'<span class="relevance-badge">'+rEmoji_r(a.relevance)+' '+a.relevance+'/10</span>':'');
-  if(datesEl) datesEl.innerHTML = (a.pub_date?'<span>&#x1F4C5; <strong style="color:var(--white)">Published:</strong> '+a.pub_date+'</span>':'')
-    + (a.authors?'<span>&#x270D; '+escHtml(a.authors)+'</span>':'');
+  if(datesEl) datesEl.innerHTML =
+    (a.pub_date?'<span>&#x1F4C5; <strong style="color:var(--text)">Published:</strong> <span style="color:var(--text)">'+a.pub_date+'</span></span>':'')
+    +(a.authors?'<span style="color:var(--muted)"> &nbsp;&#x270D; '+escHtml(a.authors)+'</span>':'')
+    +(a.database_name?'<span style="color:var(--muted)"> &nbsp;&#x1F4DA; '+escHtml(a.database_name)+'</span>':'');
   titleEl.textContent = a.title;
   summaryEl.textContent = a.summary || a.abstract || 'No summary available.';
   whyEl.textContent = a.why_it_matters || '';
+  // Source URL — display and link
   urlEl.textContent = a.url;
   linkEl.href = a.url;
+  linkEl.target = '_blank';
+  linkEl.rel = 'noopener noreferrer';
 
-  // Hide news-specific buttons
+  // Show/hide buttons appropriately for research context
   var stageBtn = document.getElementById('preview-stage-btn');
-  if(stageBtn) stageBtn.style.display = 'none';
+  if(stageBtn){ stageBtn.style.display = 'none'; } // no staging for research items
+  var readBtn = document.getElementById('preview-read-btn');
+  if(readBtn){ readBtn.textContent = a.read ? '&#x21A9; Mark Unread' : '&#x2713; Mark Read'; }
+  var aiReadBtn = document.getElementById('preview-ai-read-btn');
+  if(aiReadBtn){ aiReadBtn.style.display = 'inline-flex'; }
+  var notionBtn = document.getElementById('preview-notion-btn');
+  if(notionBtn){ notionBtn.style.display = 'none'; }
+
+  // Clear chat
+  var chatEl = document.getElementById('preview-chat');
+  if(chatEl) chatEl.innerHTML = '';
+  var chatInp = document.getElementById('preview-chat-inp');
+  if(chatInp) chatInp.value = '';
 
   document.getElementById('preview-modal').classList.add('open');
   document.body.style.overflow = 'hidden';
   markResearchRead(id, true);
-  // restore stage button when closed
 }
 
 function addResearchToCitations(id){
@@ -2055,9 +2155,14 @@ async function apiFetch(path, opts) {
 }
 
 function normaliseArticle(a) {
+  // Prefer real pub_date (from article meta) over scrape date
+  var realPubDate = a.pub_date || a.pubDate || '';
+  var scrapedDate = a.processed_date || a.scrapedDate || '';
+  // If pub_date looks like it was set to today's scrape date (i.e., same as processed_date),
+  // still show it — but label the scraped date separately so users can tell
   return Object.assign({}, a, {
-    pubDate:      a.pub_date       || a.pubDate       || '',
-    scrapedDate:  a.processed_date || a.scrapedDate   || '',
+    pubDate:      realPubDate,
+    scrapedDate:  scrapedDate,
     whyItMatters: a.why_it_matters || a.whyItMatters  || '',
     read:   a.read   === 1 || a.read   === true,
     staged: a.staged === 1 || a.staged === true,
@@ -2099,9 +2204,11 @@ async function apiSyncWatchlist(){
   renderWatchlist();
 }
 
+var lastStats = null;
 async function apiLoadStats() {
   var d = await apiFetch('/stats');
   if (!d) return;
+  lastStats = d;
   var e;
   e = document.getElementById('stat-unread'); if (e) e.textContent = d.unread || 0;
   e = document.getElementById('stat-staged'); if (e) e.textContent = d.staged || 0;
@@ -2329,8 +2436,8 @@ function openPreview(id, event){
     var _pub     = a.pubDate     || a.pub_date      || '';
     var _scraped = a.scrapedDate || a.processed_date || '';
     datesEl.innerHTML =
-      (_pub     ? '<span title="Date published by the original source">&#x1F4C5; <strong style="color:var(--white)">Published:</strong> '+_pub+'</span>' : '') +
-      (_scraped ? '<span title="Date PolicyPulse scraped this article"> &nbsp;&#x1F50D; <strong>Scraped:</strong> '+_scraped.slice(0,10)+'</span>' : '');
+      (_pub     ? '<span title="Date published by the original source">&#x1F4C5; <strong style="color:var(--text)">Published:</strong> <span style="color:var(--text)">'+_pub+'</span></span>' : '<span style="color:var(--muted);font-size:11px">&#x1F4C5; Publish date unavailable</span>') +
+      (_scraped && _scraped.slice(0,10) !== _pub ? '<span title="Date PolicyPulse scraped this article" style="color:var(--muted)"> &nbsp;&#x1F50D; <strong style="color:var(--muted)">Scraped:</strong> '+_scraped.slice(0,10)+'</span>' : '');
   }
 
   document.getElementById('preview-title').textContent = a.title;
@@ -2381,6 +2488,10 @@ function closePreview(){
   document.getElementById('preview-modal').classList.remove('open');
   document.body.style.overflow = '';
   _previewArticleId = null;
+  _researchPreviewId = null;
+  // Restore stage button for next news article preview
+  var stageBtn = document.getElementById('preview-stage-btn');
+  if(stageBtn) stageBtn.style.display = 'inline-flex';
 }
 
 function openNoteForArticle(){
@@ -2432,6 +2543,17 @@ function previewStage(){
 }
 
 function previewRead(){
+  // Handle research preview
+  if(_researchPreviewId){
+    var ra = _researchArticles ? _researchArticles.find(function(x){return x.id===_researchPreviewId;}) : null;
+    if(ra){
+      var newRead = !ra.read;
+      markResearchRead(_researchPreviewId, newRead);
+      var readBtn = document.getElementById('preview-read-btn');
+      if(readBtn) readBtn.textContent = newRead ? '↩ Mark Unread' : '✓ Mark Read';
+    }
+    return;
+  }
   if(!_previewArticleId) return;
   var a = articles.find(x=>x.id===_previewArticleId);
   if(!a) return;
