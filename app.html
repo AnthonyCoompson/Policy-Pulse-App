@@ -863,19 +863,21 @@ function skipApiKey(){
 
 <div id="nav">
   <button class="nav-btn" onclick="showLanding()" id="tab-home" title="Return to home / landing page">🏠 Home</button>
-  <button class="nav-btn active" onclick="showTab('dashboard')" id="tab-dashboard">Dashboard</button>
-  <button class="nav-btn" onclick="showTab('scraper')" id="tab-scraper">Scraper <span class="nav-badge" id="scraper-badge" style="display:none">0</span></button>
-  <button class="nav-btn" onclick="showTab('digest')" id="tab-digest">Digest <span class="nav-badge" id="digest-badge" style="display:none">0</span></button>
-  <button class="nav-btn" onclick="showTab('subscribers')" id="tab-subscribers">Subscribers</button>
-  <button class="nav-btn" onclick="showTab('askai')" id="tab-askai">Ask AI</button>
-  <button class="nav-btn" onclick="showTab('citations')" id="tab-citations">Citations</button>
-  <button class="nav-btn" onclick="showTab('notes')" id="tab-notes">&#x1F4DD; Notes</button>
-  <button class="nav-btn" onclick="showTab('quickstart')" id="tab-quickstart">Quick Start</button>
-  <button class="nav-btn" onclick="showTab('instructions')" id="tab-instructions">Reference Guide</button>
-  <button class="nav-btn" onclick="showTab('privacy')" id="tab-privacy">&#x1F512; Privacy</button>
-  <button class="nav-btn" onclick="showTab('notion')" id="tab-notion">&#x1F5D2; Notion</button>
+  <button class="nav-btn active" onclick="showTab('dashboard')" id="tab-dashboard">📊 Dashboard</button>
+  <button class="nav-btn" onclick="showTab('scraper')" id="tab-scraper">📰 News <span class="nav-badge" id="scraper-badge" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showTab('research')" id="tab-research">&#x1F4DA; Research <span class="nav-badge" id="research-badge" style="display:none">0</span></button>
-</div>
+  <button class="nav-btn" onclick="showTab('digest')" id="tab-digest">🗞️ Digest <span class="nav-badge" id="digest-badge" style="display:none">0</span></button>
+  <button class="nav-btn" onclick="showTab('notes')" id="tab-notes">&#x1F4DD; Notes</button>
+  <button class="nav-btn" onclick="showTab('notion')" id="tab-notion">📒 Notion</button>
+  <button class="nav-btn" onclick="showTab('askai')" id="tab-askai">🧠 Ask AI</button>
+  <button class="nav-btn" onclick="showTab('citations')" id="tab-citations">🔖 Citations</button>
+  <button class="nav-btn" onclick="showTab('quickstart')" id="tab-quickstart">🚀 Quick Start</button>
+  <button class="nav-btn" onclick="showTab('instructions')" id="tab-instructions">📚 Reference Guide</button>
+  <button class="nav-btn" onclick="showTab('subscribers')" id="tab-subscribers">👥 Subscribers</button>
+  <button class="nav-btn" onclick="showTab('privacy')" id="tab-privacy">&#x1F512; Privacy</button>
+  </div>
+ 
+  
 
 <div id="main">
 
@@ -2089,7 +2091,7 @@ function buildResearchCard(a, forDashboard){
 }).join('')
     +'<button class="btn-add-tag" onclick="showResearchTagInput('+a.id+')" title="Add tag">&#x2B; Tag</button>'
     +'<span id="rtag-input-wrap-'+a.id+'" style="display:none;align-items:center;gap:4px;flex-wrap:wrap">'
-    +'<input id="rtag-inp-'+a.id+'" class="filter-input" placeholder="Type or pick..." style="padding:2px 7px;font-size:10px;width:90px;height:22px" onkeydown="if(event.key==='Enter')addResearchTag('+a.id+')">'
+    +'<input id="rtag-inp-'+a.id+'" class="filter-input" placeholder="Type or pick..." style="padding:2px 7px;font-size:10px;width:90px;height:22px" onkeydown="if(event.key===&quot;Enter&quot;)addResearchTag('+a.id+')">'
     +'<select class="sentiment-picker" style="height:22px;padding:1px 4px;font-size:10px" onchange="pickResearchTagFromDropdown('+a.id+',this)">'
     +'<option value="">&#x1F4CB; Quick tags</option>'
     +'<option>Urgent</option><option>Briefing Note Worthy</option><option>DRIPA</option><option>UNDRIP</option><option>TRC</option><option>OCAP</option>'
@@ -2388,7 +2390,7 @@ function openResearchPreview(id){
     var rtags = (a.tags||'').split(',').filter(function(t){return t.trim();});
     previewTagsEl.innerHTML = rtags.map(function(t){
       return '<span class="tag-chip" style="font-size:10px;padding:3px 9px;display:inline-flex;align-items:center;gap:4px">'+t.trim()
-        +'<span onclick="previewRemoveResearchTag(''+t.trim()+'')" style="cursor:pointer;opacity:.5;font-size:12px">×</span></span>';
+        +'<span onclick="previewRemoveResearchTag(this)" data-tag="'+escHtml(t.trim())+'" style="cursor:pointer;opacity:.5;font-size:12px">×</span></span>';
     }).join('') || '<span style="font-size:11px;color:var(--dim)">No tags yet</span>';
   }
 
@@ -2403,8 +2405,9 @@ function openResearchPreview(id){
   markResearchRead(id, true);
 }
 
-function previewRemoveResearchTag(tag){
+function previewRemoveResearchTag(el){
   if(!_researchPreviewId) return;
+  var tag = el.getAttribute ? el.getAttribute('data-tag') : el;
   removeResearchTag(_researchPreviewId, tag);
   var a = _researchArticles.find(function(x){return x.id===_researchPreviewId;});
   if(a){
@@ -2413,7 +2416,7 @@ function previewRemoveResearchTag(tag){
       var rtags=(a.tags||'').split(',').filter(function(t){return t.trim();});
       el.innerHTML=rtags.map(function(t){
         return '<span class="tag-chip" style="font-size:10px;padding:3px 9px;display:inline-flex;align-items:center;gap:4px">'+t.trim()
-          +'<span onclick="previewRemoveResearchTag(''+t.trim()+'')" style="cursor:pointer;opacity:.5;font-size:12px">×</span></span>';
+          +'<span onclick="previewRemoveResearchTag(this)" data-tag="'+escHtml(t.trim())+'" style="cursor:pointer;opacity:.5;font-size:12px">×</span></span>';
       }).join('')||'<span style="font-size:11px;color:var(--dim)">No tags yet</span>';
     }
   }
@@ -2554,8 +2557,7 @@ async function removeResearchTag(id, tag){
 function shareResearchArticle(id){
   var a=_researchArticles.find(function(x){return x.id===id;});
   if(!a)return;
-  var text=a.title+'
-'+a.url;
+  var text=a.title+'\n'+a.url;
   if(navigator.share){navigator.share({title:a.title,url:a.url}).catch(function(){});}
   else{navigator.clipboard.writeText(text).then(function(){showToast('&#x1F517;','Link Copied','Article link copied.',2500);});}
 }
