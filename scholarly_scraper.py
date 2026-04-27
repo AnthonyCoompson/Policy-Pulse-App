@@ -1,19 +1,12 @@
 """
-PolicyPulse Scholarly Scraper v1
+PolicyPulse Scholarly Scraper v2
 ────────────────────────────────
-Fetches peer-reviewed and grey-literature research from open-access sources:
-
-  • OpenAlex       — 250M scholarly works, completely free, no key required
-  • DOAJ           — Directory of Open Access Journals, free API
-  • Semantic Scholar — free API, abstracts + metadata
-  • PubMed/NCBI    — biomedical/health, free E-utilities API
-  • arXiv          — preprints in policy-adjacent fields
-  • SSRN           — working papers in law, policy, economics
-  • Canadian policy think-tanks — CCPA, Yellowhead, CD Howe, MLI, IRPP, NCCIH
-
-Run separately from the news scraper (weekly, not daily).
-All results pass through Gemini AI for relevance scoring (same threshold: >=6 kept).
-Stored in the `scholarly_articles` SQLite table.
+Changes from v1:
+  - Canadian think-tank sources now read from `research_sources` DB table
+    (fully manageable from the app UI) instead of a hardcoded dict.
+  - Scholarly search keywords now read from `scholarly_keywords` DB table.
+  - All open-access API sources (OpenAlex, Semantic Scholar, PubMed, DOAJ, arXiv)
+    remain unchanged — they're queried by keyword, not by URL.
 """
 
 import hashlib
@@ -43,33 +36,14 @@ HTML_HEADERS = {
 }
 TIMEOUT = 20
 
-# ── DEFAULT SEARCH TOPICS ──────────────────────────────────────────────────────
-# These augment the user's watchlist keywords for scholarly searches
-
-DEFAULT_SCHOLARLY_KEYWORDS = [
-    "Indigenous policy Canada",
-    "DRIPA UNDRIP reconciliation",
-    "First Nations health Canada",
-    "post-secondary education Canada",
-    "research funding SSHRC NSERC",
-    "pharmacare Canada",
-    "BC government policy",
-    "OCAP data sovereignty Indigenous",
-    "TRC calls to action",
-    "Indigenous higher education",
-]
 
 # ── OPENALEX ───────────────────────────────────────────────────────────────────
 
 def fetch_openalex(keywords: list[str], days_back: int = 90) -> list[dict]:
-    """
-    Query OpenAlex for recent open-access works matching keywords.
-    No API key required for up to 100k requests/day.
-    """
     results = []
     since_date = (datetime.utcnow() - timedelta(days=days_back)).strftime("%Y-%m-%d")
 
-    for kw in keywords[:8]:  # limit to 8 keywords per run to stay polite
+    for kw in keywords[:8]:
         try:
             params = {
                 "search": kw,
@@ -95,21 +69,15 @@ def fetch_openalex(keywords: list[str], days_back: int = 90) -> list[dict]:
                 if not title or len(title) < 10:
                     continue
 
-                # Reconstruct abstract from inverted index
                 abstract = _reconstruct_abstract(work.get("abstract_inverted_index", {}))
-
-                # Get URL — prefer OA URL, fall back to DOI
                 oa_url = (work.get("open_access") or {}).get("oa_url", "")
                 doi = work.get("doi", "")
                 url = oa_url or (f"https://doi.org/{doi.replace('https://doi.org/','')}" if doi else "")
                 if not url:
                     continue
 
-                # Source journal/venue
                 primary_loc = work.get("primary_location") or {}
                 source = (primary_loc.get("source") or {}).get("display_name", "OpenAlex")
-
-                # Top concept tags
                 concepts = [c["display_name"] for c in (work.get("concepts") or [])[:4]]
 
                 results.append({
@@ -135,7 +103,6 @@ def fetch_openalex(keywords: list[str], days_back: int = 90) -> list[dict]:
 
 
 def _reconstruct_abstract(inv_index: dict) -> str:
-    """Rebuild abstract text from OpenAlex inverted index format."""
     if not inv_index:
         return ""
     positions = {}
@@ -148,10 +115,6 @@ def _reconstruct_abstract(inv_index: dict) -> str:
 # ── SEMANTIC SCHOLAR ───────────────────────────────────────────────────────────
 
 def fetch_semantic_scholar(keywords: list[str]) -> list[dict]:
-    """
-    Semantic Scholar Academic Graph API — free, no key required for basic use.
-    Returns abstracts + metadata for high-quality papers.
-    """
     results = []
     for kw in keywords[:5]:
         try:
@@ -177,7 +140,6 @@ def fetch_semantic_scholar(keywords: list[str]) -> list[dict]:
                 if not title or not abstract:
                     continue
 
-                # Try to get a real URL
                 pdf = (paper.get("openAccessPdf") or {}).get("url", "")
                 ext = paper.get("externalIds") or {}
                 doi = ext.get("DOI", "")
@@ -204,7 +166,7 @@ def fetch_semantic_scholar(keywords: list[str]) -> list[dict]:
                     "open_access": bool(pdf),
                 })
 
-            time.sleep(1.0)  # Semantic Scholar rate limit: 1 req/sec without key
+            time.sleep(1.0)
 
         except Exception as e:
             log.warning(f"Semantic Scholar error for '{kw}': {e}")
@@ -216,15 +178,9 @@ def fetch_semantic_scholar(keywords: list[str]) -> list[dict]:
 # ── DOAJ ──────────────────────────────────────────────────────────────────────
 
 def fetch_doaj(keywords: list[str]) -> list[dict]:
-    """Directory of Open Access Journals — completely free, no key required."""
     results = []
     for kw in keywords[:4]:
         try:
-            params = {
-                "q": kw,
-                "pageSize": 8,
-                "sort": "published:desc",
-            }
             resp = requests.get(
                 "https://doaj.org/api/search/articles/" + quote_plus(kw),
                 params={"pageSize": 8, "sort": "published:desc"},
@@ -276,16 +232,11 @@ def fetch_doaj(keywords: list[str]) -> list[dict]:
 # ── PUBMED / NCBI ─────────────────────────────────────────────────────────────
 
 def fetch_pubmed(keywords: list[str]) -> list[dict]:
-    """
-    NCBI E-utilities — completely free for health/biomedical research.
-    Relevant for Indigenous health, pharmacare, mental health policy.
-    """
     results = []
     combined_query = " OR ".join(f'"{kw}"[Title/Abstract]' for kw in keywords[:4])
     combined_query += " AND (Canada[Affiliation] OR Canada[Title/Abstract])"
 
     try:
-        # Step 1: Search
         search_resp = requests.get(
             "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
             params={
@@ -307,7 +258,6 @@ def fetch_pubmed(keywords: list[str]) -> list[dict]:
         if not ids:
             return results
 
-        # Step 2: Fetch summaries
         summary_resp = requests.get(
             "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
             params={"db": "pmc", "id": ",".join(ids), "retmode": "json"},
@@ -336,7 +286,7 @@ def fetch_pubmed(keywords: list[str]) -> list[dict]:
             results.append({
                 "title": title,
                 "url": url,
-                "abstract": "",  # fetch separately if needed
+                "abstract": "",
                 "source": source,
                 "pub_date": pub_date,
                 "database": "PubMed Central",
@@ -354,104 +304,9 @@ def fetch_pubmed(keywords: list[str]) -> list[dict]:
     return results
 
 
-# ── CANADIAN THINK-TANKS (HTML SCRAPING) ─────────────────────────────────────
-
-CANADIAN_SOURCES = {
-    "Canadian Centre for Policy Alternatives": {
-        "url": "https://www.policyalternatives.ca/publications",
-        "base": "https://www.policyalternatives.ca",
-        "selectors": ["h2 a", "h3 a", ".views-row a", ".node-title a"],
-        "relevance_boost": 1,
-    },
-    "Yellowhead Institute": {
-        "url": "https://yellowheadinstitute.org/resources/",
-        "base": "https://yellowheadinstitute.org",
-        "selectors": ["h2 a", "h3 a", "article a", ".entry-title a"],
-        "relevance_boost": 2,  # Highly relevant for Indigenous policy
-    },
-    "National Collaborating Centre for Indigenous Health": {
-        "url": "https://www.nccih.ca/495/Publications_and_Resources.nccih",
-        "base": "https://www.nccih.ca",
-        "selectors": ["h3 a", "h2 a", ".pub-title a", "td a"],
-        "relevance_boost": 2,
-    },
-    "Macdonald-Laurier Institute": {
-        "url": "https://macdonaldlaurier.ca/publications/",
-        "base": "https://macdonaldlaurier.ca",
-        "selectors": ["h2 a", "h3 a", ".entry-title a"],
-        "relevance_boost": 0,
-    },
-    "CD Howe Institute": {
-        "url": "https://www.cdhowe.org/intelligence-memos",
-        "base": "https://www.cdhowe.org",
-        "selectors": ["h2 a", "h3 a", ".views-field-title a"],
-        "relevance_boost": 0,
-    },
-    "Broadbent Institute": {
-        "url": "https://www.broadbentinstitute.ca/research",
-        "base": "https://www.broadbentinstitute.ca",
-        "selectors": ["h2 a", "h3 a", "article a"],
-        "relevance_boost": 0,
-    },
-}
-
-
-def fetch_canadian_think_tanks() -> list[dict]:
-    """Scrape publications from major Canadian policy think-tanks."""
-    results = []
-    for name, config in CANADIAN_SOURCES.items():
-        try:
-            resp = requests.get(config["url"], headers=HTML_HEADERS, timeout=TIMEOUT)
-            if resp.status_code != 200:
-                log.warning(f"Think-tank {name}: HTTP {resp.status_code}")
-                continue
-
-            soup = BeautifulSoup(resp.text, "html.parser")
-            seen = set()
-
-            for sel in config["selectors"]:
-                for el in soup.select(sel)[:15]:
-                    title = el.get_text(strip=True)
-                    href = el.get("href", "")
-                    if not title or len(title) < 15 or href in seen:
-                        continue
-                    if any(w in title.lower() for w in ["home","about","contact","menu","sign in"]):
-                        continue
-                    if not href.startswith("http"):
-                        href = urljoin(config["base"], href)
-                    if href:
-                        seen.add(href)
-                        results.append({
-                            "title": title,
-                            "url": href,
-                            "abstract": "",
-                            "source": name,
-                            "pub_date": datetime.utcnow().strftime("%Y-%m-%d"),
-                            "database": "Canadian Think Tank",
-                            "tags": [],
-                            "search_keyword": name,
-                            "relevance_boost": config.get("relevance_boost", 0),
-                            "open_access": True,
-                        })
-                if len(results) >= 10:
-                    break
-
-            log.info(f"Think-tank {name}: {len([r for r in results if r['source']==name])} items")
-            time.sleep(1.5)
-
-        except Exception as e:
-            log.warning(f"Think-tank scrape error [{name}]: {e}")
-
-    return results
-
-
 # ── ARXIV ─────────────────────────────────────────────────────────────────────
 
 def fetch_arxiv(keywords: list[str]) -> list[dict]:
-    """
-    arXiv Atom API — preprints in social sciences, economics, policy.
-    Relevant cs.CY (Computers & Society), econ.GN (General Economics).
-    """
     results = []
     query = " OR ".join(f'ti:"{kw}" OR abs:"{kw}"' for kw in keywords[:3])
     try:
@@ -471,16 +326,16 @@ def fetch_arxiv(keywords: list[str]) -> list[dict]:
 
         soup = BeautifulSoup(resp.content, "xml")
         for entry in soup.find_all("entry")[:8]:
-            title_el = entry.find("title")
+            title_el   = entry.find("title")
             summary_el = entry.find("summary")
-            id_el = entry.find("id")
-            pub_el = entry.find("published")
+            id_el      = entry.find("id")
+            pub_el     = entry.find("published")
             if not title_el:
                 continue
 
-            title = title_el.get_text(strip=True).replace("\n", " ")
+            title    = title_el.get_text(strip=True).replace("\n", " ")
             abstract = (summary_el.get_text(strip=True) if summary_el else "")[:1200]
-            url = id_el.get_text(strip=True) if id_el else ""
+            url      = id_el.get_text(strip=True) if id_el else ""
             pub_date = (pub_el.get_text(strip=True) if pub_el else "")[:10]
 
             if title and url:
@@ -503,33 +358,98 @@ def fetch_arxiv(keywords: list[str]) -> list[dict]:
     return results
 
 
+# ── CANADIAN THINK-TANKS — now driven by research_sources DB ─────────────────
+
+def fetch_canadian_think_tanks() -> list[dict]:
+    """
+    Scrape publications from think-tank sources stored in research_sources table.
+    Falls back to an empty list if the table doesn't exist yet.
+    """
+    from database import get_research_sources
+    results = []
+
+    try:
+        db_sources = [s for s in get_research_sources() if s["active"]]
+    except Exception as e:
+        log.warning(f"Could not load research sources from DB: {e}")
+        return results
+
+    for source in db_sources:
+        name     = source["name"]
+        url      = source["url"]
+        base_url = _base_url(url)
+        boost    = source.get("relevance_boost", 0)
+
+        try:
+            resp = requests.get(url, headers=HTML_HEADERS, timeout=TIMEOUT)
+            if resp.status_code != 200:
+                log.warning(f"Think-tank {name}: HTTP {resp.status_code}")
+                continue
+
+            soup = BeautifulSoup(resp.text, "html.parser")
+            seen = set()
+            source_results = []
+
+            # Generic selectors that work across most think-tank sites
+            selectors = ["h2 a", "h3 a", "article a", ".entry-title a",
+                         ".views-row a", ".node-title a", ".pub-title a",
+                         ".views-field-title a", "td a"]
+
+            for sel in selectors:
+                for el in soup.select(sel)[:15]:
+                    title = el.get_text(strip=True)
+                    href  = el.get("href", "")
+                    if not title or len(title) < 15 or href in seen:
+                        continue
+                    if any(w in title.lower() for w in ["home","about","contact","menu","sign in","donate"]):
+                        continue
+                    if not href.startswith("http"):
+                        href = urljoin(base_url, href)
+                    if href:
+                        seen.add(href)
+                        source_results.append({
+                            "title": title,
+                            "url": href,
+                            "abstract": "",
+                            "source": name,
+                            "pub_date": datetime.utcnow().strftime("%Y-%m-%d"),
+                            "database": "Canadian Think Tank",
+                            "tags": [],
+                            "search_keyword": name,
+                            "relevance_boost": boost,
+                            "open_access": True,
+                        })
+                if len(source_results) >= 10:
+                    break
+
+            results.extend(source_results)
+            log.info(f"Think-tank {name}: {len(source_results)} items")
+            time.sleep(1.5)
+
+        except Exception as e:
+            log.warning(f"Think-tank scrape error [{name}]: {e}")
+
+    return results
+
+
+def _base_url(url: str) -> str:
+    from urllib.parse import urlparse
+    p = urlparse(url)
+    return f"{p.scheme}://{p.netloc}"
+
+
 # ── AI ANALYSIS ───────────────────────────────────────────────────────────────
 
 def analyze_scholarly(title: str, abstract: str, source: str,
                       url: str, database: str) -> dict | None:
-    """
-    AI analysis optimised for scholarly/research content.
-    Works from title + abstract (no full text needed).
-    Returns None if relevance < 6.
-    """
     from ai_processor import analyze_article
-
-    # Combine title + abstract as the "article text" for the AI
     combined = f"[ABSTRACT FROM {database}]\n\n{abstract}" if abstract else ""
-
-    result = analyze_article(
-        title=title,
-        url=url,
-        source_name=source,
-        article_text=combined,
-    )
-    return result
+    return analyze_article(title=title, url=url, source_name=source, article_text=combined)
 
 
 # ── DATABASE HELPERS ──────────────────────────────────────────────────────────
 
 def ensure_scholarly_table():
-    """Create scholarly_articles table if it doesn't exist."""
     from database import get_conn
     conn = get_conn()
     conn.executescript("""
@@ -566,16 +486,13 @@ def ensure_scholarly_table():
 
 
 def save_scholarly_article(item: dict, ai: dict) -> bool:
-    """Insert scholarly article if not already in DB. Returns True if inserted."""
     from database import get_conn
     import sqlite3
-
     conn = get_conn()
     cur = conn.cursor()
     now = datetime.utcnow().isoformat()
-
     tags_list = list(set((item.get("tags") or []) + (ai.get("tags") or [])))
-    tags_str = ",".join(tags_list[:8])
+    tags_str  = ",".join(tags_list[:8])
 
     try:
         cur.execute("""
@@ -611,7 +528,6 @@ def save_scholarly_article(item: dict, ai: dict) -> bool:
         inserted = False
     finally:
         conn.close()
-
     return inserted
 
 
@@ -619,18 +535,14 @@ def get_scholarly_articles(domain=None, database_name=None, search=None,
                             limit=50, offset=0, sort="date") -> list[dict]:
     from database import get_conn
     conn = get_conn()
-    conditions = []
-    params = []
+    conditions, params = [], []
     if domain:
-        conditions.append("domain = ?")
-        params.append(domain)
+        conditions.append("domain = ?"); params.append(domain)
     if database_name:
-        conditions.append("database_name = ?")
-        params.append(database_name)
+        conditions.append("database_name = ?"); params.append(database_name)
     if search:
         conditions.append("(title LIKE ? OR summary LIKE ? OR abstract LIKE ?)")
-        s = f"%{search}%"
-        params.extend([s, s, s])
+        s = f"%{search}%"; params.extend([s, s, s])
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     order = "pub_date DESC" if sort == "date" else "relevance DESC, pub_date DESC"
     rows = conn.execute(
@@ -644,17 +556,13 @@ def get_scholarly_articles(domain=None, database_name=None, search=None,
 def get_scholarly_stats() -> dict:
     from database import get_conn
     conn = get_conn()
-    total = conn.execute("SELECT COUNT(*) FROM scholarly_articles").fetchone()[0]
+    total  = conn.execute("SELECT COUNT(*) FROM scholarly_articles").fetchone()[0]
     unread = conn.execute("SELECT COUNT(*) FROM scholarly_articles WHERE read=0").fetchone()[0]
-    dbs = conn.execute(
+    dbs    = conn.execute(
         "SELECT database_name, COUNT(*) as n FROM scholarly_articles GROUP BY database_name ORDER BY n DESC"
     ).fetchall()
     conn.close()
-    return {
-        "total": total,
-        "unread": unread,
-        "databases": [dict(r) for r in dbs],
-    }
+    return {"total": total, "unread": unread, "databases": [dict(r) for r in dbs]}
 
 
 def update_scholarly_read(article_id: int, read: bool):
@@ -668,46 +576,41 @@ def update_scholarly_read(article_id: int, read: bool):
 # ── MAIN SCRAPE ORCHESTRATOR ───────────────────────────────────────────────────
 
 def run_scholarly_scrape(extra_keywords: list[str] | None = None) -> dict:
-    """
-    Main entry point. Call from FastAPI background task or scheduler.
-    Combines all sources, deduplicates, AI-scores, and saves.
-    """
     log.info("=== PolicyPulse Scholarly Scrape started ===")
-
     ensure_scholarly_table()
 
-    # Build keyword list: defaults + watchlist + extras
-    keywords = list(DEFAULT_SCHOLARLY_KEYWORDS)
-    if extra_keywords:
-        keywords = list(set(keywords + extra_keywords))
+    # Keywords: from scholarly_keywords DB table + watchlist + extras passed in
+    from database import get_scholarly_keywords, get_watchlist_keywords
+    db_kws       = [r["keyword"] for r in get_scholarly_keywords() if r.get("active")]
+    watchlist_kws = get_watchlist_keywords()
+    keywords = list(set(db_kws + watchlist_kws + (extra_keywords or [])))
+    if not keywords:
+        log.warning("No scholarly keywords configured — using built-in defaults")
+        keywords = ["Indigenous policy Canada", "post-secondary education Canada",
+                    "reconciliation Canada", "pharmacare Canada"]
 
     all_items: list[dict] = []
 
-    # 1. OpenAlex (best free scholarly API)
     try:
         all_items.extend(fetch_openalex(keywords[:6], days_back=180))
     except Exception as e:
         log.error(f"OpenAlex failed: {e}")
 
-    # 2. Semantic Scholar
     try:
         all_items.extend(fetch_semantic_scholar(keywords[:4]))
     except Exception as e:
         log.error(f"Semantic Scholar failed: {e}")
 
-    # 3. Canadian think-tanks (most policy-relevant)
     try:
         all_items.extend(fetch_canadian_think_tanks())
     except Exception as e:
         log.error(f"Think-tanks failed: {e}")
 
-    # 4. DOAJ
     try:
         all_items.extend(fetch_doaj(keywords[:3]))
     except Exception as e:
         log.error(f"DOAJ failed: {e}")
 
-    # 5. PubMed (health-focused keywords only)
     health_kws = [k for k in keywords if any(w in k.lower() for w in
                   ["health", "pharmacare", "fnha", "indigenous", "mental"])]
     if health_kws:
@@ -716,7 +619,6 @@ def run_scholarly_scrape(extra_keywords: list[str] | None = None) -> dict:
         except Exception as e:
             log.error(f"PubMed failed: {e}")
 
-    # 6. arXiv
     try:
         all_items.extend(fetch_arxiv([k for k in keywords if len(k) > 6][:3]))
     except Exception as e:
@@ -733,17 +635,14 @@ def run_scholarly_scrape(extra_keywords: list[str] | None = None) -> dict:
 
     log.info(f"Scholarly: {len(unique_items)} unique items to process")
 
-    added = 0
-    skipped = 0
-    errors = []
+    added, skipped, errors = 0, 0, []
 
     for item in unique_items:
         title = (item.get("title") or "").strip()
-        url = (item.get("url") or "").strip()
+        url   = (item.get("url")   or "").strip()
         if not title or not url or len(title) < 10:
             continue
 
-        # AI analysis
         try:
             ai = analyze_scholarly(
                 title=title,
@@ -756,7 +655,6 @@ def run_scholarly_scrape(extra_keywords: list[str] | None = None) -> dict:
                 skipped += 1
                 continue
 
-            # Apply optional relevance boost for highly-relevant sources
             boost = item.get("relevance_boost", 0)
             if boost:
                 ai["relevance"] = min(10, ai["relevance"] + boost)
@@ -764,13 +662,13 @@ def run_scholarly_scrape(extra_keywords: list[str] | None = None) -> dict:
             if save_scholarly_article(item, ai):
                 added += 1
             else:
-                skipped += 1  # duplicate URL
+                skipped += 1
 
         except Exception as e:
             errors.append(f"{title[:40]}: {e}")
             log.warning(f"Scholarly analysis error: {e}")
 
-        time.sleep(0.3)  # gentle rate limit
+        time.sleep(0.3)
 
     log.info(f"=== Scholarly done. Added: {added}, Skipped: {skipped}, Errors: {len(errors)} ===")
     return {"added": added, "skipped": skipped, "errors": errors}

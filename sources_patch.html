@@ -1,0 +1,559 @@
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  POLICYPULSE — SOURCE MANAGEMENT PATCH  for app.html
+  ══════════════════════════════════════════════════════════════════════════════
+
+  HOW TO APPLY — three steps, all clearly labelled below.
+
+  STEP 1: Replace the <div id="scraper-sources-panel"> block
+  STEP 2: In the Research tab, replace the "About Sources" sub-tab panel
+          (the <div id="research-sources-panel"> block)
+  STEP 3: Replace the renderSources(), toggleSource(), addSource() JS functions
+          and add all the new JS at the bottom of your main <script> block
+
+  That's it. Nothing else in app.html needs to change.
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     STEP 1
+     Find <div id="scraper-sources-panel" style="display:none">
+     Replace the ENTIRE block (up to and including its closing </div>)
+     with the block below.
+═══════════════════════════════════════════════════════════════════════════════ -->
+
+<div id="scraper-sources-panel" style="display:none">
+  <div id="duplicate-alert" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(244,63,94,0.08);border:1px solid rgba(244,63,94,0.25);border-radius:8px">
+    <div style="font-size:11px;font-weight:700;color:#fb7185;margin-bottom:6px">⚠ Potential Duplicate Articles Detected</div>
+    <div id="duplicate-list" style="font-size:11px;color:var(--muted);line-height:1.8"></div>
+  </div>
+
+  <!-- Header row -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div style="font-size:12px;color:var(--muted)" id="sources-count">Loading sources…</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="detectDuplicates()">🔍 Find Dupes</button>
+      <button class="btn btn-primary" onclick="showAddSourceModal()">+ Add Source</button>
+    </div>
+  </div>
+
+  <!-- Inline "add source" form (hidden until button clicked) -->
+  <div id="add-source-form" style="display:none;background:rgba(0,194,255,0.04);border:1px solid rgba(0,194,255,0.18);border-radius:10px;padding:16px 18px;margin-bottom:14px">
+    <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px">+ Add New Source</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <input class="filter-input" id="ns-name" placeholder="Source name *" style="grid-column:1/-1">
+      <input class="filter-input" id="ns-url"  placeholder="URL (full URL with https://) *" style="grid-column:1/-1">
+      <select class="filter-select" id="ns-juris">
+        <option value="Federal">Federal</option>
+        <option value="BC">BC</option>
+        <option value="Municipal">Municipal</option>
+        <option value="Pan-Canadian">Pan-Canadian</option>
+        <option value="International">International</option>
+      </select>
+      <select class="filter-select" id="ns-type" title="RSS: URL points to an RSS/Atom feed. HTML: URL points to a regular web page.">
+        <option value="html">HTML page</option>
+        <option value="rss">RSS feed</option>
+      </select>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:7px 10px;background:rgba(0,0,0,.2);border-radius:6px">
+      💡 <strong style="color:var(--text)">RSS</strong> — use when the site has a feed URL (usually ends in <code style="font-size:10px">/feed/</code> or <code style="font-size:10px">.xml</code>). Gives better dates.<br>
+      💡 <strong style="color:var(--text)">HTML</strong> — use for any government news page. The scraper finds article links automatically.
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="submitAddSource()">+ Add Source</button>
+      <button class="btn btn-ghost" onclick="hideAddSourceModal()">Cancel</button>
+    </div>
+    <div id="add-source-status" style="font-size:11px;margin-top:8px;display:none"></div>
+  </div>
+
+  <!-- Sources table -->
+  <div class="table-wrap" style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Source Name</th>
+          <th>URL</th>
+          <th>Jurisdiction</th>
+          <th>Type</th>
+          <th>Status</th>
+          <th>Last Scraped</th>
+          <th>Articles</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="sources-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     STEP 2
+     Find <div id="research-sources-panel" style="display:none">
+     Replace the ENTIRE block (up to and including its closing </div>)
+     with the block below.
+     Note: keep everything before it (the stats grid, sub-tabs, feed panel, etc.)
+═══════════════════════════════════════════════════════════════════════════════ -->
+
+<div id="research-sources-panel" style="display:none">
+
+  <!-- ── THINK-TANK SOURCES ──────────────────────────────────────── -->
+  <div style="margin-bottom:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div>
+        <div class="section-title" style="margin:0 0 4px">📰 Think-Tank &amp; Custom Sources</div>
+        <div style="font-size:11px;color:var(--muted)">These sites are scraped directly for publications. Add any organisation whose publications page you want monitored.</div>
+      </div>
+      <button class="btn btn-primary" onclick="showAddResearchSourceModal()">+ Add Source</button>
+    </div>
+
+    <!-- Inline add form -->
+    <div id="add-research-source-form" style="display:none;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:16px 18px;margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:12px">+ Add Research Source</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <input class="filter-input" id="nrs-name" placeholder="Organisation name *" style="grid-column:1/-1">
+        <input class="filter-input" id="nrs-url"  placeholder="Publications page URL *" style="grid-column:1/-1">
+        <select class="filter-select" id="nrs-type">
+          <option value="think_tank">Think Tank</option>
+          <option value="government">Government</option>
+          <option value="university">University</option>
+          <option value="ngo">NGO / Non-profit</option>
+          <option value="other">Other</option>
+        </select>
+        <select class="filter-select" id="nrs-boost" title="Relevance boost adds points to AI score for articles from this source">
+          <option value="0">No boost (neutral)</option>
+          <option value="1">+1 boost (relevant)</option>
+          <option value="2">+2 boost (highly relevant)</option>
+        </select>
+        <input class="filter-input" id="nrs-notes" placeholder="Notes (optional)" style="grid-column:1/-1">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="submitAddResearchSource()" style="background:linear-gradient(135deg,#4f46e5,#6366f1)">+ Add Research Source</button>
+        <button class="btn btn-ghost" onclick="hideAddResearchSourceModal()">Cancel</button>
+      </div>
+      <div id="add-research-source-status" style="font-size:11px;margin-top:8px;display:none"></div>
+    </div>
+
+    <div class="table-wrap" style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Organisation</th>
+            <th>URL</th>
+            <th>Type</th>
+            <th>Boost</th>
+            <th>Status</th>
+            <th>Last Scraped</th>
+            <th>Articles</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="research-sources-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── SCHOLARLY KEYWORDS ──────────────────────────────────────── -->
+  <div style="margin-bottom:24px">
+    <div class="section-title" style="margin-bottom:8px">🔑 Scholarly Search Keywords</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">These keywords are sent to OpenAlex, Semantic Scholar, PubMed, DOAJ and arXiv each time the research scraper runs. Toggle individual keywords on/off without deleting them.</div>
+    <div id="scholarly-keywords-list" style="margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px">
+      <input class="filter-input" id="skw-input" placeholder="Add keyword (e.g. 'OCAP Indigenous data')" style="max-width:340px" onkeydown="if(event.key==='Enter')submitAddScholarlyKeyword()">
+      <button class="btn btn-cyan" onclick="submitAddScholarlyKeyword()">+ Add Keyword</button>
+    </div>
+  </div>
+
+  <!-- ── API SOURCE INFO (read-only) ─────────────────────────────── -->
+  <div>
+    <div class="section-title" style="margin-bottom:12px">🌐 Open-Access API Sources</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px">These databases are queried automatically using your keywords above. They require no credentials and are always active.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:900px">
+      <div class="card" style="padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span class="research-db-badge db-openalex">OpenAlex</span>
+          <span class="oa-badge">🔓 Free</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.65">250M+ scholarly works. No API key. Best coverage for policy and social science.</div>
+      </div>
+      <div class="card" style="padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span class="research-db-badge db-semantic">Semantic Scholar</span>
+          <span class="oa-badge">🔓 Free</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.65">220M papers with AI-powered abstracts. Allen Institute. Strong on interdisciplinary work.</div>
+      </div>
+      <div class="card" style="padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span class="research-db-badge db-pubmed">PubMed Central</span>
+          <span class="oa-badge">🔓 Free</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.65">Full-text biomedical research. Best for Indigenous health, pharmacare, and FNHA-related papers.</div>
+      </div>
+      <div class="card" style="padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span class="research-db-badge db-doaj">DOAJ</span>
+          <span class="oa-badge">🔓 Free</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.65">20,000+ peer-reviewed open access journals. Strong on law, policy, and social sciences.</div>
+      </div>
+      <div class="card" style="padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span class="research-db-badge db-arxiv">arXiv</span>
+          <span class="oa-badge">🔓 Free</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.65">Preprints in economics, social science, AI policy. Often 6–12 months ahead of journals.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     STEP 3
+     Find the existing renderSources(), toggleSource(), addSource() functions
+     in your main <script> block and DELETE those three functions.
+     Then paste everything below in their place.
+═══════════════════════════════════════════════════════════════════════════════ -->
+<script id="source-management-js">
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   NEWS SOURCES — renderSources + full CRUD
+══════════════════════════════════════════════════════════════════════════════ */
+
+async function renderSources() {
+  if (API_BASE) {
+    var d = await apiFetch('/sources');
+    if (d && d.sources) sources = d.sources;
+  }
+  var tbody = document.getElementById('sources-tbody');
+  var countEl = document.getElementById('sources-count');
+  if (!tbody) return;
+
+  if (!sources.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:24px">No sources configured yet. Click + Add Source to add one.</td></tr>';
+    if (countEl) countEl.textContent = '0 sources';
+    return;
+  }
+
+  tbody.innerHTML = sources.map(function(s) {
+    var typeTag = s.scrape_type === 'rss'
+      ? '<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:rgba(16,185,129,0.12);color:#34d399;border:1px solid rgba(16,185,129,0.25)">RSS</span>'
+      : '<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:rgba(37,99,235,0.12);color:#60a5fa;border:1px solid rgba(37,99,235,0.25)">HTML</span>';
+    var active = s.active === 1 || s.active === true;
+    var lastScraped = s.last_scraped ? s.last_scraped.slice(0,16).replace('T',' ') : (s.lastScraped || '—');
+    var count = s.article_count || s.count || 0;
+    return '<tr>'
+      + '<td style="font-weight:600;color:var(--white);white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis" title="' + escHtml(s.url) + '">' + escHtml(s.name) + '</td>'
+      + '<td><a href="' + escHtml(s.url) + '" target="_blank" style="color:var(--cyan);font-size:10px;font-family:\'IBM Plex Mono\',monospace;max-width:180px;overflow:hidden;text-overflow:ellipsis;display:block;white-space:nowrap">' + escHtml(s.url) + '</a></td>'
+      + '<td><span class="tag tag-juris">' + escHtml(s.jurisdiction || '') + '</span></td>'
+      + '<td>' + typeTag + '</td>'
+      + '<td><span class="source-status"><span class="dot" style="background:' + (active ? 'var(--green)' : 'var(--red)') + '"></span>' + (active ? 'Active' : 'Paused') + '</span></td>'
+      + '<td style="font-size:11px;color:var(--muted);font-family:\'IBM Plex Mono\',monospace;white-space:nowrap">' + lastScraped + '</td>'
+      + '<td style="font-family:\'IBM Plex Mono\',monospace">' + count + '</td>'
+      + '<td><div style="display:flex;gap:5px">'
+      +   '<button class="btn ' + (active ? 'btn-red' : 'btn-green') + ' btn-sm" onclick="toggleSourceById(' + s.id + ')">' + (active ? 'Pause' : 'Activate') + '</button>'
+      +   '<button class="btn btn-ghost btn-sm" onclick="deleteSourceById(' + s.id + ', \'' + escHtml(s.name).replace(/'/g,"\\'") + '\')" style="color:#fb7185">Delete</button>'
+      + '</div></td>'
+      + '</tr>';
+  }).join('');
+
+  if (countEl) countEl.textContent = sources.length + ' source' + (sources.length !== 1 ? 's' : '') + ' configured';
+}
+
+function showAddSourceModal() {
+  document.getElementById('add-source-form').style.display = 'block';
+  document.getElementById('ns-name').focus();
+}
+function hideAddSourceModal() {
+  document.getElementById('add-source-form').style.display = 'none';
+  document.getElementById('add-source-status').style.display = 'none';
+  ['ns-name','ns-url'].forEach(function(id){ document.getElementById(id).value = ''; });
+}
+
+async function submitAddSource() {
+  var name  = (document.getElementById('ns-name').value || '').trim();
+  var url   = (document.getElementById('ns-url').value  || '').trim();
+  var juris = document.getElementById('ns-juris').value;
+  var type  = document.getElementById('ns-type').value;
+  var status = document.getElementById('add-source-status');
+
+  if (!name || !url) {
+    status.style.display = 'block';
+    status.style.color = 'var(--red)';
+    status.textContent = '⚠ Name and URL are required.';
+    return;
+  }
+  if (!url.startsWith('http')) {
+    status.style.display = 'block';
+    status.style.color = 'var(--red)';
+    status.textContent = '⚠ URL must start with https://';
+    return;
+  }
+
+  status.style.display = 'block';
+  status.style.color = 'var(--muted)';
+  status.textContent = 'Adding…';
+
+  if (API_BASE) {
+    var d = await apiFetch('/sources', {
+      method: 'POST',
+      body: JSON.stringify({ name: name, url: url, jurisdiction: juris, scrape_type: type })
+    });
+    if (d && d.ok) {
+      hideAddSourceModal();
+      await renderSources();
+      showToast('✅', 'Source Added', '"' + name + '" added and will be scraped on the next run.', 3500);
+    } else {
+      status.style.color = 'var(--red)';
+      status.textContent = '⚠ Could not save — check your backend connection.';
+    }
+  } else {
+    // No backend: add locally only
+    sources.push({ id: Date.now(), name: name, url: url, jurisdiction: juris,
+                   scrape_type: type, active: 1, last_scraped: null, article_count: 0 });
+    hideAddSourceModal();
+    renderSources();
+    showToast('✅', 'Source Added (local)', '"' + name + '" added locally. Connect Railway to persist.', 4000);
+  }
+}
+
+async function toggleSourceById(id) {
+  if (API_BASE) {
+    var d = await apiFetch('/sources/' + id + '/toggle', { method: 'PATCH' });
+    if (d && d.ok) {
+      var s = sources.find(function(x){ return x.id === id; });
+      if (s) s.active = d.active ? 1 : 0;
+    }
+  } else {
+    var s = sources.find(function(x){ return x.id === id; });
+    if (s) s.active = s.active ? 0 : 1;
+  }
+  renderSources();
+}
+
+async function deleteSourceById(id, name) {
+  if (!confirm('Delete source "' + name + '"? This cannot be undone.')) return;
+  if (API_BASE) {
+    await apiFetch('/sources/' + id, { method: 'DELETE' });
+  }
+  sources = sources.filter(function(s){ return s.id !== id; });
+  renderSources();
+  showToast('🗑', 'Source Deleted', '"' + name + '" removed.', 2500);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   RESEARCH SOURCES — full CRUD
+══════════════════════════════════════════════════════════════════════════════ */
+
+var _researchSources = [];
+
+async function loadResearchSources() {
+  if (!API_BASE) return;
+  var d = await apiFetch('/research-sources');
+  if (d && d.sources) _researchSources = d.sources;
+}
+
+async function renderResearchSourcesTable() {
+  await loadResearchSources();
+  var tbody = document.getElementById('research-sources-tbody');
+  if (!tbody) return;
+
+  if (!_researchSources.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:24px">No research sources yet. Click + Add Source to add one.</td></tr>';
+    return;
+  }
+
+  var typeLabels = { think_tank:'Think Tank', government:'Government', university:'University', ngo:'NGO', other:'Other' };
+  tbody.innerHTML = _researchSources.map(function(s) {
+    var active = s.active === 1 || s.active === true;
+    var boost = s.relevance_boost || 0;
+    var boostDisplay = boost > 0
+      ? '<span style="font-size:10px;font-weight:700;color:var(--green)">+' + boost + '</span>'
+      : '<span style="font-size:10px;color:var(--dim)">—</span>';
+    var lastScraped = s.last_scraped ? s.last_scraped.slice(0,16).replace('T',' ') : '—';
+    return '<tr>'
+      + '<td style="font-weight:600;color:var(--white);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (s.notes||'') + '">' + escHtml(s.name) + '</td>'
+      + '<td><a href="' + escHtml(s.url) + '" target="_blank" style="color:var(--cyan);font-size:10px;font-family:\'IBM Plex Mono\',monospace;max-width:160px;overflow:hidden;text-overflow:ellipsis;display:block;white-space:nowrap">' + escHtml(s.url) + '</a></td>'
+      + '<td style="font-size:11px;color:var(--muted)">' + escHtml(typeLabels[s.source_type] || s.source_type || '') + '</td>'
+      + '<td style="text-align:center">' + boostDisplay + '</td>'
+      + '<td><span class="source-status"><span class="dot" style="background:' + (active?'var(--green)':'var(--red)') + '"></span>' + (active?'Active':'Paused') + '</span></td>'
+      + '<td style="font-size:11px;color:var(--muted);font-family:\'IBM Plex Mono\',monospace;white-space:nowrap">' + lastScraped + '</td>'
+      + '<td style="font-family:\'IBM Plex Mono\',monospace">' + (s.article_count || 0) + '</td>'
+      + '<td><div style="display:flex;gap:5px">'
+      +   '<button class="btn ' + (active?'btn-red':'btn-green') + ' btn-sm" onclick="toggleResearchSource(' + s.id + ')">' + (active?'Pause':'Activate') + '</button>'
+      +   '<button class="btn btn-ghost btn-sm" onclick="deleteResearchSource(' + s.id + ',\'' + escHtml(s.name).replace(/'/g,"\\'") + '\')" style="color:#fb7185">Delete</button>'
+      + '</div></td>'
+      + '</tr>';
+  }).join('');
+}
+
+function showAddResearchSourceModal() {
+  document.getElementById('add-research-source-form').style.display = 'block';
+  document.getElementById('nrs-name').focus();
+}
+function hideAddResearchSourceModal() {
+  document.getElementById('add-research-source-form').style.display = 'none';
+  document.getElementById('add-research-source-status').style.display = 'none';
+  ['nrs-name','nrs-url','nrs-notes'].forEach(function(id){ document.getElementById(id).value=''; });
+}
+
+async function submitAddResearchSource() {
+  var name  = (document.getElementById('nrs-name').value  || '').trim();
+  var url   = (document.getElementById('nrs-url').value   || '').trim();
+  var type  = document.getElementById('nrs-type').value;
+  var boost = parseInt(document.getElementById('nrs-boost').value) || 0;
+  var notes = (document.getElementById('nrs-notes').value || '').trim();
+  var status = document.getElementById('add-research-source-status');
+
+  if (!name || !url) {
+    status.style.display='block'; status.style.color='var(--red)';
+    status.textContent='⚠ Name and URL are required.'; return;
+  }
+  if (!url.startsWith('http')) {
+    status.style.display='block'; status.style.color='var(--red)';
+    status.textContent='⚠ URL must start with https://'; return;
+  }
+
+  status.style.display='block'; status.style.color='var(--muted)';
+  status.textContent='Adding…';
+
+  if (API_BASE) {
+    var d = await apiFetch('/research-sources', {
+      method: 'POST',
+      body: JSON.stringify({ name:name, url:url, source_type:type, relevance_boost:boost, notes:notes })
+    });
+    if (d && d.ok) {
+      hideAddResearchSourceModal();
+      await renderResearchSourcesTable();
+      showToast('✅','Research Source Added','"'+name+'" added. It will be scraped on the next research run.',3500);
+    } else {
+      status.style.color='var(--red)';
+      status.textContent='⚠ Could not save — check your backend connection.';
+    }
+  } else {
+    _researchSources.push({id:Date.now(),name:name,url:url,source_type:type,
+                            relevance_boost:boost,notes:notes,active:1,article_count:0});
+    hideAddResearchSourceModal();
+    renderResearchSourcesTable();
+    showToast('✅','Research Source Added (local)','"'+name+'" added locally.',3500);
+  }
+}
+
+async function toggleResearchSource(id) {
+  if (API_BASE) {
+    var d = await apiFetch('/research-sources/'+id+'/toggle', {method:'PATCH'});
+    if (d && d.ok) {
+      var s = _researchSources.find(function(x){return x.id===id;});
+      if (s) s.active = d.active ? 1 : 0;
+    }
+  } else {
+    var s = _researchSources.find(function(x){return x.id===id;});
+    if (s) s.active = s.active ? 0 : 1;
+  }
+  renderResearchSourcesTable();
+}
+
+async function deleteResearchSource(id, name) {
+  if (!confirm('Delete research source "'+name+'"?')) return;
+  if (API_BASE) await apiFetch('/research-sources/'+id, {method:'DELETE'});
+  _researchSources = _researchSources.filter(function(s){return s.id!==id;});
+  renderResearchSourcesTable();
+  showToast('🗑','Source Deleted','"'+name+'" removed.',2500);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   SCHOLARLY KEYWORDS — full CRUD
+══════════════════════════════════════════════════════════════════════════════ */
+
+var _scholarlyKeywords = [];
+
+async function loadScholarlyKeywords() {
+  if (!API_BASE) return;
+  var d = await apiFetch('/scholarly-keywords');
+  if (d && d.keywords) _scholarlyKeywords = d.keywords;
+}
+
+async function renderScholarlyKeywords() {
+  await loadScholarlyKeywords();
+  var container = document.getElementById('scholarly-keywords-list');
+  if (!container) return;
+  if (!_scholarlyKeywords.length) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--dim);padding:8px 0">No keywords yet. Add some below.</div>';
+    return;
+  }
+  container.innerHTML = _scholarlyKeywords.map(function(k) {
+    var active = k.active === 1 || k.active === true;
+    return '<span style="display:inline-flex;align-items:center;gap:6px;background:'
+      + (active ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,.04)')
+      + ';border:1px solid '
+      + (active ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,.1)')
+      + ';border-radius:5px;padding:4px 10px;margin:3px;font-size:11px;font-weight:600;color:'
+      + (active ? '#a5b4fc' : 'var(--dim)') + '">'
+      + escHtml(k.keyword)
+      + '<span onclick="toggleScholarlyKeyword('+k.id+')" style="cursor:pointer;font-size:13px;opacity:.6" title="'+(active?'Pause':'Activate')+'">'+(active?'⏸':'▶')+'</span>'
+      + '<span onclick="deleteScholarlyKeyword('+k.id+')" style="cursor:pointer;font-size:13px;opacity:.5;color:var(--red)" title="Delete">×</span>'
+      + '</span>';
+  }).join('');
+}
+
+async function submitAddScholarlyKeyword() {
+  var inp = document.getElementById('skw-input');
+  var kw = (inp.value || '').trim();
+  if (!kw) return;
+  if (API_BASE) {
+    var d = await apiFetch('/scholarly-keywords', {method:'POST', body:JSON.stringify({keyword:kw})});
+    if (d && d.ok) { inp.value=''; renderScholarlyKeywords(); showToast('🔑','Keyword Added','"'+kw+'" will be used on the next research scrape.',3000); }
+    else showToast('⚠','Could not Add','Check your backend connection.',3000);
+  } else {
+    _scholarlyKeywords.push({id:Date.now(),keyword:kw,active:1});
+    inp.value=''; renderScholarlyKeywords();
+    showToast('🔑','Keyword Added (local)','"'+kw+'" added locally.',3000);
+  }
+}
+
+async function toggleScholarlyKeyword(id) {
+  if (API_BASE) {
+    var d = await apiFetch('/scholarly-keywords/'+id+'/toggle', {method:'PATCH'});
+    if (d && d.ok) {
+      var k = _scholarlyKeywords.find(function(x){return x.id===id;});
+      if (k) k.active = d.active ? 1 : 0;
+    }
+  } else {
+    var k = _scholarlyKeywords.find(function(x){return x.id===id;});
+    if (k) k.active = k.active ? 0 : 1;
+  }
+  renderScholarlyKeywords();
+}
+
+async function deleteScholarlyKeyword(id) {
+  if (API_BASE) await apiFetch('/scholarly-keywords/'+id, {method:'DELETE'});
+  _scholarlyKeywords = _scholarlyKeywords.filter(function(k){return k.id!==id;});
+  renderScholarlyKeywords();
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   PATCH researchTab() to also render sources + keywords when 'sources' opens
+   Add this at the bottom of your existing researchTab() function, OR
+   replace your existing researchTab() with this version:
+══════════════════════════════════════════════════════════════════════════════ */
+
+function researchTab(t) {
+  ['feed','search','sources'].forEach(function(x) {
+    var panel = document.getElementById('research-'+x+'-panel');
+    var tab   = document.getElementById('rst-'+x);
+    if (panel) panel.style.display = x === t ? 'block' : 'none';
+    if (tab)   tab.classList.toggle('active', x === t);
+  });
+  if (t === 'feed')    renderResearchFeed();
+  if (t === 'sources') {
+    renderResearchSourcesTable();
+    renderScholarlyKeywords();
+  }
+}
+
+</script>

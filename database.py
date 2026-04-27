@@ -1,6 +1,10 @@
 """
 PolicyPulse Database Layer — SQLite
 All data persists in policypulse.db
+
+v2: Added full CRUD for sources (add, toggle, delete, update scrape_type).
+    Added research_sources table with full CRUD.
+    Added scholarly keyword management.
 """
 
 import sqlite3
@@ -54,9 +58,29 @@ def init_db():
             name            TEXT NOT NULL,
             url             TEXT NOT NULL,
             jurisdiction    TEXT,
+            scrape_type     TEXT DEFAULT 'html',
             active          INTEGER DEFAULT 1,
             last_scraped    TEXT,
             article_count   INTEGER DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS research_sources (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            name            TEXT NOT NULL,
+            url             TEXT NOT NULL,
+            source_type     TEXT NOT NULL DEFAULT 'think_tank',
+            active          INTEGER DEFAULT 1,
+            relevance_boost INTEGER DEFAULT 0,
+            last_scraped    TEXT,
+            article_count   INTEGER DEFAULT 0,
+            notes           TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS scholarly_keywords (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            keyword      TEXT UNIQUE NOT NULL,
+            active       INTEGER DEFAULT 1,
+            created_date TEXT
         );
 
         CREATE TABLE IF NOT EXISTS digests (
@@ -88,38 +112,84 @@ def init_db():
     if cur.fetchone()[0] == 0:
         _seed_sources(cur)
 
+    # Seed research sources if empty
+    cur.execute("SELECT COUNT(*) FROM research_sources")
+    if cur.fetchone()[0] == 0:
+        _seed_research_sources(cur)
+
+    # Seed scholarly keywords if empty
+    cur.execute("SELECT COUNT(*) FROM scholarly_keywords")
+    if cur.fetchone()[0] == 0:
+        _seed_scholarly_keywords(cur)
+
     conn.commit()
     conn.close()
 
 
 def _seed_sources(cur):
+    # scrape_type: 'rss' uses RSS parser, 'html' uses generic HTML scraper
     sources = [
-        # Original 8
-        ("BC Ministry of Post-Secondary Education", "https://www2.gov.bc.ca/gov/content/education-training/post-secondary-education", "BC"),
-        ("Government of Canada — Education", "https://www.canada.ca/en/employment-social-development/news.html", "Federal"),
-        ("BC Legislature News", "https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings", "BC"),
-        ("BC Indigenous Relations & Reconciliation", "https://news.gov.bc.ca/ministries/indigenous-relations-reconciliation", "BC"),
-        ("University Affairs Canada", "https://www.universityaffairs.ca/news/", "Federal"),
-        ("Burnaby City Hall News", "https://www.burnaby.ca/city-hall/news", "Municipal"),
-        ("Higher Education Strategy Associates", "https://higheredstrategy.com/", "Pan-Canadian"),
-        ("Innovation, Science and Economic Development Canada", "https://www.canada.ca/en/innovation-science-economic-development/news.html", "Federal"),
-        # Additional relevant sources
-        ("BC Government Newsroom", "https://news.gov.bc.ca/", "BC"),
-        ("SSHRC News", "https://www.sshrc-crsh.gc.ca/news_room-salle_des_nouvelles/latest_news-nouvelles_recentes-eng.aspx", "Federal"),
-        ("NSERC News", "https://www.nserc-crsng.gc.ca/Media-Media/NewsReleases-CommuniquesDePresse_eng.asp", "Federal"),
-        ("CIHR News", "https://cihr-irsc.gc.ca/e/51999.html", "Federal"),
-        ("Universities Canada", "https://www.univcan.ca/media-room/media-releases/", "Federal"),
-        ("First Nations Health Authority", "https://www.fnha.ca/about/news-and-events/news", "BC"),
-        ("BC First Nations Summit", "https://fns.bc.ca/news/", "BC"),
-        ("Crown-Indigenous Relations Canada", "https://www.canada.ca/en/crown-indigenous-relations-northern-affairs/news.html", "Federal"),
-        ("Times Higher Education", "https://www.timeshighereducation.com/news", "International"),
-        ("Policy Options (IRPP)", "https://policyoptions.irpp.org/", "Federal"),
-        ("Maclean's Education", "https://www.macleans.ca/education/", "Federal"),
-        ("BC Public Service Agency", "https://www2.gov.bc.ca/gov/content/careers-myhr/about-the-bc-public-service/our-organization", "BC"),
+        ("BC Ministry of Post-Secondary Education",    "https://news.gov.bc.ca/ministries/post-secondary-education-and-future-skills", "BC",            "html"),
+        ("Government of Canada — Education",           "https://www.canada.ca/en/employment-social-development/news.html",              "Federal",        "html"),
+        ("BC Legislature News",                        "https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings",   "BC",            "html"),
+        ("BC Indigenous Relations & Reconciliation",   "https://news.gov.bc.ca/ministries/indigenous-relations-reconciliation",          "BC",            "html"),
+        ("University Affairs Canada",                  "https://www.universityaffairs.ca/feed/",                                         "Federal",        "rss"),
+        ("Burnaby City Hall News",                     "https://www.burnaby.ca/city-hall/news",                                          "Municipal",      "html"),
+        ("Higher Education Strategy Associates",       "https://higheredstrategy.com/feed/",                                             "Pan-Canadian",   "rss"),
+        ("Innovation Science and Economic Development","https://www.canada.ca/en/innovation-science-economic-development/news.html",     "Federal",        "html"),
+        ("BC Government Newsroom",                     "https://news.gov.bc.ca/",                                                        "BC",            "html"),
+        ("SSHRC News",                                 "https://www.sshrc-crsh.gc.ca/news_room-salle_des_nouvelles/latest_news-nouvelles_recentes-eng.aspx", "Federal", "html"),
+        ("NSERC News",                                 "https://www.nserc-crsng.gc.ca/Media-Media/NewsReleases-CommuniquesDePresse_eng.asp", "Federal",   "html"),
+        ("CIHR News",                                  "https://cihr-irsc.gc.ca/e/51999.html",                                           "Federal",        "html"),
+        ("Universities Canada",                        "https://www.univcan.ca/feed/",                                                   "Federal",        "rss"),
+        ("First Nations Health Authority",             "https://www.fnha.ca/about/news-and-events/news",                                 "BC",            "html"),
+        ("BC First Nations Summit",                    "https://fns.bc.ca/news/",                                                        "BC",            "html"),
+        ("Crown-Indigenous Relations Canada",          "https://www.canada.ca/en/crown-indigenous-relations-northern-affairs/news.html", "Federal",        "html"),
+        ("Times Higher Education",                     "https://www.timeshighereducation.com/rss.xml",                                   "International",  "rss"),
+        ("Policy Options (IRPP)",                      "https://policyoptions.irpp.org/feed/",                                           "Federal",        "rss"),
+        ("Maclean's Education",                        "https://www.macleans.ca/education/feed/",                                        "Federal",        "rss"),
+        ("BC Public Service Agency",                   "https://www2.gov.bc.ca/gov/content/careers-myhr/about-the-bc-public-service/our-organization", "BC", "html"),
     ]
     cur.executemany(
-        "INSERT INTO sources (name, url, jurisdiction) VALUES (?, ?, ?)",
+        "INSERT INTO sources (name, url, jurisdiction, scrape_type) VALUES (?,?,?,?)",
         sources
+    )
+
+
+def _seed_research_sources(cur):
+    """Seed the default Canadian think-tank research sources."""
+    sources = [
+        ("Canadian Centre for Policy Alternatives", "https://www.policyalternatives.ca/publications", "think_tank", 1, 1),
+        ("Yellowhead Institute",                    "https://yellowheadinstitute.org/resources/",      "think_tank", 1, 2),
+        ("National Collaborating Centre for Indigenous Health", "https://www.nccih.ca/495/Publications_and_Resources.nccih", "think_tank", 1, 2),
+        ("Macdonald-Laurier Institute",             "https://macdonaldlaurier.ca/publications/",       "think_tank", 1, 0),
+        ("CD Howe Institute",                       "https://www.cdhowe.org/intelligence-memos",       "think_tank", 1, 0),
+        ("Broadbent Institute",                     "https://www.broadbentinstitute.ca/research",      "think_tank", 1, 0),
+    ]
+    cur.executemany(
+        "INSERT INTO research_sources (name, url, source_type, active, relevance_boost) VALUES (?,?,?,?,?)",
+        sources
+    )
+
+
+def _seed_scholarly_keywords(cur):
+    """Seed default scholarly search keywords."""
+    keywords = [
+        "Indigenous policy Canada",
+        "DRIPA UNDRIP reconciliation",
+        "First Nations health Canada",
+        "post-secondary education Canada",
+        "research funding SSHRC NSERC",
+        "pharmacare Canada",
+        "BC government policy",
+        "OCAP data sovereignty Indigenous",
+        "TRC calls to action",
+        "Indigenous higher education",
+    ]
+    now = datetime.utcnow().isoformat()
+    cur.executemany(
+        "INSERT INTO scholarly_keywords (keyword, active, created_date) VALUES (?,1,?)",
+        [(kw, now) for kw in keywords]
     )
 
 
@@ -214,12 +284,9 @@ def update_article_staged(article_id, staged):
     conn.execute("UPDATE articles SET staged = ? WHERE id = ?", (1 if staged else 0, article_id))
     conn.commit()
     conn.close()
+
+
 def update_article_content(article_id: int, fields: dict):
-    """
-    Update summary and/or why_it_matters on an article.
-    Called when the frontend regenerates these fields via Gemini.
-    Only updates fields present in the dict.
-    """
     allowed = {"summary", "why_it_matters"}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
@@ -230,8 +297,6 @@ def update_article_content(article_id: int, fields: dict):
     conn.execute(f"UPDATE articles SET {set_clause} WHERE id = ?", values)
     conn.commit()
     conn.close()
-
-
 
 
 def log_scrape(articles_added, errors=""):
@@ -261,6 +326,173 @@ def update_source_scraped(source_name, count):
     conn.close()
 
 
+# ── SOURCES — full CRUD ────────────────────────────────────
+
+def get_sources():
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM sources ORDER BY jurisdiction, name").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def add_source(name: str, url: str, jurisdiction: str, scrape_type: str = "html") -> int:
+    conn = get_conn()
+    cur = conn.execute(
+        "INSERT INTO sources (name, url, jurisdiction, scrape_type, active) VALUES (?,?,?,?,1)",
+        (name.strip(), url.strip(), jurisdiction.strip(), scrape_type)
+    )
+    new_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return new_id
+
+
+def toggle_source(source_id: int) -> bool:
+    """Flip active flag. Returns new active state."""
+    conn = get_conn()
+    row = conn.execute("SELECT active FROM sources WHERE id = ?", (source_id,)).fetchone()
+    if not row:
+        conn.close()
+        return False
+    new_state = 0 if row["active"] else 1
+    conn.execute("UPDATE sources SET active = ? WHERE id = ?", (new_state, source_id))
+    conn.commit()
+    conn.close()
+    return bool(new_state)
+
+
+def delete_source(source_id: int):
+    conn = get_conn()
+    conn.execute("DELETE FROM sources WHERE id = ?", (source_id,))
+    conn.commit()
+    conn.close()
+
+
+def update_source(source_id: int, fields: dict):
+    allowed = {"name", "url", "jurisdiction", "scrape_type", "active"}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return
+    conn = get_conn()
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [source_id]
+    conn.execute(f"UPDATE sources SET {set_clause} WHERE id = ?", values)
+    conn.commit()
+    conn.close()
+
+
+# ── RESEARCH SOURCES — full CRUD ──────────────────────────
+
+def get_research_sources():
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM research_sources ORDER BY name").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def add_research_source(name: str, url: str, source_type: str = "think_tank",
+                         relevance_boost: int = 0, notes: str = "") -> int:
+    conn = get_conn()
+    cur = conn.execute(
+        """INSERT INTO research_sources
+           (name, url, source_type, active, relevance_boost, notes)
+           VALUES (?,?,?,1,?,?)""",
+        (name.strip(), url.strip(), source_type, int(relevance_boost), notes.strip())
+    )
+    new_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return new_id
+
+
+def toggle_research_source(source_id: int) -> bool:
+    conn = get_conn()
+    row = conn.execute("SELECT active FROM research_sources WHERE id = ?", (source_id,)).fetchone()
+    if not row:
+        conn.close()
+        return False
+    new_state = 0 if row["active"] else 1
+    conn.execute("UPDATE research_sources SET active = ? WHERE id = ?", (new_state, source_id))
+    conn.commit()
+    conn.close()
+    return bool(new_state)
+
+
+def delete_research_source(source_id: int):
+    conn = get_conn()
+    conn.execute("DELETE FROM research_sources WHERE id = ?", (source_id,))
+    conn.commit()
+    conn.close()
+
+
+def update_research_source(source_id: int, fields: dict):
+    allowed = {"name", "url", "source_type", "active", "relevance_boost", "notes"}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return
+    conn = get_conn()
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [source_id]
+    conn.execute(f"UPDATE research_sources SET {set_clause} WHERE id = ?", values)
+    conn.commit()
+    conn.close()
+
+
+def update_research_source_scraped(source_id: int, count: int):
+    conn = get_conn()
+    conn.execute(
+        "UPDATE research_sources SET last_scraped = ?, article_count = article_count + ? WHERE id = ?",
+        (datetime.utcnow().isoformat(), count, source_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+# ── SCHOLARLY KEYWORDS ────────────────────────────────────
+
+def get_scholarly_keywords():
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM scholarly_keywords ORDER BY id").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def add_scholarly_keyword(keyword: str) -> bool:
+    conn = get_conn()
+    try:
+        conn.execute(
+            "INSERT INTO scholarly_keywords (keyword, active, created_date) VALUES (?,1,?)",
+            (keyword.strip(), datetime.utcnow().isoformat())
+        )
+        conn.commit()
+        result = True
+    except sqlite3.IntegrityError:
+        result = False
+    finally:
+        conn.close()
+    return result
+
+
+def delete_scholarly_keyword(keyword_id: int):
+    conn = get_conn()
+    conn.execute("DELETE FROM scholarly_keywords WHERE id = ?", (keyword_id,))
+    conn.commit()
+    conn.close()
+
+
+def toggle_scholarly_keyword(keyword_id: int) -> bool:
+    conn = get_conn()
+    row = conn.execute("SELECT active FROM scholarly_keywords WHERE id = ?", (keyword_id,)).fetchone()
+    if not row:
+        conn.close()
+        return False
+    new_state = 0 if row["active"] else 1
+    conn.execute("UPDATE scholarly_keywords SET active = ? WHERE id = ?", (new_state, keyword_id))
+    conn.commit()
+    conn.close()
+    return bool(new_state)
+
+
 # ── WATCHLIST KEYWORDS ────────────────────────────────────
 
 def get_watchlist_keywords():
@@ -268,6 +500,7 @@ def get_watchlist_keywords():
     rows = conn.execute("SELECT keyword FROM watchlist_keywords ORDER BY id").fetchall()
     conn.close()
     return [r["keyword"] for r in rows]
+
 
 def add_watchlist_keyword(keyword):
     conn = get_conn()
@@ -282,11 +515,13 @@ def add_watchlist_keyword(keyword):
         conn.close()
     return result
 
+
 def remove_watchlist_keyword(keyword):
     conn = get_conn()
     conn.execute("DELETE FROM watchlist_keywords WHERE keyword = ?", (keyword,))
     conn.commit()
     conn.close()
+
 
 # ── MANUAL TAGS ────────────────────────────────────────────
 
@@ -308,6 +543,7 @@ def add_article_tag(article_id, tag):
         conn.commit()
     conn.close()
 
+
 def remove_article_tag(article_id, tag):
     conn = get_conn()
     row = conn.execute("SELECT tags FROM articles WHERE id = ?", (article_id,)).fetchone()
@@ -316,14 +552,6 @@ def remove_article_tag(article_id, tag):
         conn.execute("UPDATE articles SET tags = ? WHERE id = ?", (",".join(existing), article_id))
         conn.commit()
     conn.close()
-
-# ── SOURCES ───────────────────────────────────────────────
-
-def get_sources():
-    conn = get_conn()
-    rows = conn.execute("SELECT * FROM sources ORDER BY jurisdiction, name").fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
 
 
 # ── STATS ─────────────────────────────────────────────────
