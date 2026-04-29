@@ -621,6 +621,11 @@ def get_scholarly_for_note(article_id: int):
 
 @app.get("/scholarly/{article_id}")
 def get_scholarly_article(article_id: int):
+    # This calls the function we just added to database.py
+    article = database.get_scholarly_article_by_id(article_id)
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    return article
 
 
 # ── HEALTH ────────────────────────────────────────────────────────────────────
