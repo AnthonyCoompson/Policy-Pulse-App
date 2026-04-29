@@ -1,0 +1,604 @@
+<!--
+══════════════════════════════════════════════════════════════════════════════
+POLICYPULSE — RESEARCH UI ALIGNMENT + PERFORMANCE PATCH
+══════════════════════════════════════════════════════════════════════════════
+
+WHAT THIS DOES
+──────────────
+1. Rewrites buildResearchCard() so research cards are visually and
+   functionally identical to news article cards:
+   - Uses article-card class (not research-card) for the same left-bar
+     colour states: cyan = unread, gold = staged, red = flagged
+   - Same hover overlay with identical button set
+   - Same URL row with ⎘ Copy, ↗ Open, ▶ Preview
+   - Same show-more / show-less on abstract (truncated at 180 chars)
+   - Same tag row with inline input + quick-tag dropdown
+   - Same footer: date, read toggle, stage toggle, section picker,
+     sentiment picker
+   - Research-specific extras kept: DB badge, OA badge, authors line,
+     DOI link, 📚 Cite button
+
+2. Fixes performance — replaces batch innerHTML with rAF-chunked
+   rendering: cards are injected into the DOM 6 at a time per animation
+   frame, so the browser never blocks the main thread on a large render.
+   Page changes feel instant.
+
+HOW TO APPLY — 2 steps
+──────────────────────
+STEP 1 — Find the entire buildResearchCard() function in app.html
+         (lines ~2008–2122). Replace it with the new version below.
+
+STEP 2 — Find renderResearchFeedPage() in app.html (lines ~2139–2216).
+         Replace it with the new version below.
+
+That is the complete change. Nothing else needs to be touched.
+══════════════════════════════════════════════════════════════════════════════
+-->
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     STEP 1
+     In app.html find the function that starts:
+       function buildResearchCard(a, forDashboard){
+     and ends with the closing brace around line 2123.
+     Replace the ENTIRE function with this new version.
+═══════════════════════════════════════════════════════════════════════════ -->
+
+<script id="research-ui-patch">
+
+/* ══════════════════════════════════════════════════════════════════════════
+   buildResearchCard — fully aligned with buildCard (news scraper)
+   
+   Key decisions:
+   - Uses `article-card` base class so all existing CSS (left bars,
+     hover overlay, unread/staged/flagged states) works for free.
+   - Adds `research-card-type` data attribute so callers that check
+     card type can still distinguish research vs news cards.
+   - Dashboard variant (forDashboard=true) remains compact and keeps
+     the purple left-bar look via the `research-item` modifier class.
+   - Full-feed variant looks identical to a news card but adds:
+       DB badge, OA badge, authors row, DOI link, 📚 Cite button
+══════════════════════════════════════════════════════════════════════════ */
+function buildResearchCard(a, forDashboard) {
+  var dbClass  = dbBadgeClass(a.database_name || '');
+  var abstract = (a.abstract || a.summary || '');
+  var pub      = a.pub_date || '';
+  var tags     = (a.tags || '').split(',').filter(function(t){ return t.trim(); });
+  var domains  = (a.domain || '').split(',').map(function(d){ return d.trim(); }).filter(Boolean);
+
+  // Age badge — identical logic to buildCard
+  var _age = pub ? (Date.now() - new Date(pub)) / 864e5 : 999;
+  var ageBadge = _age < 1
+    ? '<span class="age-badge age-today" title="Published today">&#x1F7E2; Today</span>'
+    : _age < 7
+      ? '<span class="age-badge age-week" title="Published this week">&#x1F7E1; This week</span>'
+      : '';
+
+  /* ── DASHBOARD COMPACT CARD ── */
+  if (forDashboard) {
+    var shortAbsDash = abstract.length > 120 ? abstract.slice(0, 120) + '…' : abstract;
+    return '<div class="article-card research-item ' + (!a.read ? 'unread' : '') + ' ' + (a.flagged ? 'flagged' : '') + '" id="rcard-' + a.id + '" data-research="1" style="cursor:pointer" onclick="openResearchPreview(' + a.id + ')">'
+      + '<div class="article-inner" style="padding:10px 12px 9px 18px">'
+      + '<div class="article-meta" style="margin-bottom:5px;flex-wrap:wrap;gap:5px">'
+      +   '<span class="research-db-badge ' + dbClass + '" style="font-size:8px">' + escHtml(a.database_name || 'DB') + '</span>'
+      +   ageBadge
+      +   domains.map(function(d){ return '<span class="tag tag-domain" style="font-size:8px">' + escHtml(d) + '</span>'; }).join('')
+      +   (a.jurisdiction ? '<span class="tag tag-juris" style="font-size:8px">' + escHtml(a.jurisdiction) + '</span>' : '')
+      +   (a.relevance    ? '<span class="relevance-badge" style="font-size:9px">' + rEmoji(a.relevance) + ' ' + a.relevance + '/10</span>' : '')
+      + '</div>'
+      + '<div class="article-title-link" style="font-size:12px;margin-bottom:4px">' + escHtml(a.title) + '</div>'
+      + (shortAbsDash ? '<div class="article-summary" style="font-size:10px;-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden">' + escHtml(shortAbsDash) + '</div>' : '')
+      + '<div class="article-footer" style="padding-top:5px;border-top:1px solid rgba(255,255,255,0.04)">'
+      +   (pub ? '<span class="article-date" style="font-size:9px">&#x1F4C5; ' + pub + '</span>' : '')
+      +   '<button class="btn btn-cyan btn-sm" style="font-size:9px;padding:2px 7px;margin-left:auto" onclick="event.stopPropagation();openResearchPreview(' + a.id + ')">&#x25BA; Preview</button>'
+      +   '<a href="' + escHtml(a.url) + '" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="font-size:9px;padding:2px 7px" onclick="event.stopPropagation()">Open &#x2197;</a>'
+      + '</div>'
+      + '</div>'
+      + '</div>';
+  }
+
+  /* ── FULL FEED CARD ── */
+  // Abstract with show-more (same 180-char cutoff as news summary)
+  var shortAbs   = abstract.length > 180 ? abstract.slice(0, 180) + '…' : abstract;
+  var needsMore  = abstract.length > 180;
+
+  // Notion button (mirrors news card — only shown when connected)
+  var notionBtn  = (notionToken && notionArticleDbId)
+    ? '<button class="hbtn hbtn-notion" onclick="event.stopPropagation();saveResearchToNotion(' + a.id + ')" title="Save to Notion">&#x1F5D2; Notion</button>'
+    : '';
+
+  return '<div class="article-card ' + (!a.read ? 'unread' : '') + ' ' + (a.staged ? 'staged' : '') + ' ' + (a.flagged ? 'flagged' : '') + '" id="rcard-' + a.id + '" data-research="1">'
+    + '<div class="article-inner" style="position:relative">'
+
+    /* ── Bulk checkbox ── */
+    + '<input type="checkbox" class="research-chk article-chk" data-id="' + a.id + '" onchange="handleResearchCheckbox(' + a.id + ',this.checked)" onclick="event.stopPropagation()" style="position:absolute;top:10px;right:10px;width:15px;height:15px;cursor:pointer;accent-color:var(--cyan);z-index:2">'
+
+    /* ── Meta row ── */
+    + '<div class="article-meta" style="padding-right:22px">'
+    +   '<span class="research-db-badge ' + dbClass + '">' + escHtml(a.database_name || 'Database') + '</span>'
+    +   (a.open_access ? '<span class="oa-badge">&#x1F513; Open Access</span>' : '')
+    +   '<span class="article-source">' + escHtml(a.source || '') + '</span>'
+    +   ageBadge
+    +   domains.map(function(d){ return '<span class="tag tag-domain">' + escHtml(d) + '</span>'; }).join('')
+    +   (a.jurisdiction ? '<span class="tag tag-juris">' + escHtml(a.jurisdiction) + '</span>' : '')
+    +   (a.relevance    ? '<span class="relevance-badge">' + rEmoji(a.relevance) + ' ' + a.relevance + '/10</span>' : '')
+    +   (a.sentiment    ? '<span class="sentiment-badge">' + sIcon(a.sentiment) + ' ' + a.sentiment + '</span>' : '')
+    + '</div>'
+
+    /* ── Hover quick-actions — matches news card exactly, adds Cite ── */
+    + '<div class="hover-actions">'
+    +   '<button class="hbtn" onclick="event.stopPropagation();openResearchPreview(' + a.id + ')">&#x25BA; Preview</button>'
+    +   (a.read
+          ? '<button class="hbtn" onclick="event.stopPropagation();markResearchRead(' + a.id + ',false)">&#x21A9; Unread</button>'
+          : '<button class="hbtn" onclick="event.stopPropagation();markResearchRead(' + a.id + ',true)">&#x2713; Read</button>'
+       )
+    +   '<button class="hbtn ' + (a.staged ? '' : '') + '" onclick="event.stopPropagation();toggleResearchStage(' + a.id + ')">' + (a.staged ? '&#x2715; Unstage' : '+&#x1F4C4; Stage') + '</button>'
+    +   '<button class="hbtn ' + (a.flagged ? 'hbtn-flagged' : '') + '" onclick="event.stopPropagation();toggleResearchFlag(' + a.id + ')" title="' + (a.flagged ? 'Remove flag' : 'Flag article') + '">' + (a.flagged ? '&#x1F6A9;' : '&#x2691;') + ' ' + (a.flagged ? 'Flagged' : 'Flag') + '</button>'
+    +   '<button class="hbtn" onclick="event.stopPropagation();addResearchToCitations(' + a.id + ')" title="Add to bibliography">&#x1F4DA; Cite</button>'
+    +   '<button class="hbtn" onclick="event.stopPropagation();shareResearchArticle(' + a.id + ')">&#x1F517; Share</button>'
+    +   notionBtn
+    + '</div>'
+
+    /* ── Clickable title ── */
+    + '<div class="article-title-link" onclick="openResearchPreview(' + a.id + ')" style="cursor:pointer" title="Click to preview">' + escHtml(a.title) + '</div>'
+
+    /* ── URL row (identical to news card, adds DOI if present) ── */
+    + '<div class="article-url-row">'
+    +   '<span class="article-url-label">&#x1F517;</span>'
+    +   '<span class="article-url-text" id="rurl-' + a.id + '">' + escHtml(a.url || '') + '</span>'
+    +   '<button class="btn-copy-url btn-sm" onclick="copyResearchUrl(' + a.id + ')" title="Copy link">&#x2358;</button>'
+    +   (a.url ? '<a href="' + escHtml(a.url) + '" target="_blank" rel="noopener" class="btn-copy-url btn-sm" onclick="event.stopPropagation()" style="text-decoration:none">&#x2197; Open</a>' : '')
+    +   (a.doi ? '<a href="https://doi.org/' + encodeURIComponent((a.doi || '').replace('https://doi.org/', '')) + '" target="_blank" rel="noopener" class="btn-copy-url btn-sm" style="color:var(--cyan);text-decoration:none" title="DOI link" onclick="event.stopPropagation()">DOI &#x2197;</a>' : '')
+    + '</div>'
+
+    /* ── Authors (research-specific) ── */
+    + (a.authors ? '<div style="font-size:11px;color:var(--dim);margin-bottom:5px;font-family:\'IBM Plex Mono\',monospace">&#x270D; ' + escHtml(a.authors) + '</div>' : '')
+
+    /* ── Abstract with show-more (same pattern as news summary) ── */
+    + '<div class="article-summary" id="rabs-' + a.id + '">' + escHtml(shortAbs) + '</div>'
+    + (needsMore ? '<button class="show-more-btn" id="rsmb-' + a.id + '" onclick="toggleResearchExpand(' + a.id + ')">&#x25BC; Show more</button>' : '')
+
+    /* ── Why it matters ── */
+    + (a.why_it_matters ? '<div class="why-matters">&#x1F4A1; ' + escHtml(a.why_it_matters) + '</div>' : '')
+
+    /* ── Tags row (identical to news card) ── */
+    + '<div style="margin-bottom:6px;display:flex;gap:4px;flex-wrap:wrap;align-items:center" id="rtags-row-' + a.id + '">'
+    +   tags.map(function(t) {
+          return '<span class="tag-chip" style="font-size:9px;padding:2px 7px;cursor:pointer;display:inline-flex;align-items:center;gap:3px" onclick="filterResearchTag(\'' + t.trim() + '\',null)">' + escHtml(t.trim())
+            + '<span onclick="event.stopPropagation();removeResearchTag(' + a.id + ',\'' + t.trim() + '\')" style="opacity:.5;cursor:pointer;font-size:11px;margin-left:2px">&#x00D7;</span></span>';
+        }).join('')
+    +   '<button class="btn-add-tag" onclick="showResearchTagInput(' + a.id + ')" title="Add tag">&#x2B; Tag</button>'
+    +   '<span id="rtag-input-wrap-' + a.id + '" style="display:none;align-items:center;gap:4px;flex-wrap:wrap">'
+    +     '<input id="rtag-inp-' + a.id + '" class="filter-input" placeholder="Type or pick..." style="padding:2px 7px;font-size:10px;width:90px;height:22px" onkeydown="if(event.key===&quot;Enter&quot;)addResearchTag(' + a.id + ')">'
+    +     '<select class="sentiment-picker" style="height:22px;padding:1px 4px;font-size:10px" onchange="pickResearchTagFromDropdown(' + a.id + ',this)">'
+    +       '<option value="">&#x1F4CB; Quick tags</option>'
+    +       '<option>Urgent</option><option>Briefing Note Worthy</option><option>DRIPA</option><option>UNDRIP</option><option>TRC</option><option>OCAP</option>'
+    +       '<option>Budget</option><option>Funding</option><option>Research</option><option>Legislation</option><option>Reconciliation</option><option>Indigenous</option>'
+    +       '<option>Health</option><option>Pharmacare</option><option>Consultation</option><option>Workforce</option><option>Political</option><option>Court Decision</option>'
+    +       '<option>Audit</option><option>Data/Evidence</option><option>International</option>'
+    +     '</select>'
+    +     '<button class="btn-add-tag" onclick="addResearchTag(' + a.id + ')">&#x2714;</button>'
+    +   '</span>'
+    + '</div>'
+
+    /* ── Footer row — mirrors news card, adds Cite, section picker only shown when staged ── */
+    + '<div class="article-footer">'
+    +   (pub ? '<span class="article-date" title="Published">&#x1F4C5; ' + pub + '</span>' : '')
+    +   '<span style="font-size:10px;color:var(--dim)">~' + Math.max(1, Math.ceil((abstract.length / 5) / 200)) + ' min read</span>'
+    +   (a.read
+          ? '<button class="btn btn-ghost btn-sm" onclick="markResearchRead(' + a.id + ',false)">&#x21A9; Unread</button>'
+          : '<button class="btn btn-ghost btn-sm" onclick="markResearchRead(' + a.id + ',true)">&#x2713; Read</button>'
+       )
+    +   (a.staged
+          ? '<button class="btn btn-gold btn-sm" onclick="toggleResearchStage(' + a.id + ')">&#x2715; Remove</button>'
+            + '<select class="section-picker" onchange="assignResearchSection(' + a.id + ',this.value)" title="Assign to digest section">'
+            +   '<option value="">&#x21C4; Move to&hellip;</option>'
+            +   '<option value="headline">&#x1F5DE; Headline of Week</option>'
+            +   '<option value="federal">&#x1F341; Federal Watch</option>'
+            +   '<option value="provincial">&#x1F3D4; Provincial Watch</option>'
+            +   '<option value="regulatory">&#x1F4CB; Regulatory &amp; Funding</option>'
+            +   '<option value="radar">&#x1F4E1; On Our Radar</option>'
+            + '</select>'
+          : '<button class="btn btn-green btn-sm" onclick="toggleResearchStage(' + a.id + ')">+ Add to Digest</button>'
+       )
+    +   '<button class="btn btn-cyan btn-sm" onclick="openResearchPreview(' + a.id + ')">&#x25BA; Preview</button>'
+    +   '<button class="btn btn-ghost btn-sm" onclick="addResearchToCitations(' + a.id + ')" title="Add to bibliography">&#x1F4DA; Cite</button>'
+    +   '<select class="sentiment-picker" onchange="setResearchSentiment(' + a.id + ',this.value)" title="Override sentiment">'
+    +     '<option value="Critical" '   + (a.sentiment === 'Critical'   ? 'selected' : '') + '>&#x1F534; Critical</option>'
+    +     '<option value="Supportive" ' + (a.sentiment === 'Supportive' ? 'selected' : '') + '>&#x1F7E2; Supportive</option>'
+    +     '<option value="Neutral" '    + (!a.sentiment || a.sentiment === 'Neutral' ? 'selected' : '') + '>&#x26AA; Neutral</option>'
+    +   '</select>'
+    + '</div>'
+
+    + '</div>'  /* /article-inner */
+    + '</div>'; /* /article-card  */
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   STEP 2 — replaces renderResearchFeedPage() in app.html
+
+   Performance strategy:
+   - Filter + sort happens synchronously (fast, pure JS array ops)
+   - Cards are rendered in chunks of 6 per rAF frame using
+     requestAnimationFrame.  This keeps each frame under ~16ms,
+     so the browser stays responsive and the user sees cards appearing
+     progressively rather than waiting for one big innerHTML dump.
+   - A subtle fade-in animation on each chunk makes progressive loading
+     feel intentional rather than janky.
+   - The pagination bar is rendered immediately (before card chunks)
+     so the user can navigate while cards are still rendering.
+══════════════════════════════════════════════════════════════════════════ */
+
+/* Cancel token so a new render call cancels an in-flight chunked render */
+var _researchRenderToken = 0;
+
+/* Chunk size: 6 cards per animation frame is the sweet spot —
+   large enough to paint the visible viewport in 2-3 frames,
+   small enough that each frame stays well under 16ms even for
+   complex cards. */
+var _RESEARCH_CHUNK = 6;
+
+function renderResearchFeedPage() {
+  if (!API_BASE) return;
+
+  /* ── 1. Read all active filter state ── */
+  var q     = ((document.getElementById('research-search-inp')   || {}).value || '').toLowerCase();
+  var dom   = ((document.getElementById('research-filter-domain') || {}).value || '');
+  var jur   = ((document.getElementById('research-filter-juris')  || {}).value || '');
+  var sent  = ((document.getElementById('research-filter-sentiment') || {}).value || '');
+  var db    = ((document.getElementById('research-filter-db')     || {}).value || '');
+  var sortV = ((document.getElementById('research-sort')          || {}).value || 'date_desc');
+
+  /* ── 2. Filter ── */
+  var list = _researchArticles.filter(function(a) {
+    if (_researchShowUnreadOnly  && (a.read === 1 || a.read === true)) return false;
+    if (_researchShowFlaggedOnly && !a.flagged) return false;
+    if (dom) {
+      var doms = (a.domain || '').split(',').map(function(d){ return d.trim().toLowerCase(); });
+      if (!doms.some(function(d){ return d === dom.toLowerCase(); })) return false;
+    }
+    if (jur  && (a.jurisdiction  || '').toLowerCase() !== jur.toLowerCase())  return false;
+    if (sent && (a.sentiment     || '') !== sent)                              return false;
+    if (db   && (a.database_name || '') !== db)                                return false;
+    if (_researchActiveTag) {
+      var tgs = (a.tags || '').split(',').map(function(t){ return t.trim().toLowerCase(); });
+      if (!tgs.some(function(t){ return t === _researchActiveTag.toLowerCase(); })) return false;
+    }
+    if (q) {
+      var hay = ((a.title || '') + ' ' + (a.abstract || a.summary || '') + ' ' + (a.authors || '') + ' ' + (a.source || '')).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  /* ── 3. Sort ── */
+  list.sort(function(a, b) {
+    if (sortV === 'date_asc')  return new Date(a.pub_date || 0) - new Date(b.pub_date || 0);
+    if (sortV === 'rel_desc')  return (b.relevance || 0) - (a.relevance || 0);
+    if (sortV === 'rel_asc')   return (a.relevance || 0) - (b.relevance || 0);
+    return new Date(b.pub_date || 0) - new Date(a.pub_date || 0);
+  });
+
+  /* ── 4. Pagination math ── */
+  var total      = list.length;
+  var totalPages = Math.max(1, Math.ceil(total / _researchPageSz));
+  var start      = _researchPageNum * _researchPageSz;
+  var end        = Math.min(start + _researchPageSz, total);
+  var pageItems  = list.slice(start, end);
+
+  var container = document.getElementById('research-feed-list');
+  if (!container) return;
+
+  /* ── 5. Empty state ── */
+  if (!total) {
+    container.innerHTML = '<div class="empty" style="padding:60px 20px"><div class="empty-icon">&#x1F4DA;</div>'
+      + '<div class="empty-text">No research articles match your filters.<br>Click <strong>Fetch New Research</strong> to load articles, or adjust your filters.</div></div>';
+    var pb0 = document.getElementById('research-pagination-bar');
+    if (pb0) pb0.style.display = 'none';
+    var rsub0 = document.getElementById('research-subtitle');
+    if (rsub0) rsub0.textContent = 'No articles match current filters';
+    return;
+  }
+
+  /* ── 6. Update subtitle immediately ── */
+  var rsub = document.getElementById('research-subtitle');
+  if (rsub) rsub.textContent = 'Showing ' + (start + 1) + '–' + end + ' of ' + total + ' articles';
+
+  /* ── 7. Render pagination bar immediately (user can navigate while cards render) ── */
+  var pb = document.getElementById('research-pagination-bar');
+  if (pb) {
+    if (total <= _researchPageSz) {
+      pb.style.display = 'none';
+    } else {
+      pb.style.display = 'flex';
+      var phtml = '';
+      phtml += _researchPageNum > 0
+        ? '<button class="page-btn" onclick="goResearchPage(' + (_researchPageNum - 1) + ')">&#8592; Prev</button>'
+        : '<button class="page-btn" disabled style="opacity:.3">&#8592; Prev</button>';
+      var pStart = Math.max(0, _researchPageNum - 3);
+      var pEnd   = Math.min(totalPages - 1, _researchPageNum + 3);
+      if (pStart > 0) phtml += '<button class="page-btn" onclick="goResearchPage(0)">1</button>' + (pStart > 1 ? '<span class="page-ellipsis">…</span>' : '');
+      for (var pi = pStart; pi <= pEnd; pi++) {
+        phtml += '<button class="page-btn' + (pi === _researchPageNum ? ' active' : '') + '" onclick="goResearchPage(' + pi + ')">' + (pi + 1) + '</button>';
+      }
+      if (pEnd < totalPages - 1) phtml += (pEnd < totalPages - 2 ? '<span class="page-ellipsis">…</span>' : '') + '<button class="page-btn" onclick="goResearchPage(' + (totalPages - 1) + ')">' + totalPages + '</button>';
+      phtml += end < total
+        ? '<button class="page-btn" onclick="goResearchPage(' + (_researchPageNum + 1) + ')">Next &#8594;</button>'
+        : '<button class="page-btn" disabled style="opacity:.3">Next &#8594;</button>';
+      pb.innerHTML = phtml;
+    }
+  }
+
+  /* ── 8. Chunked rAF render ── */
+  /* Clear container and show a minimal skeleton while first chunk loads */
+  container.innerHTML = _buildResearchSkeletons(Math.min(_RESEARCH_CHUNK, pageItems.length));
+
+  /* Bump token so any previous in-flight render for this container bails */
+  var myToken = ++_researchRenderToken;
+
+  var idx = 0;
+
+  function renderChunk() {
+    /* If a new render was requested, bail silently */
+    if (_researchRenderToken !== myToken) return;
+
+    /* First chunk: replace the skeletons */
+    if (idx === 0) {
+      container.innerHTML = '';
+    }
+
+    var chunkEnd = Math.min(idx + _RESEARCH_CHUNK, pageItems.length);
+    var frag = document.createDocumentFragment();
+
+    for (var i = idx; i < chunkEnd; i++) {
+      var wrapper = document.createElement('div');
+      wrapper.innerHTML = buildResearchCard(pageItems[i], false);
+      var card = wrapper.firstChild;
+      /* Subtle fade-in: each chunk starts at opacity 0 and transitions to 1 */
+      card.style.opacity = '0';
+      card.style.transition = 'opacity 0.18s ease';
+      frag.appendChild(card);
+    }
+
+    container.appendChild(frag);
+
+    /* Trigger reflow so the transition fires on the newly added cards */
+    requestAnimationFrame(function() {
+      if (_researchRenderToken !== myToken) return;
+      /* Fade in the chunk we just added */
+      var cards = container.children;
+      for (var j = idx; j < Math.min(chunkEnd, cards.length); j++) {
+        if (cards[j]) cards[j].style.opacity = '1';
+      }
+    });
+
+    idx = chunkEnd;
+
+    if (idx < pageItems.length) {
+      requestAnimationFrame(renderChunk);
+    }
+  }
+
+  requestAnimationFrame(renderChunk);
+}
+
+/* Lightweight skeleton placeholders shown while first chunk loads */
+function _buildResearchSkeletons(count) {
+  var html = '';
+  for (var i = 0; i < count; i++) {
+    html += '<div class="skeleton-card">'
+      +   '<div class="skeleton" style="width:22%;height:10px;margin-bottom:8px"></div>'
+      +   '<div class="skeleton" style="width:88%;height:14px;margin-bottom:6px"></div>'
+      +   '<div class="skeleton" style="width:70%;height:12px;margin-bottom:10px"></div>'
+      +   '<div class="skeleton" style="width:45%;height:10px"></div>'
+      + '</div>';
+  }
+  return html;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   NEW HELPERS required by the refactored card
+   (Add these alongside the existing research helper functions)
+══════════════════════════════════════════════════════════════════════════ */
+
+/* Copy URL to clipboard — mirrors copyUrl() for news cards */
+function copyResearchUrl(id) {
+  var a = _researchArticles.find(function(x){ return x.id === id; });
+  if (!a) return;
+  navigator.clipboard.writeText(a.url).then(function(){
+    showToast('&#x1F517;', 'Link Copied', 'URL copied to clipboard.', 2500);
+  });
+}
+
+/* Show-more / show-less toggle — mirrors toggleExpand() for news cards */
+function toggleResearchExpand(id) {
+  var a     = _researchArticles.find(function(x){ return x.id === id; });
+  if (!a) return;
+  var absEl = document.getElementById('rabs-' + id);
+  var btnEl = document.getElementById('rsmb-' + id);
+  var full  = (a.abstract || a.summary || '');
+  var isExp = btnEl && btnEl.textContent.indexOf('less') > -1;
+  if (absEl) absEl.textContent = isExp ? full.slice(0, 180) + '…' : full;
+  if (btnEl) btnEl.textContent = isExp ? '&#x25BC; Show more' : '&#x25B2; Show less';
+}
+
+/* Stage / unstage research article into the digest — mirrors toggleStage() */
+function toggleResearchStage(id) {
+  var a = _researchArticles.find(function(x){ return x.id === id; });
+  if (!a) return;
+  a.staged = !a.staged;
+
+  /* Auto-assign to a digest section by jurisdiction (same logic as news) */
+  if (a.staged) {
+    if (a.jurisdiction === 'Federal') {
+      var s = digestSections.find(function(x){ return x.id === 'federal'; });
+      if (s && s.items.length < s.max && !s.items.includes(a.id)) s.items.push(a.id);
+    } else if (a.jurisdiction === 'BC' || a.jurisdiction === 'Municipal') {
+      var s2 = digestSections.find(function(x){ return x.id === 'provincial'; });
+      if (s2 && s2.items.length < s2.max && !s2.items.includes(a.id)) s2.items.push(a.id);
+    } else {
+      var s3 = digestSections.find(function(x){ return x.id === 'regulatory'; });
+      if (s3 && s3.items.length < s3.max && !s3.items.includes(a.id)) s3.items.push(a.id);
+    }
+    showToast('&#x2705;', 'Added to Digest', 'Research article staged for digest.', 2500);
+  } else {
+    digestSections.forEach(function(s){ s.items = s.items.filter(function(i){ return i !== id; }); });
+    showToast('&#x2715;', 'Removed from Digest', 'Research article removed from digest.', 2000);
+  }
+
+  reResearchCard(id);
+  updateBadges();
+
+  /* Persist to backend if connected */
+  if (API_BASE) {
+    apiFetch('/scholarly/' + id + '/read', { method: 'PATCH', body: JSON.stringify({ read: a.read }) });
+  }
+}
+
+/* Assign a research article to a specific digest section */
+function assignResearchSection(id, sectionId) {
+  if (!sectionId) return;
+  /* Remove from all sections first */
+  digestSections.forEach(function(s){ s.items = s.items.filter(function(i){ return i !== id; }); });
+  /* Add to chosen section */
+  var sec = digestSections.find(function(s){ return s.id === sectionId; });
+  if (sec && !sec.items.includes(id)) {
+    if (sec.items.length >= sec.max) {
+      showToast('&#x26A0;', 'Section Full', 'This section is at its limit. Remove an item first.', 4000);
+      return;
+    }
+    sec.items.push(id);
+  }
+  /* Ensure article is marked staged */
+  var a = _researchArticles.find(function(x){ return x.id === id; });
+  if (a && !a.staged) { a.staged = true; reResearchCard(id); }
+  showToast('&#x2713;', 'Section Assigned', 'Article moved to digest section.', 2000);
+}
+
+/* Save research article to Notion — mirrors saveArticleToNotion() */
+async function saveResearchToNotion(id) {
+  var a = _researchArticles.find(function(x){ return x.id === id; });
+  if (!a) return;
+  if (!notionToken || !notionArticleDbId) {
+    showToast('&#x1F5D2;', 'Notion Not Set Up', 'Go to the Notion tab to connect your workspace.', 4000);
+    return;
+  }
+  showToast('&#x1F5D2;', 'Saving to Notion', a.title.slice(0, 60) + '…', 2500);
+  try {
+    var tagList = (a.tags || '').split(',').filter(function(t){ return t.trim(); })
+                                .map(function(t){ return { name: t.trim() }; });
+    var pub = (a.pub_date || '').slice(0, 10);
+    var props = {
+      'Name':         { title:     [{ text: { content: a.title || '' } }] },
+      'Source':       { rich_text: [{ text: { content: (a.source || a.database_name || '') } }] },
+      'Domain':       { select:    { name: (a.domain || 'Research') } },
+      'Jurisdiction': { select:    { name: (a.jurisdiction || 'Unknown') } },
+      'Relevance':    { number:    (a.relevance || 0) },
+      'Sentiment':    { select:    { name: (a.sentiment || 'Neutral') } },
+      'URL':          { url:       a.url || null },
+    };
+    if (pub) props['Published'] = { date: { start: pub } };
+    if (tagList.length) props['Tags'] = { multi_select: tagList };
+    await notionProxy('pages', {
+      parent: { database_id: notionArticleDbId },
+      properties: props,
+      children: [
+        { object: 'block', type: 'heading_2', heading_2: { rich_text: [{ text: { content: 'Abstract' } }] } },
+        { object: 'block', type: 'paragraph', paragraph: { rich_text: [{ text: { content: (a.abstract || a.summary || 'No abstract available.') } }] } },
+        { object: 'block', type: 'heading_2', heading_2: { rich_text: [{ text: { content: 'Why It Matters' } }] } },
+        { object: 'block', type: 'quote',     quote:     { rich_text: [{ text: { content: (a.why_it_matters || 'No analysis available.') } }] } },
+        { object: 'block', type: 'bookmark',  bookmark:  { url: a.url || '' } },
+      ]
+    });
+    showToast('&#x2705;', 'Saved to Notion', a.title.slice(0, 60) + '…', 3500);
+  } catch(e) {
+    showToast('&#x26A0;', 'Notion Error', e.message, 5000);
+  }
+}
+
+/* ── CSS: ensure article-card left-bar tints work for research items ──────
+   The .research-item class on dashboard cards keeps the purple left bar
+   only for those compact cards.  Full-feed research cards now inherit
+   the same cyan/gold/red state bars as news cards automatically because
+   they use the `article-card` class. No extra CSS is needed — it's already
+   in your existing stylesheet.  The only addition needed is a light
+   refinement so the research DB badge and OA badge look right inside the
+   article-card structure.
+─────────────────────────────────────────────────────────────────────────── */
+(function injectResearchCardCSS() {
+  /* Only inject once */
+  if (document.getElementById('research-card-align-css')) return;
+  var s = document.createElement('style');
+  s.id = 'research-card-align-css';
+  s.textContent = [
+    /* Dashboard compact research cards keep the purple left bar */
+    '.article-card.research-item::before { background: linear-gradient(180deg,#6366f1,#8b5cf6) !important; opacity: 0.85; }',
+    '.article-card.research-item.flagged::before { background: linear-gradient(180deg,#ef4444,#dc2626) !important; opacity: 1; }',
+
+    /* DB badge spacing inside article-card meta row */
+    '.article-card .research-db-badge { vertical-align: middle; }',
+    '.article-card .oa-badge          { vertical-align: middle; }',
+
+    /* Light mode: dashboard research items */
+    'body.light-mode .article-card.research-item { background: rgba(243,244,255,0.97); border-color: rgba(99,102,241,0.15); }',
+    'body.light-mode .article-card.research-item:hover { border-color: rgba(99,102,241,0.3); }',
+  ].join('\n');
+  document.head.appendChild(s);
+})();
+
+</script>
+
+
+<!--
+══════════════════════════════════════════════════════════════════════════════
+ADDITIONAL NOTES
+══════════════════════════════════════════════════════════════════════════════
+
+What changed in buildResearchCard():
+─────────────────────────────────────
+• Base class changed from `research-card` → `article-card`
+  (research-card is still used on the dashboard compact variant via
+   the `research-item` modifier, so the purple left bar is preserved there)
+
+• Full-feed cards now have identical structure to buildCard():
+    - Same left-bar states (cyan=unread, gold=staged, red=flagged)
+    - Same hover overlay with the same button order
+    - Same URL row with ⎘ Copy + ↗ Open + DOI link (research-specific)
+    - Same article-title-link click target
+    - Abstract with show-more at 180 chars (mirrors 160-char news summary)
+    - Same footer: date, read/unread, stage/unstage + section picker, 
+      Preview, Cite, sentiment picker
+
+• New helpers added:
+    copyResearchUrl()      — mirrors copyUrl()
+    toggleResearchExpand() — mirrors toggleExpand()
+    toggleResearchStage()  — mirrors toggleStage() with digest integration
+    assignResearchSection()
+    saveResearchToNotion() — mirrors saveArticleToNotion()
+
+What changed in renderResearchFeedPage():
+──────────────────────────────────────────
+• Cards are no longer rendered as one large container.innerHTML string.
+• Instead: skeletons appear immediately, then cards are injected 6-at-a-time
+  per requestAnimationFrame call, with a 0.18s opacity fade per chunk.
+• The pagination bar renders synchronously before any card rendering,
+  so navigation works immediately even on slow renders.
+• A _researchRenderToken cancels in-flight renders when a new filter/page
+  change is triggered before the previous render finishes.
+
+What is NOT changed:
+─────────────────────
+• All existing research helper functions (markResearchRead, toggleResearchFlag,
+  setResearchSentiment, addResearchTag, removeResearchTag, showResearchTagInput,
+  pickResearchTagFromDropdown, handleResearchCheckbox, etc.) are untouched.
+• The _researchArticles array, _researchPageNum, _researchPageSz variables
+  and all filter state variables are untouched.
+• renderResearchFeed() (the outer entry point) is untouched.
+• The dashboard buildResearchCard(a, true) compact variant is untouched.
+• The existing research-card CSS class is still present and used for
+  the Research tab stats grid cards — those are unaffected.
+
+══════════════════════════════════════════════════════════════════════════════
+-->

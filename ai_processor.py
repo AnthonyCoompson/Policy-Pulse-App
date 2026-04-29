@@ -29,6 +29,97 @@ GEMINI_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-fla
 # Cap concurrent AI calls to avoid Gemini rate-limit errors
 _AI_SEMAPHORE = asyncio.Semaphore(5)
 
+# ── KEYWORD PRE-FILTER ────────────────────────────────────────────────────────
+# These lists power quick_relevance_score(), which runs in pure Python before
+# any Gemini API call is made.  Articles that score below QUICK_FILTER_THRESHOLD
+# in scraper.py are discarded without ever touching the API.
+#
+# To tune coverage: add terms to HIGH_RELEVANCE_TERMS to catch more policy
+# content; add terms to LOW_RELEVANCE_TERMS to drop more noise categories.
+# Terms are matched as substrings of the lowercased title, so "health" matches
+# "public health", "healthcare", "mental health" etc.
+
+HIGH_RELEVANCE_TERMS: list[str] = [
+    # Indigenous policy
+    "indigenous", "first nations", "métis", "inuit", "reconciliation",
+    "dripa", "undrip", "trc", "ocap", "fnha", "crown-indigenous",
+    "residential school", "land rights", "treaty",
+    # Post-secondary & research
+    "post-secondary", "university", "college", "tuition", "campus",
+    "sshrc", "nserc", "cihr", "tri-council", "research", "academic",
+    "graduate", "scholarship", "endowment",
+    # Government & policy
+    "federal", "provincial", "legislation", "bill", "act", "regulation",
+    "policy", "budget", "fiscal", "funding", "grant", "investment",
+    "government", "ministry", "minister", "senate", "parliament", "hansard",
+    # Health
+    "health", "pharmacare", "healthcare", "mental health", "wellness",
+    "public health", "drug coverage",
+    # Education & workforce
+    "education", "workforce", "labour", "labor", "employment",
+    "apprenticeship", "childcare", "child care",
+    # BC-specific
+    "bc government", "british columbia", "bc legislature",
+]
+
+LOW_RELEVANCE_TERMS: list[str] = [
+    # Sports
+    "sports", "nba", "nfl", "nhl", "mlb", "fifa", "nfl", "hockey game",
+    "basketball", "baseball game", "soccer match", "golf tournament",
+    "tennis match", "formula 1", "nascar", "wrestling",
+    # Entertainment / celebrity
+    "celebrity", "entertainment", "box office", "album release",
+    "music video", "red carpet", "awards show", "oscars", "emmys",
+    "reality tv", "bachelor", "survivor",
+    # Lifestyle noise
+    "weather forecast", "horoscope", "astrology", "recipe", "cooking tips",
+    "lottery", "casino", "gambling", "real estate listing",
+    "stock tip", "crypto price", "bitcoin price",
+]
+
+
+def quick_relevance_score(title: str, source_name: str = "") -> int:
+    """Fast keyword pre-filter — runs in pure Python before any AI call.
+
+    Scores a title from 0 to 100 based on the presence of high-relevance
+    policy terms and low-relevance noise terms.
+
+    Scoring rules:
+    - Start at 0.
+    - +15 for each HIGH_RELEVANCE_TERMS hit in the lowercased title.
+    - -30 for each LOW_RELEVANCE_TERMS hit in the lowercased title.
+    - Clamped to [0, 100].
+
+    A score of 0 means the article contains at least one noise signal and
+    zero policy signals — safe to discard without an AI call.
+    A score >= QUICK_FILTER_THRESHOLD (15 in scraper.py, i.e. one hit) means
+    at least one policy keyword matched and the article proceeds to full AI
+    analysis.
+
+    The source_name parameter is accepted for future use (e.g. boosting
+    scores from known trusted sources) but is not used in scoring yet.
+
+    Args:
+        title:       Article headline string.
+        source_name: Name of the originating source (unused, reserved).
+
+    Returns:
+        Integer score in [0, 100].
+    """
+    lowered = title.lower()
+    score   = 0
+
+    for term in HIGH_RELEVANCE_TERMS:
+        if term in lowered:
+            score += 15
+
+    for term in LOW_RELEVANCE_TERMS:
+        if term in lowered:
+            score -= 30
+
+    return max(0, min(100, score))
+
+
 SYSTEM_PROMPT = """You are a senior Canadian policy analyst specializing in:
 - Post-secondary education and research funding
 - Indigenous relations, UNDRIP, DRIPA, TRC Calls to Action, OCAP

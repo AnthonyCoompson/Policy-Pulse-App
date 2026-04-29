@@ -27,6 +27,30 @@ from database import (
     # Scholarly keywords
     get_scholarly_keywords, add_scholarly_keyword,
     delete_scholarly_keyword, toggle_scholarly_keyword,
+    # Subscribers
+    get_subscribers, add_subscriber, toggle_subscriber,
+    delete_subscriber, update_subscriber,
+)
+from database import (
+    init_db, get_articles, get_article_by_id, get_sources, get_stats,
+    get_digest_history, save_digest, update_article_read, update_article_staged,
+    get_watchlist_keywords, add_watchlist_keyword, remove_watchlist_keyword,
+    add_article_tag, remove_article_tag, update_article_sentiment,
+    update_article_content,
+    update_article_pub_date,
+    # Source CRUD
+    add_source, toggle_source, delete_source, update_source,
+    # Research source CRUD
+    get_research_sources, add_research_source, toggle_research_source,
+    delete_research_source, update_research_source,
+    # Scholarly keywords
+    get_scholarly_keywords, add_scholarly_keyword,
+    delete_scholarly_keyword, toggle_scholarly_keyword,
+    # Subscribers
+    get_subscribers, add_subscriber, toggle_subscriber,
+    delete_subscriber, update_subscriber,
+    # Scholarly article lookup
+    get_scholarly_article_by_id,
 )
 from scraper import run_scrape
 from scheduler import start_scheduler
@@ -374,6 +398,50 @@ def delete_keyword(keyword: str):
     remove_watchlist_keyword(keyword)
     return {"ok": True}
 
+# ── SUBSCRIBERS ───────────────────────────────────────────────────────────────
+
+@app.get("/subscribers")
+def list_subscribers():
+    return {"subscribers": get_subscribers()}
+
+
+@app.post("/subscribers")
+def create_subscriber(body: dict):
+    import sqlite3
+    name  = (body.get("name")  or "").strip()
+    email = (body.get("email") or "").strip().lower()
+    role  = (body.get("role")  or "Reader").strip()
+    if not name or not email:
+        raise HTTPException(status_code=400, detail="name and email are required")
+    if "@" not in email:
+        raise HTTPException(status_code=400, detail="invalid email address")
+    try:
+        new_id = add_subscriber(name, email, role)
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=409, detail="Email already exists")
+    return {"ok": True, "id": new_id}
+
+
+@app.patch("/subscribers/{subscriber_id}/toggle")
+def toggle_subscriber_endpoint(subscriber_id: int):
+    new_state = toggle_subscriber(subscriber_id)
+    return {"ok": True, "active": new_state}
+
+
+@app.patch("/subscribers/{subscriber_id}")
+def edit_subscriber(subscriber_id: int, body: dict):
+    allowed = {"name", "role", "active"}
+    updates = {k: v for k, v in body.items() if k in allowed}
+    if not updates:
+        raise HTTPException(status_code=400, detail=f"Allowed fields: {allowed}")
+    update_subscriber(subscriber_id, updates)
+    return {"ok": True}
+
+
+@app.delete("/subscribers/{subscriber_id}")
+def remove_subscriber_endpoint(subscriber_id: int):
+    delete_subscriber(subscriber_id)
+    return {"ok": True}
 
 # ── STATS ─────────────────────────────────────────────────────────────────────
 
@@ -542,14 +610,17 @@ def mark_scholarly_read(article_id: int, body: dict = {}):
     return {"ok": True}
 
 
+@app.get("/scholarly/{article_id}/for-note")
+def get_scholarly_for_note(article_id: int):
+    from database import get_scholarly_article_by_id
+    article = get_scholarly_article_by_id(article_id)
+    if not article:
+        raise HTTPException(status_code=404, detail="Research paper not found")
+    return article
+
+
 @app.get("/scholarly/{article_id}")
 def get_scholarly_article(article_id: int):
-    from database import get_conn
-    conn = get_conn()
-    row = conn.execute("SELECT * FROM scholarly_articles WHERE id = ?", (article_id,)).fetchone()
-    conn.close()
-    if not row: raise HTTPException(status_code=404, detail="Article not found")
-    return dict(row)
 
 
 # ── HEALTH ────────────────────────────────────────────────────────────────────

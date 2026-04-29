@@ -18,12 +18,14 @@ from datetime import datetime
 from urllib.parse import urljoin, quote_plus
 
 import requests
+import httpx
 from bs4 import BeautifulSoup
 from rapidfuzz import fuzz
 
 from database import (
     save_article, get_sources, log_scrape,
-    update_source_scraped, get_watchlist_keywords,
+    update_source_scraped, get_watchlist_keywords, 
+    get_exclusion_keywords,
 )
 from ai_processor import analyze_article, analyze_articles_batch
 
@@ -156,7 +158,132 @@ def fetch_article_details(url: str) -> tuple[str, str | None]:
     return "", None
 
 
-def _parse_date(raw: str) -> str | None:
+# ── PARALLEL ARTICLE BODY FETCH ───────────────────────────────────────────────
+
+async def fetch_article_details_async(
+    url: str,
+    session: httpx.AsyncClient,
+) -> tuple[str, str | None]:
+    """Async version of fetch_article_details() using a shared httpx session.
+
+    Uses the same extraction logic (pub_date meta tags, semantic selectors,
+    body text) and the same UA rotation.  Called concurrently by
+    fetch_all_article_bodies() — one coroutine per article URL.
+
+    The original synchronous fetch_article_details() is kept intact and is
+    still used as a fallback when asyncio.run() is unavailable, and by any
+    other caller that needs a simple synchronous interface.
+
+    Args:
+        url:     Article URL to fetch.
+        session: Shared httpx.AsyncClient — created once per batch in
+                 fetch_all_article_bodies() so connections are reused.
+
+    Returns:
+        (article_text[:5000], pub_date_str) — same contract as the sync version.
+    """
+    for attempt in range(3):
+        headers = {**HEADERS, "User-Agent": USER_AGENTS[attempt % len(USER_AGENTS)]}
+        try:
+            resp = await session.get(url, headers=headers)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
+
+            # ── 1. Extract publish date (same logic as sync version) ──────────
+            pub_date = None
+            date_metas = [
+                ("meta", {"property": "article:published_time"}),
+                ("meta", {"property": "article:modified_time"}),
+                ("meta", {"name": "pubdate"}),
+                ("meta", {"name": "publishdate"}),
+                ("meta", {"name": "date"}),
+                ("meta", {"itemprop": "datePublished"}),
+                ("meta", {"property": "og:updated_time"}),
+            ]
+            for tag, attrs in date_metas:
+                el = soup.find(tag, attrs)
+                if el and el.get("content"):
+                    pub_date = _parse_date(el["content"])
+                    if pub_date:
+                        break
+            if not pub_date:
+                for time_el in soup.find_all("time", datetime=True)[:3]:
+                    pub_date = _parse_date(time_el["datetime"])
+                    if pub_date:
+                        break
+
+            # ── 2. Extract article body text (same logic as sync version) ─────
+            for tag in soup(["script", "style", "nav", "footer", "header",
+                             "aside", "figure", "form", "noscript", "iframe",
+                             "advertisement", "banner"]):
+                tag.decompose()
+
+            article_text = ""
+            for selector in ["article", "main", ".article-body", ".entry-content",
+                             ".post-content", ".story-body", "#content", ".content",
+                             '[role="main"]', ".field-items"]:
+                container = soup.select_one(selector)
+                if container:
+                    article_text = container.get_text(separator=" ", strip=True)
+                    if len(article_text) > 200:
+                        break
+            if len(article_text) < 200:
+                article_text = soup.get_text(separator=" ", strip=True)
+
+            article_text = re.sub(r"\s{2,}", " ", article_text).strip()
+            return article_text[:5000], pub_date
+
+        except httpx.HTTPStatusError as e:
+            log.warning(f"fetch_async HTTP {e.response.status_code} attempt {attempt+1}/3 [{url[:60]}]")
+            if attempt < 2:
+                await asyncio.sleep(2 ** attempt)
+        except httpx.RequestError as e:
+            log.warning(f"fetch_async request error attempt {attempt+1}/3 [{url[:60]}]: {e}")
+            if attempt < 2:
+                await asyncio.sleep(2 ** attempt)
+        except Exception as e:
+            log.debug(f"fetch_async non-request error [{url[:60]}]: {e}")
+            break
+
+    return "", None
+
+
+async def fetch_all_article_bodies(
+    urls: list[str],
+) -> list[tuple[str, str | None]]:
+    """Fetch all article body pages concurrently using one shared httpx session.
+
+    Creates a single AsyncClient (so TCP connections are reused across the
+    batch) and gathers all fetch_article_details_async() coroutines at once.
+    asyncio.gather preserves order — results[i] corresponds to urls[i].
+
+    Timeout is set to ARTICLE_FETCH_TIMEOUT per request.  Slow or unreachable
+    URLs return ("", None) rather than failing the whole batch.
+
+    Args:
+        urls: List of article URLs to fetch in parallel.
+
+    Returns:
+        List of (article_text, pub_date) tuples, same length and order as urls.
+    """
+    timeout = httpx.Timeout(ARTICLE_FETCH_TIMEOUT, connect=5.0)
+    async with httpx.AsyncClient(
+        timeout=timeout,
+        follow_redirects=True,
+        limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+    ) as session:
+        tasks = [fetch_article_details_async(url, session) for url in urls]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Replace any unhandled exceptions with the safe empty fallback
+    cleaned = []
+    for i, r in enumerate(results):
+        if isinstance(r, Exception):
+            log.warning(f"fetch_all_article_bodies unhandled exception [{urls[i][:60]}]: {r}")
+            cleaned.append(("", None))
+        else:
+            cleaned.append(r)
+    return cleaned
     if not raw:
         return None
     raw = raw.strip()
@@ -286,6 +413,9 @@ def run_scrape():
     _seen_titles = set()   # reset dedup state for this run
 
     log.info("=== PolicyPulse scrape started ===")
+    # Load exclusion list once per run — lowercase already stored in DB
+    exclusions = get_exclusion_keywords()
+    log.info(f"Exclusion keywords active: {len(exclusions)}")
     total_added = 0
     all_errors  = []
 
@@ -300,7 +430,7 @@ def run_scrape():
                 raw = scrape_rss(url, name)
             else:
                 raw = scrape_generic(url, name, base_url=_base_url(url))
-            added = _process_and_save(raw, source)
+            added = _process_and_save(raw, source, exclusions=exclusions)
             total_added += added
             update_source_scraped(name, added)
             log.info(f"  -> {added} new articles")
@@ -315,7 +445,7 @@ def run_scrape():
             log.info(f"Google News keywords: {keywords}")
             gn_raw = scrape_google_news_keywords(keywords)
             gn_source = {"name": "Google News (Keyword Feed)", "jurisdiction": "Pan-Canadian"}
-            added = _process_and_save(gn_raw, gn_source, relevance_boost=1)
+            added = _process_and_save(gn_raw, gn_source, relevance_boost=1, exclusions=exclusions)
             total_added += added
             log.info(f"  -> {added} new articles from Google News keywords")
         else:
@@ -337,18 +467,20 @@ def _base_url(url: str) -> str:
 
 # ── PROCESS AND SAVE ──────────────────────────────────────────────────────────
 
-def _process_and_save(raw_articles, source, relevance_boost=0):
+def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
     """
-    Phase 1 — validate, fuzzy-dedup, fetch article bodies
+    Phase 1 — validate, fuzzy-dedup, parallel-fetch all article bodies at once
     Phase 2 — AI analysis: batch async if > 3 articles, else serial sync
     Phase 3 — save to DB
     """
     source_name  = source["name"]
     jurisdiction = source.get("jurisdiction", "Unknown")
 
-    # ── Phase 1 ───────────────────────────────────────────────────────────────
-    batch = []
-    meta  = []
+    # ── Phase 1a — validate and dedup ─────────────────────────────────────────
+    # Collect all articles that pass validation and dedup into a candidates
+    # list before touching the network.  This lets us fire all body fetches
+    # in a single parallel batch instead of one sequential request per article.
+    candidates = []
 
     for raw in raw_articles:
         title      = (raw.get("title") or "").strip()
@@ -358,31 +490,65 @@ def _process_and_save(raw_articles, source, relevance_boost=0):
 
         if not title or not url or len(title) < 10:
             continue
+        # Exclusion keyword check — skip before any network call
+        if exclusions:
+            title_lower = title.lower()
+            if any(kw in title_lower for kw in exclusions):
+                log.debug(f"  [excluded] {title[:60]}")
+                continue
 
-        # Fuzzy dedup — skip before any network calls
+        # Fuzzy dedup — still runs before any network call
         if is_duplicate_title(title, _seen_titles):
             continue
         _seen_titles.add(title)
 
-        url_hash = hashlib.sha256(url.encode()).hexdigest()
+        candidates.append({
+            "title":      title,
+            "url":        url,
+            "pub_date":   pub_date,
+            "forced_tag": forced_tag,
+            "url_hash":   hashlib.sha256(url.encode()).hexdigest(),
+        })
 
-        log.debug(f"  Fetching body: {url[:80]}")
-        article_text, extracted_date = fetch_article_details(url)
-        if extracted_date:
-            pub_date = extracted_date
-        time.sleep(DELAY_BETWEEN_ARTICLES)
+    if not candidates:
+        return 0
 
+    # ── Phase 1b — parallel body fetch ────────────────────────────────────────
+    # All article pages for this source are fetched concurrently in one call.
+    # asyncio.gather preserves order so body_results[i] matches candidates[i].
+    # Falls back to sequential requests if asyncio.run() is unavailable
+    # (e.g. when called from inside an already-running event loop).
+    urls = [c["url"] for c in candidates]
+    log.info(f"  Fetching {len(urls)} article bodies in parallel")
+
+    try:
+        body_results = asyncio.run(fetch_all_article_bodies(urls))
+    except RuntimeError:
+        # Already inside a running event loop (e.g. called from a test or
+        # an async FastAPI route) — fall back to sequential sync fetching.
+        log.warning("  asyncio.run() unavailable — falling back to sequential body fetch")
+        body_results = []
+        for url in urls:
+            body_results.append(fetch_article_details(url))
+            time.sleep(DELAY_BETWEEN_ARTICLES)
+
+    # ── Phase 1c — assemble batch and meta arrays ──────────────────────────────
+    batch = []
+    meta  = []
+
+    for candidate, (article_text, extracted_date) in zip(candidates, body_results):
+        pub_date = extracted_date if extracted_date else candidate["pub_date"]
         batch.append({
-            "title":        title,
-            "url":          url,
+            "title":        candidate["title"],
+            "url":          candidate["url"],
             "source_name":  source_name,
             "article_text": article_text,
         })
         meta.append({
-            "url_hash":   url_hash,
+            "url_hash":   candidate["url_hash"],
             "pub_date":   pub_date,
-            "forced_tag": forced_tag,
-            "title":      title,
+            "forced_tag": candidate["forced_tag"],
+            "title":      candidate["title"],
         })
 
     if not batch:

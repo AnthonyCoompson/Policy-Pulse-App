@@ -2111,6 +2111,8 @@ function buildResearchCard(a, forDashboard){
     )
     +'<button class="btn btn-cyan btn-sm" onclick="openResearchPreview('+a.id+')">&#x25BA; Preview</button>'
     +'<button class="btn btn-ghost btn-sm" onclick="addResearchToCitations('+a.id+')" title="Add to bibliography">&#x1F4DA; Cite</button>'
+    +'<button class="hbtn" onclick="event.stopPropagation();addResearchToCitations(' + a.id + ')" title="Add to bibliography">&#x1F4DA; Cite</button>'
+    +'<button class="hbtn" onclick="event.stopPropagation();openNoteForResearchPaper(' + a.id + ')" title="Open in Notes">&#x1F4DD; Notes</button>'
     // sentiment picker like article scraper
     +'<select class="sentiment-picker" onchange="setResearchSentiment('+a.id+',this.value)" title="Override sentiment">'
     +'<option value="Critical" '+(a.sentiment==='Critical'?'selected':'')+'>&#x1F534; Critical</option>'
@@ -2820,17 +2822,22 @@ const DS_DEF=[
 let articles=ARTICLES_SEED.map(a=>({...a}));
 let sources=SOURCES_SEED.map(s=>({...s}));
 // Load subscribers from localStorage, fall back to seed data on first run
-function loadSubscribers(){
-  try {
-    var stored = localStorage.getItem('pp_subscribers');
-    if(stored){
-      var parsed = JSON.parse(stored);
-      if(Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch(e){}
-  return SUBSCRIBERS_SEED.map(s=>({...s}));
+async function loadSubscribers(){
+  if(API_BASE){
+    var d = await apiFetch('/subscribers');
+    if(d && d.subscribers) subscribers = d.subscribers;
+  } else {
+    try {
+      var stored = localStorage.getItem('pp_subscribers');
+      if(stored){
+        var parsed = JSON.parse(stored);
+        if(Array.isArray(parsed) && parsed.length > 0) subscribers = parsed;
+      }
+    } catch(e){}
+  }
 }
 function saveSubscribers(){
+    if(API_BASE) return;
   try { localStorage.setItem('pp_subscribers', JSON.stringify(subscribers)); } catch(e){}
 }
 let subscribers = loadSubscribers();
@@ -3017,6 +3024,48 @@ function closePreview(){
   // Restore stage button for next news article preview
   var stageBtn = document.getElementById('preview-stage-btn');
   if(stageBtn) stageBtn.style.display = 'inline-flex';
+}
+
+function openNoteForResearchPaper(researchId){
+  var a = _researchArticles.find(function(x){ return x.id === researchId; });
+  if(!a) return;
+
+  var existingNote = _notes_data.find(function(n){
+    return n.researchId === researchId;
+  });
+
+  if(!existingNote){
+    var newNote = {
+      id:              Date.now(),
+      title:           a.title,
+      body:            '## ' + a.title + '\n\n'
+                       + '**Source:** ' + (a.source || '') + '\n'
+                       + '**Database:** ' + (a.database_name || '') + '\n'
+                       + '**Authors:** ' + (a.authors || '') + '\n'
+                       + '**DOI:** ' + (a.doi || '') + '\n'
+                       + '**Published:** ' + (a.pub_date || '') + '\n\n'
+                       + '---\n\n',
+      tag:             'research',
+      researchId:      a.id,
+      researchTitle:   a.title,
+      researchUrl:     a.url  || '',
+      researchDoi:     a.doi  || '',
+      researchAbstract:(a.abstract || '').slice(0, 300),
+      created:         new Date().toISOString(),
+      updated:         new Date().toISOString(),
+      wordCount:       0,
+    };
+    _notes_data.unshift(newNote);
+    saveNotesData();
+    existingNote = newNote;
+  }
+
+  closePreview();
+  showTab('notes');
+  setTimeout(function(){
+    renderNotesList();
+    openNote(existingNote.id);
+  }, 100);
 }
 
 function openNoteForArticle(){
@@ -3299,6 +3348,7 @@ async function init(){
   if (API_BASE) {
     await apiLoadArticles({ limit: 100 });
     await apiLoadStats();
+    await loadSubscribers();
     await apiLoadSources();
     await apiLoadDigests();
     await apiSyncWatchlist();
@@ -3964,8 +4014,53 @@ function renderSubscribers(){
   </tr>`).join('');
 }
 function toggleSub(id){const s=subscribers.find(x=>x.id===id);if(s)s.active=!s.active;saveSubscribers();renderSubscribers();}
-function removeSub(id){if(confirm('Remove this subscriber?')){subscribers=subscribers.filter(x=>x.id!==id);saveSubscribers();renderSubscribers();}}
-function addSubscriber(){const name=prompt('Full name:');if(!name)return;const email=prompt('Email:');if(!email||!email.includes('@')){alert('Please enter a valid email address.');return;}const role=prompt('Role (Admin/Reader):')||'Reader';subscribers.push({id:Date.now(),name:name.trim(),email:email.trim().toLowerCase(),role,active:true,added:new Date().toISOString().slice(0,10)});saveSubscribers();renderSubscribers();showToast('&#x2705;','Subscriber Added',name+' added to your list.',2500);}
+async function removeSub(id){
+  if(!confirm('Remove this subscriber?')) return;
+  if(API_BASE){
+    var d = await apiFetch('/subscribers/'+id, {method:'DELETE'});
+    if(d && d.ok){
+      await loadSubscribers();
+      renderSubscribers();
+      showToast('🗑','Removed','Subscriber removed.',2000);
+    }
+  } else {
+    subscribers = subscribers.filter(function(x){ return x.id!==id; });
+    saveSubscribers();
+    renderSubscribers();
+  }
+}
+async function addSubscriber(){
+  var name  = prompt('Full name:');
+  if(!name) return;
+  var email = prompt('Email:');
+  if(!email || !email.includes('@')){ alert('Please enter a valid email address.'); return; }
+  var role  = prompt('Role (Admin/Reader):') || 'Reader';
+
+  if(API_BASE){
+    var d = await apiFetch('/subscribers', {
+      method: 'POST',
+      body: JSON.stringify({name: name.trim(), email: email.trim(), role: role.trim()})
+    });
+    if(d && d.ok){
+      await loadSubscribers();
+      renderSubscribers();
+      showToast('✅','Subscriber Added', name.trim()+' added.',2500);
+    } else {
+      var msg = (d && d.detail) || 'Could not add subscriber.';
+      showToast('⚠️','Failed', msg, 4000);
+    }
+  } else {
+    subscribers.push({
+      id: Date.now(), name: name.trim(),
+      email: email.trim().toLowerCase(),
+      role: role, active: true,
+      added: new Date().toISOString().slice(0,10)
+    });
+    saveSubscribers();
+    renderSubscribers();
+    showToast('✅','Subscriber Added', name.trim()+' added.',2500);
+  }
+}
 
 function appendMsg(text,type){const el=document.getElementById('chat-messages');const div=document.createElement('div');div.className=type;div.textContent=text;el.appendChild(div);el.scrollTop=el.scrollHeight;return div;}
 function askSuggestion(btn){document.getElementById('chat-input').value=btn.textContent;sendChat();}
@@ -5876,6 +5971,19 @@ async function syncNoteToNotion(){
       'Created': { date:      { start: (note.created||new Date().toISOString()).slice(0,10) } },
     };
     if(note.linkedArticleUrl) props['Article URL'] = { url: note.linkedArticleUrl };
+
+    if(note.researchId){
+      if(note.researchDoi){
+        props['DOI'] = {
+          rich_text: [{ text: { content: note.researchDoi } }]
+        };
+      }
+      if(note.researchAbstract){
+        props['Abstract'] = {
+          rich_text: [{ text: { content: note.researchAbstract.slice(0, 2000) } }]
+        };
+      }
+    }
     await notionProxy('pages', {
       parent:     { database_id: notionNotesDbId },
       properties: props,

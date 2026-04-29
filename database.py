@@ -64,6 +64,28 @@ def init_db():
             article_count   INTEGER DEFAULT 0
         );
 
+         CREATE TABLE IF NOT EXISTS scholarly_articles (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            title           TEXT NOT NULL,
+            url             TEXT NOT NULL,
+            url_hash        TEXT UNIQUE NOT NULL,
+            source          TEXT, -- The Journal or Publisher
+            database_name   TEXT, -- e.g., OpenAlex, Semantic Scholar
+            authors         TEXT,
+            relevance       INTEGER DEFAULT 5,
+            sentiment       TEXT DEFAULT 'Neutral',
+            summary         TEXT,
+            abstract        TEXT,
+            why_it_matters  TEXT,
+            pub_date        TEXT,
+            processed_date  TEXT,
+            read            INTEGER DEFAULT 0,
+            tags            TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_scholarly_pub_date ON scholarly_articles(pub_date DESC);
+        CREATE INDEX IF NOT EXISTS idx_scholarly_hash     ON scholarly_articles(url_hash);
+
         CREATE TABLE IF NOT EXISTS research_sources (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             name            TEXT NOT NULL,
@@ -100,7 +122,28 @@ def init_db():
             errors          TEXT
         );
 
+         CREATE TABLE IF NOT EXISTS subscribers (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT NOT NULL,
+            email       TEXT UNIQUE NOT NULL,
+            role        TEXT DEFAULT 'Reader',
+            active      INTEGER DEFAULT 1,
+            added_date  TEXT
+        );
+                      
         CREATE TABLE IF NOT EXISTS watchlist_keywords (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            keyword      TEXT UNIQUE NOT NULL,
+            created_date TEXT
+        );
+        
+        CREATE TABLE IF NOT EXISTS exclusion_keywords (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            keyword      TEXT UNIQUE NOT NULL,
+            created_date TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS scholarly_exclusion_keywords (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             keyword      TEXT UNIQUE NOT NULL,
             created_date TEXT
@@ -448,6 +491,16 @@ def update_research_source_scraped(source_id: int, count: int):
     conn.close()
 
 
+# ── SCHOLARLY ARTICLES ────────────────────────────────────
+
+def get_scholarly_article_by_id(article_id: int):
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT * FROM scholarly_articles WHERE id = ?", (article_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
 # ── SCHOLARLY KEYWORDS ────────────────────────────────────
 
 def get_scholarly_keywords():
@@ -579,6 +632,67 @@ def get_stats():
         "last_scraped": last_scraped["scraped_at"] if last_scraped else None,
     }
 
+# ── SUBSCRIBERS ───────────────────────────────────────────
+
+def get_subscribers():
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM subscribers ORDER BY name"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def add_subscriber(name: str, email: str, role: str = "Reader") -> int:
+    conn = get_conn()
+    now = datetime.utcnow().isoformat()
+    cur = conn.execute(
+        "INSERT INTO subscribers (name, email, role, active, added_date) VALUES (?,?,?,1,?)",
+        (name.strip(), email.strip().lower(), role.strip(), now)
+    )
+    new_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return new_id
+
+
+def toggle_subscriber(subscriber_id: int) -> bool:
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT active FROM subscribers WHERE id = ?", (subscriber_id,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return False
+    new_state = 0 if row["active"] else 1
+    conn.execute(
+        "UPDATE subscribers SET active = ? WHERE id = ?", (new_state, subscriber_id)
+    )
+    conn.commit()
+    conn.close()
+    return bool(new_state)
+
+
+def delete_subscriber(subscriber_id: int):
+    conn = get_conn()
+    conn.execute("DELETE FROM subscribers WHERE id = ?", (subscriber_id,))
+    conn.commit()
+    conn.close()
+
+
+def update_subscriber(subscriber_id: int, fields: dict):
+    allowed = {"name", "role", "active"}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return
+    conn = get_conn()
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [subscriber_id]
+    conn.execute(
+        f"UPDATE subscribers SET {set_clause} WHERE id = ?", values
+    )
+    conn.commit()
+    conn.close()
 
 # ── DIGESTS ───────────────────────────────────────────────
 
@@ -600,3 +714,75 @@ def save_digest(subject, html_content, recipients, token):
     conn.commit()
     conn.close()
     return digest_id
+
+# ── EXCLUSION KEYWORDS (News Scraper) ─────────────────────────────────────────
+
+def get_exclusion_keywords() -> list[str]:
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT keyword FROM exclusion_keywords ORDER BY keyword"
+    ).fetchall()
+    conn.close()
+    return [r["keyword"] for r in rows]
+
+
+def add_exclusion_keyword(keyword: str) -> bool:
+    conn = get_conn()
+    try:
+        conn.execute(
+            "INSERT INTO exclusion_keywords (keyword, created_date) VALUES (?,?)",
+            (keyword.strip().lower(), datetime.utcnow().isoformat())
+        )
+        conn.commit()
+        result = True
+    except sqlite3.IntegrityError:
+        result = False
+    finally:
+        conn.close()
+    return result
+
+
+def remove_exclusion_keyword(keyword: str):
+    conn = get_conn()
+    conn.execute(
+        "DELETE FROM exclusion_keywords WHERE keyword = ?",
+        (keyword.strip().lower(),)
+    )
+    conn.commit()
+    conn.close()
+
+# ── EXCLUSION KEYWORDS (Research Scraper) ─────────────────────────────────────
+
+def get_scholarly_exclusion_keywords() -> list[str]:
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT keyword FROM scholarly_exclusion_keywords ORDER BY keyword"
+    ).fetchall()
+    conn.close()
+    return [r["keyword"] for r in rows]
+
+
+def add_scholarly_exclusion_keyword(keyword: str) -> bool:
+    conn = get_conn()
+    try:
+        conn.execute(
+            "INSERT INTO scholarly_exclusion_keywords (keyword, created_date) VALUES (?,?)",
+            (keyword.strip().lower(), datetime.utcnow().isoformat())
+        )
+        conn.commit()
+        result = True
+    except sqlite3.IntegrityError:
+        result = False
+    finally:
+        conn.close()
+    return result
+
+
+def remove_scholarly_exclusion_keyword(keyword: str):
+    conn = get_conn()
+    conn.execute(
+        "DELETE FROM scholarly_exclusion_keywords WHERE keyword = ?",
+        (keyword.strip().lower(),)
+    )
+    conn.commit()
+    conn.close()

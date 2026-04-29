@@ -9,6 +9,7 @@ Changes from v1:
     remain unchanged — they're queried by keyword, not by URL.
 """
 
+import asyncio
 import hashlib
 import logging
 import os
@@ -17,7 +18,9 @@ from datetime import datetime, timedelta
 from urllib.parse import quote_plus, urljoin
 
 import requests
+import httpx
 from bs4 import BeautifulSoup
+from database import get_scholarly_exclusion_keywords
 
 log = logging.getLogger(__name__)
 
@@ -364,6 +367,11 @@ def fetch_canadian_think_tanks() -> list[dict]:
     """
     Scrape publications from think-tank sources stored in research_sources table.
     Falls back to an empty list if the table doesn't exist yet.
+
+    All source pages are fetched concurrently using fetch_all_think_tank_pages()
+    (one httpx.AsyncClient shared across the batch).  HTML parsing runs
+    sequentially after the parallel fetch completes — parsing is CPU-bound
+    and fast enough that parallelising it offers no benefit.
     """
     from database import get_research_sources
     results = []
@@ -374,19 +382,39 @@ def fetch_canadian_think_tanks() -> list[dict]:
         log.warning(f"Could not load research sources from DB: {e}")
         return results
 
-    for source in db_sources:
+    if not db_sources:
+        return results
+
+    # ── Parallel fetch all think-tank pages at once ───────────────────────────
+    log.info(f"  Fetching {len(db_sources)} think-tank pages in parallel")
+    try:
+        page_results = asyncio.run(fetch_all_think_tank_pages(db_sources))
+    except RuntimeError:
+        # Already inside a running event loop — fall back to sequential sync
+        log.warning("  asyncio.run() unavailable — falling back to sequential think-tank fetch")
+        page_results = []
+        for source in db_sources:
+            try:
+                resp = requests.get(source["url"], headers=HTML_HEADERS, timeout=TIMEOUT)
+                html = resp.text if resp.status_code == 200 else None
+            except Exception as e:
+                log.warning(f"Think-tank sync fallback [{source['name']}]: {e}")
+                html = None
+            page_results.append((source, html))
+
+    # ── Parse each page (sequential — parsing is fast) ───────────────────────
+    for source, html in page_results:
         name     = source["name"]
         url      = source["url"]
         base_url = _base_url(url)
         boost    = source.get("relevance_boost", 0)
 
-        try:
-            resp = requests.get(url, headers=HTML_HEADERS, timeout=TIMEOUT)
-            if resp.status_code != 200:
-                log.warning(f"Think-tank {name}: HTTP {resp.status_code}")
-                continue
+        if html is None:
+            log.warning(f"Think-tank {name}: skipping — page fetch failed")
+            continue
 
-            soup = BeautifulSoup(resp.text, "html.parser")
+        try:
+            soup = BeautifulSoup(html, "html.parser")
             seen = set()
             source_results = []
 
@@ -424,15 +452,85 @@ def fetch_canadian_think_tanks() -> list[dict]:
 
             results.extend(source_results)
             log.info(f"Think-tank {name}: {len(source_results)} items")
-            time.sleep(1.5)
 
         except Exception as e:
-            log.warning(f"Think-tank scrape error [{name}]: {e}")
+            log.warning(f"Think-tank parse error [{name}]: {e}")
 
     return results
 
 
-def _base_url(url: str) -> str:
+# ── PARALLEL THINK-TANK PAGE FETCH ────────────────────────────────────────────
+
+async def fetch_think_tank_page_async(
+    source: dict,
+    session: httpx.AsyncClient,
+) -> tuple[dict, str | None]:
+    """Fetch one think-tank publications page asynchronously.
+
+    Args:
+        source:  A research_sources row dict with at minimum 'name' and 'url'.
+        session: Shared httpx.AsyncClient from fetch_all_think_tank_pages().
+
+    Returns:
+        (source_dict, html_text | None) — html_text is None on failure so the
+        caller can skip parsing for that source without crashing the batch.
+    """
+    name = source["name"]
+    url  = source["url"]
+    try:
+        resp = await session.get(url, headers=HTML_HEADERS)
+        if resp.status_code != 200:
+            log.warning(f"Think-tank async {name}: HTTP {resp.status_code}")
+            return source, None
+        return source, resp.text
+    except httpx.TimeoutException:
+        log.warning(f"Think-tank async {name}: timeout")
+        return source, None
+    except httpx.RequestError as e:
+        log.warning(f"Think-tank async {name}: {e}")
+        return source, None
+    except Exception as e:
+        log.warning(f"Think-tank async {name}: unexpected error: {e}")
+        return source, None
+
+
+async def fetch_all_think_tank_pages(
+    sources: list[dict],
+) -> list[tuple[dict, str | None]]:
+    """Fetch all active think-tank publications pages concurrently.
+
+    Creates one shared httpx.AsyncClient so TCP connections are reused.
+    Results are returned in the same order as the input sources list.
+    Each element is (source_dict, html_text | None); a None html means
+    that source failed and should be skipped during parsing.
+
+    This replaces the sequential requests.get() + time.sleep(1.5) loop
+    that previously ran inside fetch_canadian_think_tanks().  For 6 default
+    think-tank sources the wall-clock time drops from ~9 s to ~2 s.
+
+    Args:
+        sources: List of active research_sources row dicts.
+
+    Returns:
+        List of (source, html | None) tuples, same order as input.
+    """
+    timeout = httpx.Timeout(TIMEOUT, connect=5.0)
+    async with httpx.AsyncClient(
+        timeout=timeout,
+        follow_redirects=True,
+        limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+    ) as session:
+        tasks = [fetch_think_tank_page_async(s, session) for s in sources]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    cleaned = []
+    for i, r in enumerate(results):
+        if isinstance(r, Exception):
+            log.warning(f"fetch_all_think_tank_pages unhandled [{sources[i]['name']}]: {r}")
+            cleaned.append((sources[i], None))
+        else:
+            cleaned.append(r)
+    return cleaned
     from urllib.parse import urlparse
     p = urlparse(url)
     return f"{p.scheme}://{p.netloc}"
