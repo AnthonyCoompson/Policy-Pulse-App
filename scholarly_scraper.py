@@ -20,7 +20,6 @@ from urllib.parse import quote_plus, urljoin
 import requests
 import httpx
 from bs4 import BeautifulSoup
-from database import get_scholarly_exclusion_keywords
 
 log = logging.getLogger(__name__)
 
@@ -531,6 +530,9 @@ async def fetch_all_think_tank_pages(
         else:
             cleaned.append(r)
     return cleaned
+
+
+def _base_url(url: str) -> str:
     from urllib.parse import urlparse
     p = urlparse(url)
     return f"{p.scheme}://{p.netloc}"

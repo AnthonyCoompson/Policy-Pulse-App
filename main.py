@@ -30,25 +30,6 @@ from database import (
     # Subscribers
     get_subscribers, add_subscriber, toggle_subscriber,
     delete_subscriber, update_subscriber,
-)
-from database import (
-    init_db, get_articles, get_article_by_id, get_sources, get_stats,
-    get_digest_history, save_digest, update_article_read, update_article_staged,
-    get_watchlist_keywords, add_watchlist_keyword, remove_watchlist_keyword,
-    add_article_tag, remove_article_tag, update_article_sentiment,
-    update_article_content,
-    update_article_pub_date,
-    # Source CRUD
-    add_source, toggle_source, delete_source, update_source,
-    # Research source CRUD
-    get_research_sources, add_research_source, toggle_research_source,
-    delete_research_source, update_research_source,
-    # Scholarly keywords
-    get_scholarly_keywords, add_scholarly_keyword,
-    delete_scholarly_keyword, toggle_scholarly_keyword,
-    # Subscribers
-    get_subscribers, add_subscriber, toggle_subscriber,
-    delete_subscriber, update_subscriber,
     # Scholarly article lookup
     get_scholarly_article_by_id,
 )
@@ -612,7 +593,6 @@ def mark_scholarly_read(article_id: int, body: dict = {}):
 
 @app.get("/scholarly/{article_id}/for-note")
 def get_scholarly_for_note(article_id: int):
-    from database import get_scholarly_article_by_id
     article = get_scholarly_article_by_id(article_id)
     if not article:
         raise HTTPException(status_code=404, detail="Research paper not found")
@@ -621,11 +601,55 @@ def get_scholarly_for_note(article_id: int):
 
 @app.get("/scholarly/{article_id}")
 def get_scholarly_article(article_id: int):
-    # This calls the function we just added to database.py
-    article = database.get_scholarly_article_by_id(article_id)
+    article = get_scholarly_article_by_id(article_id)
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
     return article
+
+
+# ── SCHOLARLY TAGS ────────────────────────────────────────────────────────────
+
+@app.post("/scholarly/{article_id}/tags")
+def add_scholarly_tag(article_id: int, body: dict):
+    """Add a tag to a scholarly article."""
+    tag = body.get("tag", "").strip()
+    if not tag:
+        raise HTTPException(status_code=400, detail="tag required")
+    from database import get_conn
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT tags FROM scholarly_articles WHERE id = ?", (article_id,)
+    ).fetchone()
+    if row:
+        existing = [t.strip() for t in (row["tags"] or "").split(",") if t.strip()]
+        if tag not in existing:
+            existing.append(tag)
+        conn.execute(
+            "UPDATE scholarly_articles SET tags = ? WHERE id = ?",
+            (",".join(existing), article_id)
+        )
+        conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.delete("/scholarly/{article_id}/tags/{tag}")
+def remove_scholarly_tag(article_id: int, tag: str):
+    """Remove a tag from a scholarly article."""
+    from database import get_conn
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT tags FROM scholarly_articles WHERE id = ?", (article_id,)
+    ).fetchone()
+    if row:
+        existing = [t.strip() for t in (row["tags"] or "").split(",") if t.strip() and t.strip() != tag]
+        conn.execute(
+            "UPDATE scholarly_articles SET tags = ? WHERE id = ?",
+            (",".join(existing), article_id)
+        )
+        conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 # ── HEALTH ────────────────────────────────────────────────────────────────────

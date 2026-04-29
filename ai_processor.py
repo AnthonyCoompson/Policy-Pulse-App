@@ -26,8 +26,18 @@ log = logging.getLogger(__name__)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent"
 
-# Cap concurrent AI calls to avoid Gemini rate-limit errors
-_AI_SEMAPHORE = asyncio.Semaphore(5)
+# Cap concurrent AI calls to avoid Gemini rate-limit errors.
+# Initialised lazily inside the running event loop to avoid the
+# RuntimeError that Python 3.10+ raises when asyncio primitives are
+# created at module-import time (before any event loop exists).
+_AI_SEMAPHORE: asyncio.Semaphore | None = None
+
+
+def _get_semaphore() -> asyncio.Semaphore:
+    global _AI_SEMAPHORE
+    if _AI_SEMAPHORE is None:
+        _AI_SEMAPHORE = asyncio.Semaphore(5)
+    return _AI_SEMAPHORE
 
 # ── KEYWORD PRE-FILTER ────────────────────────────────────────────────────────
 # These lists power quick_relevance_score(), which runs in pure Python before
@@ -64,7 +74,7 @@ HIGH_RELEVANCE_TERMS: list[str] = [
 
 LOW_RELEVANCE_TERMS: list[str] = [
     # Sports
-    "sports", "nba", "nfl", "nhl", "mlb", "fifa", "nfl", "hockey game",
+    "sports", "nba", "nfl", "nhl", "mlb", "fifa", "hockey game",
     "basketball", "baseball game", "soccer match", "golf tournament",
     "tennis match", "formula 1", "nascar", "wrestling",
     # Entertainment / celebrity
@@ -228,8 +238,8 @@ def _parse_gemini_response(text: str, title: str, source_name: str) -> dict | No
     if text.lower() == "null" or text == "":
         return None
 
-    text = re.sub(r"^```json\s*", "", text)
-    text = re.sub(r"\s*```$", "", text)
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```\s*$", "", text)
 
     try:
         result = json.loads(text)
@@ -319,27 +329,27 @@ async def analyze_article_async(title: str, url: str, source_name: str = "",
     payload = _build_payload(title, url, source_name, article_text)
     api_url = f"{GEMINI_URL}?key={GEMINI_API_KEY}"
 
-    async with _AI_SEMAPHORE:
-        for attempt in range(3):
-            try:
-                async with httpx.AsyncClient(timeout=25) as client:
+    async with _get_semaphore():
+        async with httpx.AsyncClient(timeout=25) as client:
+            for attempt in range(3):
+                try:
                     resp = await client.post(api_url, json=payload)
                     resp.raise_for_status()
                     data = resp.json()
                     text = data["candidates"][0]["content"]["parts"][0]["text"]
                     return _parse_gemini_response(text, title, source_name)
 
-            except json.JSONDecodeError as e:
-                log.warning(f"[async] JSON parse error attempt {attempt+1}: {e}")
-                if attempt < 2:
-                    await asyncio.sleep(1)
-            except httpx.HTTPError as e:
-                log.warning(f"[async] HTTP error attempt {attempt+1}: {e}")
-                if attempt < 2:
-                    await asyncio.sleep(2 ** attempt)
-            except (KeyError, IndexError) as e:
-                log.warning(f"[async] Gemini response structure error: {e}")
-                break
+                except json.JSONDecodeError as e:
+                    log.warning(f"[async] JSON parse error attempt {attempt+1}: {e}")
+                    if attempt < 2:
+                        await asyncio.sleep(1)
+                except httpx.HTTPError as e:
+                    log.warning(f"[async] HTTP error attempt {attempt+1}: {e}")
+                    if attempt < 2:
+                        await asyncio.sleep(2 ** attempt)
+                except (KeyError, IndexError) as e:
+                    log.warning(f"[async] Gemini response structure error: {e}")
+                    break
 
     return _default_analysis(title, source_name)
 

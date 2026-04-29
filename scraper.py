@@ -11,7 +11,6 @@ PolicyPulse Scraper v4
 import asyncio
 import hashlib
 import logging
-import os
 import re
 import time
 from datetime import datetime
@@ -284,6 +283,9 @@ async def fetch_all_article_bodies(
         else:
             cleaned.append(r)
     return cleaned
+
+
+def _parse_date(raw: str) -> str | None:
     if not raw:
         return None
     raw = raw.strip()
