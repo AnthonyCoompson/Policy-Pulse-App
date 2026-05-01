@@ -32,11 +32,21 @@ from database import (
     delete_subscriber, update_subscriber,
     # Scholarly article lookup
     get_scholarly_article_by_id,
+    # Scraper config
+    get_scraper_config, set_scraper_config, get_all_scraper_config,
 )
 from scraper import run_scrape
 from scheduler import start_scheduler
 
-app = FastAPI(title="PolicyPulse API", version="4.0.0")
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    start_scheduler()
+    yield
+
+app = FastAPI(title="PolicyPulse API", version="4.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,11 +55,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.on_event("startup")
-async def startup():
-    init_db()
-    start_scheduler()
 
 
 # ── ARTICLES ──────────────────────────────────────────────────────────────────
@@ -82,13 +87,15 @@ def get_article(article_id: int):
 
 
 @app.patch("/articles/{article_id}/read")
-def mark_read(article_id: int, body: dict = {}):
+def mark_read(article_id: int, body: dict = None):
+    body = body or {}
     update_article_read(article_id, body.get("read", True))
     return {"ok": True}
 
 
 @app.patch("/articles/{article_id}/staged")
-def mark_staged(article_id: int, body: dict = {}):
+def mark_staged(article_id: int, body: dict = None):
+    body = body or {}
     update_article_staged(article_id, body.get("staged", True))
     return {"ok": True}
 
@@ -106,6 +113,14 @@ def update_article(article_id: int, body: dict):
 @app.patch("/articles/{article_id}/sentiment")
 def update_sentiment(article_id: int, body: dict):
     update_article_sentiment(article_id, body.get("sentiment", "Neutral"))
+    return {"ok": True}
+
+
+@app.patch("/articles/{article_id}/relevance")
+def update_article_relevance_endpoint(article_id: int, body: dict):
+    from database import update_article_relevance
+    score = int(body.get("relevance", 6))
+    update_article_relevance(article_id, score)
     return {"ok": True}
 
 
@@ -190,7 +205,8 @@ def get_article_reader(article_id: int):
     for el in content_node.find_all(True):
         if el.has_attr("style"):   del el["style"]
         if el.has_attr("class"):   del el["class"]
-        for attr in [a for a in el.attrs if a.startswith("on")]:
+        on_attrs = [a for a in list(el.attrs.keys()) if a.startswith("on")]
+        for attr in on_attrs:
             del el[attr]
 
     for img in content_node.find_all("img"):
@@ -234,8 +250,14 @@ def get_article_reader(article_id: int):
 # ── SCRAPER ───────────────────────────────────────────────────────────────────
 
 @app.post("/scrape")
-def trigger_scrape(background_tasks: BackgroundTasks):
-    background_tasks.add_task(run_scrape)
+def trigger_scrape(background_tasks: BackgroundTasks, body: dict = None):
+    body = body or {}
+    filter_config = body.get("filter_config", {})
+    # Persist the config so the scheduler uses it too
+    if filter_config:
+        import json
+        set_scraper_config("news_filter_config", json.dumps(filter_config))
+    background_tasks.add_task(run_scrape, filter_config)
     return {"ok": True, "message": "Scrape started in background"}
 
 
@@ -377,6 +399,31 @@ def add_keyword(body: dict):
 @app.delete("/watchlist/{keyword}")
 def delete_keyword(keyword: str):
     remove_watchlist_keyword(keyword)
+    return {"ok": True}
+
+
+# ── EXCLUSION KEYWORDS ────────────────────────────────────────────────────────
+
+@app.get("/exclusion-keywords")
+def list_exclusion_keywords():
+    from database import get_all_exclusion_keywords
+    return {"keywords": get_all_exclusion_keywords()}
+
+
+@app.post("/exclusion-keywords")
+def create_exclusion_keyword(body: dict):
+    from database import add_exclusion_keyword
+    kw = (body.get("keyword") or "").strip()
+    if not kw:
+        raise HTTPException(status_code=400, detail="keyword required")
+    added = add_exclusion_keyword(kw)
+    return {"ok": True, "added": added}
+
+
+@app.delete("/exclusion-keywords/{keyword_id}")
+def remove_exclusion_keyword_endpoint(keyword_id: int):
+    from database import delete_exclusion_keyword_by_id
+    delete_exclusion_keyword_by_id(keyword_id)
     return {"ok": True}
 
 # ── SUBSCRIBERS ───────────────────────────────────────────────────────────────
@@ -573,21 +620,36 @@ def scholarly_stats():
 
 
 @app.post("/scholarly/scrape")
-def trigger_scholarly_scrape(background_tasks: BackgroundTasks, body: dict = {}):
+def trigger_scholarly_scrape(background_tasks: BackgroundTasks, body: dict = None):
+    body = body or {}
     extra_keywords = body.get("keywords", [])
-    background_tasks.add_task(_run_scholarly_bg, extra_keywords)
+    fetch_config   = body.get("fetch_config", {})
+    # Persist so the scheduler uses the same config
+    if fetch_config:
+        import json
+        set_scraper_config("research_fetch_config", json.dumps(fetch_config))
+    background_tasks.add_task(_run_scholarly_bg, extra_keywords, fetch_config)
     return {"ok": True, "message": "Scholarly scrape started in background"}
 
 
-def _run_scholarly_bg(extra_keywords: list):
+def _run_scholarly_bg(extra_keywords: list, fetch_config: dict = None):
     from scholarly_scraper import run_scholarly_scrape
-    run_scholarly_scrape(extra_keywords=extra_keywords)
+    run_scholarly_scrape(extra_keywords=extra_keywords, fetch_config=fetch_config or {})
 
 
 @app.patch("/scholarly/{article_id}/read")
-def mark_scholarly_read(article_id: int, body: dict = {}):
+def mark_scholarly_read(article_id: int, body: dict = None):
+    body = body or {}
     from scholarly_scraper import update_scholarly_read
     update_scholarly_read(article_id, body.get("read", True))
+    return {"ok": True}
+
+
+@app.patch("/scholarly/{article_id}/relevance")
+def update_scholarly_relevance_endpoint(article_id: int, body: dict):
+    from database import update_scholarly_relevance
+    score = int(body.get("relevance", 6))
+    update_scholarly_relevance(article_id, score)
     return {"ok": True}
 
 
@@ -657,6 +719,36 @@ def remove_scholarly_tag(article_id: int, tag: str):
 @app.get("/health")
 def health():
     return {"status": "ok", "time": datetime.utcnow().isoformat()}
+
+
+# ── SCRAPER CONFIG ────────────────────────────────────────────────────────────
+
+@app.get("/scraper-config")
+def get_scraper_config_endpoint():
+    """Return all saved scraper filter config values."""
+    return {"config": get_all_scraper_config()}
+
+
+@app.post("/scraper-config")
+def set_scraper_config_endpoint(body: dict):
+    """Save one or more config key-value pairs."""
+    import json
+    for key, value in body.items():
+        if isinstance(value, (dict, list)):
+            value = json.dumps(value)
+        set_scraper_config(str(key), str(value))
+    return {"ok": True, "saved": list(body.keys())}
+
+
+@app.delete("/scraper-config/{key}")
+def delete_scraper_config_endpoint(key: str):
+    """Delete a single config key."""
+    from database import get_conn
+    conn = get_conn()
+    conn.execute("DELETE FROM scraper_config WHERE key = ?", (key,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 if __name__ == "__main__":

@@ -1,11 +1,23 @@
 """
-PolicyPulse Scraper v4
-- Sources driven by DB table (scrape_type column decides RSS vs HTML)
-- Fuzzy title deduplication via rapidfuzz before any AI calls are made
-- User-Agent rotation + exponential backoff retry on page fetches
-- Batch AI processing: articles > 3 use asyncio.gather for concurrent calls
-- Google News RSS for watchlist keywords
-- Full article body fetch for real AI summaries and publish dates
+PolicyPulse Scraper v5
+──────────────────────
+Changes from v4:
+  - run_scrape() now accepts an optional filter_config dict.
+  - filter_config is deep-merged with _DEFAULT_FILTER_CONFIG so every key
+    always has a safe value — old callers that pass nothing still work.
+  - _process_and_save() enforces all filter rules:
+      * max_per_source    — cap on raw articles fetched per source
+      * dedup_threshold   — overrides the module constant per-run
+      * jurisdictions     — allowlist (empty list = accept all)
+      * domain_whitelist  — allowlist (empty list = accept all)
+      * must_include      — keyword allowlist on title+summary (empty = skip)
+      * min_relevance     — minimum AI score to keep (default 6)
+      * dry_run           — score + log but don't write to DB
+  - scrape_google_news_keywords() accepts a delay_ms param so the
+    inter-keyword delay is configurable from the UI.
+  - Scheduler still calls run_scrape() with no arguments; it will pick up
+    the stored config via database.get_scraper_config() once main.py
+    passes that through (handled in main.py / scheduler.py updates).
 """
 
 import asyncio
@@ -23,7 +35,7 @@ from rapidfuzz import fuzz
 
 from database import (
     save_article, get_sources, log_scrape,
-    update_source_scraped, get_watchlist_keywords, 
+    update_source_scraped, get_watchlist_keywords,
     get_exclusion_keywords,
 )
 from ai_processor import analyze_article, analyze_articles_batch
@@ -33,25 +45,77 @@ log = logging.getLogger(__name__)
 
 # ── CONSTANTS ─────────────────────────────────────────────────────────────────
 
-REQUEST_TIMEOUT       = 15
-ARTICLE_FETCH_TIMEOUT = 12
-DELAY_BETWEEN_SOURCES = 1.5
+REQUEST_TIMEOUT        = 15
+ARTICLE_FETCH_TIMEOUT  = 12
+DELAY_BETWEEN_SOURCES  = 1.5
 DELAY_BETWEEN_ARTICLES = 0.4
 FUZZY_DEDUP_THRESHOLD  = 88   # token_set_ratio >= this → duplicate
+
+# ── DEFAULT FILTER CONFIG ─────────────────────────────────────────────────────
+# Mirrors the frontend defaults exactly.  Every key must have a value here
+# so _merge_config() can always produce a complete, safe config dict.
+
+_DEFAULT_FILTER_CONFIG: dict = {
+    "min_relevance":    6,
+    "max_per_source":   15,
+    "dedup_threshold":  88,
+    "jurisdictions":    [],   # empty = accept all
+    "domain_whitelist": [],   # empty = accept all
+    "must_include":     [],   # empty = skip check
+    "days_back":        90,   # used by scholarly scraper
+    "gn_delay_ms":      800,
+    "dry_run":          False,
+    "scholarly_databases": {
+        "openalex":    True,
+        "semantic":    True,
+        "pubmed":      True,
+        "doaj":        True,
+        "arxiv":       True,
+        "thinktanks":  True,
+    },
+}
+
+
+def _merge_config(user_config: dict | None) -> dict:
+    """Deep-merge user_config onto _DEFAULT_FILTER_CONFIG.
+
+    The scholarly_databases sub-dict is merged key-by-key so the caller
+    only needs to supply the keys they want to change.  Unknown top-level
+    keys from the frontend are passed through unchanged for forward
+    compatibility.
+    """
+    cfg = dict(_DEFAULT_FILTER_CONFIG)
+    cfg["scholarly_databases"] = dict(_DEFAULT_FILTER_CONFIG["scholarly_databases"])
+
+    if not user_config:
+        return cfg
+
+    for k, v in user_config.items():
+        if k == "scholarly_databases" and isinstance(v, dict):
+            cfg["scholarly_databases"].update(v)
+        else:
+            cfg[k] = v
+
+    # Clamp numeric fields to sane ranges
+    cfg["min_relevance"]    = max(1,   min(10,  int(cfg["min_relevance"])))
+    cfg["max_per_source"]   = max(1,   min(200, int(cfg["max_per_source"])))
+    cfg["dedup_threshold"]  = max(50,  min(100, int(cfg["dedup_threshold"])))
+    cfg["days_back"]        = max(7,   min(730, int(cfg["days_back"])))
+    cfg["gn_delay_ms"]      = max(200, min(10000, int(cfg["gn_delay_ms"])))
+    cfg["dry_run"]          = bool(cfg["dry_run"])
+
+    return cfg
+
 
 # ── USER-AGENT ROTATION ───────────────────────────────────────────────────────
 
 USER_AGENTS = [
-    # Chrome on Windows
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    # Chrome on Mac
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    # Firefox on Windows
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) "
     "Gecko/20100101 Firefox/121.0",
-    # Safari on Mac
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_2) "
     "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
 ]
@@ -67,21 +131,19 @@ _seen_titles: set[str] = set()
 
 # ── FUZZY DEDUPLICATION ───────────────────────────────────────────────────────
 
-def is_duplicate_title(new_title: str, seen: set) -> bool:
-    """
-    Return True if new_title is semantically similar to any title in seen.
-    Uses rapidfuzz token_set_ratio — handles word-order differences and
-    syndication patterns like:
-      "Federal Budget Cuts Research Funding"
-      "Federal Budget: Research Funding Cuts Announced"
-    Threshold 88 catches near-duplicates, misses genuinely different stories.
+def is_duplicate_title(new_title: str, seen: set, threshold: int = FUZZY_DEDUP_THRESHOLD) -> bool:
+    """Return True if new_title is semantically similar to any title in seen.
+
+    Now accepts a threshold parameter so the per-run dedup sensitivity can
+    be overridden via filter_config["dedup_threshold"] without touching the
+    module constant.
     """
     if not seen:
         return False
     new_lower = new_title.lower()
     for existing in seen:
         score = fuzz.token_set_ratio(new_lower, existing.lower())
-        if score >= FUZZY_DEDUP_THRESHOLD:
+        if score >= threshold:
             log.debug(f"  [dedup] '{new_title[:55]}' score={score} vs '{existing[:55]}'")
             return True
     return False
@@ -90,10 +152,10 @@ def is_duplicate_title(new_title: str, seen: set) -> bool:
 # ── ARTICLE BODY + PUBLISH DATE EXTRACTION ───────────────────────────────────
 
 def fetch_article_details(url: str) -> tuple[str, str | None]:
-    """
-    Fetch article page with retry + User-Agent rotation.
+    """Fetch article page with retry + User-Agent rotation.
+
     Returns (article_text, pub_date). Both may be empty/None on all failures.
-    Retries 3 times with backoff: 1s, 2s then give up.
+    Retries 3 times with backoff: 1 s, 2 s, then give up.
     """
     for attempt in range(3):
         headers = {**HEADERS, "User-Agent": USER_AGENTS[attempt % len(USER_AGENTS)]}
@@ -163,24 +225,7 @@ async def fetch_article_details_async(
     url: str,
     session: httpx.AsyncClient,
 ) -> tuple[str, str | None]:
-    """Async version of fetch_article_details() using a shared httpx session.
-
-    Uses the same extraction logic (pub_date meta tags, semantic selectors,
-    body text) and the same UA rotation.  Called concurrently by
-    fetch_all_article_bodies() — one coroutine per article URL.
-
-    The original synchronous fetch_article_details() is kept intact and is
-    still used as a fallback when asyncio.run() is unavailable, and by any
-    other caller that needs a simple synchronous interface.
-
-    Args:
-        url:     Article URL to fetch.
-        session: Shared httpx.AsyncClient — created once per batch in
-                 fetch_all_article_bodies() so connections are reused.
-
-    Returns:
-        (article_text[:5000], pub_date_str) — same contract as the sync version.
-    """
+    """Async version of fetch_article_details() using a shared httpx session."""
     for attempt in range(3):
         headers = {**HEADERS, "User-Agent": USER_AGENTS[attempt % len(USER_AGENTS)]}
         try:
@@ -188,7 +233,6 @@ async def fetch_article_details_async(
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
 
-            # ── 1. Extract publish date (same logic as sync version) ──────────
             pub_date = None
             date_metas = [
                 ("meta", {"property": "article:published_time"}),
@@ -211,7 +255,6 @@ async def fetch_article_details_async(
                     if pub_date:
                         break
 
-            # ── 2. Extract article body text (same logic as sync version) ─────
             for tag in soup(["script", "style", "nav", "footer", "header",
                              "aside", "figure", "form", "noscript", "iframe",
                              "advertisement", "banner"]):
@@ -247,24 +290,8 @@ async def fetch_article_details_async(
     return "", None
 
 
-async def fetch_all_article_bodies(
-    urls: list[str],
-) -> list[tuple[str, str | None]]:
-    """Fetch all article body pages concurrently using one shared httpx session.
-
-    Creates a single AsyncClient (so TCP connections are reused across the
-    batch) and gathers all fetch_article_details_async() coroutines at once.
-    asyncio.gather preserves order — results[i] corresponds to urls[i].
-
-    Timeout is set to ARTICLE_FETCH_TIMEOUT per request.  Slow or unreachable
-    URLs return ("", None) rather than failing the whole batch.
-
-    Args:
-        urls: List of article URLs to fetch in parallel.
-
-    Returns:
-        List of (article_text, pub_date) tuples, same length and order as urls.
-    """
+async def fetch_all_article_bodies(urls: list[str]) -> list[tuple[str, str | None]]:
+    """Fetch all article body pages concurrently using one shared httpx session."""
     timeout = httpx.Timeout(ARTICLE_FETCH_TIMEOUT, connect=5.0)
     async with httpx.AsyncClient(
         timeout=timeout,
@@ -274,7 +301,6 @@ async def fetch_all_article_bodies(
         tasks = [fetch_article_details_async(url, session) for url in urls]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # Replace any unhandled exceptions with the safe empty fallback
     cleaned = []
     for i, r in enumerate(results):
         if isinstance(r, Exception):
@@ -304,7 +330,7 @@ def _parse_date(raw: str) -> str | None:
     return None
 
 
-# ── RSS SCRAPING — no retry needed, feeds are stable ─────────────────────────
+# ── RSS SCRAPING ──────────────────────────────────────────────────────────────
 
 def scrape_rss(url, source_name, extra_tag=None):
     articles = []
@@ -336,7 +362,7 @@ def scrape_rss(url, source_name, extra_tag=None):
     return articles
 
 
-# ── HTML SCRAPING — retry + UA rotation on initial page fetch ─────────────────
+# ── HTML SCRAPING ─────────────────────────────────────────────────────────────
 
 def scrape_generic(url, source_name, base_url=None):
     articles = []
@@ -390,9 +416,19 @@ def build_google_news_url(keyword, region="CA", lang="en"):
     return f"https://news.google.com/rss/search?q={q}&hl={lang}-{region}&gl={region}&ceid={region}:{lang}"
 
 
-def scrape_google_news_keywords(keywords):
+def scrape_google_news_keywords(keywords: list[str], delay_ms: int = 800) -> list[dict]:
+    """Scrape Google News RSS for each watchlist keyword.
+
+    Args:
+        keywords: List of search terms.
+        delay_ms: Milliseconds to wait between keyword fetches.  Configurable
+                  via filter_config["gn_delay_ms"] so the user can back off
+                  if they're hitting rate limits.
+    """
     all_articles = []
-    seen_urls = set()
+    seen_urls    = set()
+    delay_s      = max(0.2, delay_ms / 1000)
+
     for kw in keywords:
         if not kw or len(kw) < 2:
             continue
@@ -403,36 +439,67 @@ def scrape_google_news_keywords(keywords):
             if art["url"] not in seen_urls:
                 seen_urls.add(art["url"])
                 all_articles.append(art)
-        time.sleep(0.8)
+        time.sleep(delay_s)
+
     log.info(f"  Google News total: {len(all_articles)} articles from {len(keywords)} keywords")
     return all_articles
 
 
 # ── MAIN SCRAPE ───────────────────────────────────────────────────────────────
 
-def run_scrape():
+def run_scrape(filter_config: dict | None = None) -> dict:
+    """Main scrape entry point.
+
+    Args:
+        filter_config: Optional dict sent by the frontend UI (or loaded from
+                       the DB by the scheduler).  Merged with defaults so
+                       missing keys are always safe.  Pass None (or omit) to
+                       use all defaults — backward-compatible with v4 callers.
+
+    Returns:
+        {"added": int, "errors": list[str]}
+    """
     global _seen_titles
     _seen_titles = set()   # reset dedup state for this run
 
-    log.info("=== PolicyPulse scrape started ===")
-    # Load exclusion list once per run — lowercase already stored in DB
+    cfg = _merge_config(filter_config)
+
+    log.info(
+        f"=== PolicyPulse scrape started "
+        f"[min_rel={cfg['min_relevance']}, max_per_src={cfg['max_per_source']}, "
+        f"dedup={cfg['dedup_threshold']}%, dry_run={cfg['dry_run']}] ==="
+    )
+
     exclusions = get_exclusion_keywords()
     log.info(f"Exclusion keywords active: {len(exclusions)}")
-    total_added = 0
-    all_errors  = []
+
+    total_added, all_errors = 0, []
 
     sources = get_sources()
     for source in [s for s in sources if s["active"]]:
         name        = source["name"]
         url         = source["url"]
         scrape_type = source.get("scrape_type", "html")
+
+        # ── Source-level jurisdiction pre-filter ─────────────────────────────
+        # Skip entire source before making any network calls if its
+        # jurisdiction isn't in the allowlist.  Empty list = accept all.
+        if cfg["jurisdictions"]:
+            src_juris = source.get("jurisdiction", "")
+            if src_juris not in cfg["jurisdictions"]:
+                log.info(
+                    f"  [config] Skipping '{name}' — "
+                    f"jurisdiction '{src_juris}' not in allowlist"
+                )
+                continue
+
         log.info(f"Scraping [{scrape_type.upper()}]: {name}")
         try:
             if scrape_type == "rss":
                 raw = scrape_rss(url, name)
             else:
                 raw = scrape_generic(url, name, base_url=_base_url(url))
-            added = _process_and_save(raw, source, exclusions=exclusions)
+            added = _process_and_save(raw, source, exclusions=exclusions, cfg=cfg)
             total_added += added
             update_source_scraped(name, added)
             log.info(f"  -> {added} new articles")
@@ -441,13 +508,19 @@ def run_scrape():
             log.error(f"Error [{name}]: {e}")
         time.sleep(DELAY_BETWEEN_SOURCES)
 
+    # ── Google News keyword feed ──────────────────────────────────────────────
     try:
         keywords = get_watchlist_keywords()
         if keywords:
             log.info(f"Google News keywords: {keywords}")
-            gn_raw = scrape_google_news_keywords(keywords)
+            gn_raw    = scrape_google_news_keywords(keywords, delay_ms=cfg["gn_delay_ms"])
             gn_source = {"name": "Google News (Keyword Feed)", "jurisdiction": "Pan-Canadian"}
-            added = _process_and_save(gn_raw, gn_source, relevance_boost=1, exclusions=exclusions)
+            # Google News results get +1 relevance boost because they matched
+            # an explicit watchlist keyword the user cares about.
+            added = _process_and_save(
+                gn_raw, gn_source, relevance_boost=1,
+                exclusions=exclusions, cfg=cfg,
+            )
             total_added += added
             log.info(f"  -> {added} new articles from Google News keywords")
         else:
@@ -457,8 +530,9 @@ def run_scrape():
         log.error(f"Google News error: {e}")
 
     log_scrape(total_added, "; ".join(all_errors))
-    log.info(f"=== Done. {total_added} new, {len(all_errors)} errors ===")
-    return {"added": total_added, "errors": all_errors}
+    dry_note = " (DRY RUN — nothing saved)" if cfg["dry_run"] else ""
+    log.info(f"=== Done. {total_added} new{dry_note}, {len(all_errors)} errors ===")
+    return {"added": total_added, "errors": all_errors, "dry_run": cfg["dry_run"]}
 
 
 def _base_url(url: str) -> str:
@@ -469,22 +543,55 @@ def _base_url(url: str) -> str:
 
 # ── PROCESS AND SAVE ──────────────────────────────────────────────────────────
 
-def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
-    """
-    Phase 1 — validate, fuzzy-dedup, parallel-fetch all article bodies at once
-    Phase 2 — AI analysis: batch async if > 3 articles, else serial sync
-    Phase 3 — save to DB
-    """
-    source_name  = source["name"]
-    jurisdiction = source.get("jurisdiction", "Unknown")
+def _process_and_save(
+    raw_articles,
+    source,
+    relevance_boost: int = 0,
+    exclusions: list | None = None,
+    cfg: dict | None = None,
+) -> int:
+    """Apply all filter rules, fetch bodies in parallel, run AI, and save.
 
-    # ── Phase 1a — validate and dedup ─────────────────────────────────────────
-    # Collect all articles that pass validation and dedup into a candidates
-    # list before touching the network.  This lets us fire all body fetches
-    # in a single parallel batch instead of one sequential request per article.
-    candidates = []
+    Phase 1 — validate, exclusion check, jurisdiction/domain pre-filter,
+               fuzzy-dedup, cap at max_per_source, parallel body fetch
+    Phase 2 — AI analysis (batch async if > 3, else serial sync)
+    Phase 3 — apply min_relevance / domain whitelist / must_include /
+               dry_run, then save to DB
+
+    Args:
+        raw_articles:   List of raw article dicts from a scraper function.
+        source:         Source dict from the DB (has "name", "jurisdiction").
+        relevance_boost:Extra points to add to AI relevance score (e.g. +1
+                        for Google News keyword hits).
+        exclusions:     Loaded once per run in run_scrape(); passed in to
+                        avoid a DB round-trip per source.
+        cfg:            Merged filter config from _merge_config().
+
+    Returns:
+        Number of articles actually added (or would-have-added in dry_run).
+    """
+    if cfg is None:
+        cfg = _merge_config(None)
+
+    source_name   = source["name"]
+    jurisdiction  = source.get("jurisdiction", "Unknown")
+
+    # Config values used in this function
+    min_relevance    = cfg["min_relevance"]
+    max_per_source   = cfg["max_per_source"]
+    dedup_threshold  = cfg["dedup_threshold"]
+    domain_whitelist = [d.lower() for d in cfg["domain_whitelist"]]
+    must_include_kws = [k.lower() for k in cfg["must_include"]]
+    dry_run          = cfg["dry_run"]
+
+    # ── Phase 1a: validate, exclusion, dedup, cap ─────────────────────────────
+    candidates: list[dict] = []
 
     for raw in raw_articles:
+        # Cap early to avoid fetching bodies we'll discard anyway
+        if len(candidates) >= max_per_source:
+            break
+
         title      = (raw.get("title") or "").strip()
         url        = (raw.get("url")   or "").strip()
         pub_date   = raw.get("pub_date", datetime.utcnow().date().isoformat())
@@ -492,15 +599,16 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
 
         if not title or not url or len(title) < 10:
             continue
-        # Exclusion keyword check — skip before any network call
+
+        # Exclusion keyword check (title only — fast, no AI needed)
         if exclusions:
             title_lower = title.lower()
             if any(kw in title_lower for kw in exclusions):
                 log.debug(f"  [excluded] {title[:60]}")
                 continue
 
-        # Fuzzy dedup — still runs before any network call
-        if is_duplicate_title(title, _seen_titles):
+        # Fuzzy dedup using the per-run threshold from config
+        if is_duplicate_title(title, _seen_titles, threshold=dedup_threshold):
             continue
         _seen_titles.add(title)
 
@@ -515,28 +623,22 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
     if not candidates:
         return 0
 
-    # ── Phase 1b — parallel body fetch ────────────────────────────────────────
-    # All article pages for this source are fetched concurrently in one call.
-    # asyncio.gather preserves order so body_results[i] matches candidates[i].
-    # Falls back to sequential requests if asyncio.run() is unavailable
-    # (e.g. when called from inside an already-running event loop).
+    # ── Phase 1b: parallel body fetch ────────────────────────────────────────
     urls = [c["url"] for c in candidates]
     log.info(f"  Fetching {len(urls)} article bodies in parallel")
 
     try:
         body_results = asyncio.run(fetch_all_article_bodies(urls))
     except RuntimeError:
-        # Already inside a running event loop (e.g. called from a test or
-        # an async FastAPI route) — fall back to sequential sync fetching.
         log.warning("  asyncio.run() unavailable — falling back to sequential body fetch")
         body_results = []
-        for url in urls:
-            body_results.append(fetch_article_details(url))
+        for u in urls:
+            body_results.append(fetch_article_details(u))
             time.sleep(DELAY_BETWEEN_ARTICLES)
 
-    # ── Phase 1c — assemble batch and meta arrays ──────────────────────────────
-    batch = []
-    meta  = []
+    # ── Phase 1c: assemble batch ──────────────────────────────────────────────
+    batch: list[dict] = []
+    meta:  list[dict] = []
 
     for candidate, (article_text, extracted_date) in zip(candidates, body_results):
         pub_date = extracted_date if extracted_date else candidate["pub_date"]
@@ -556,13 +658,12 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
     if not batch:
         return 0
 
-    # ── Phase 2 — AI ──────────────────────────────────────────────────────────
+    # ── Phase 2: AI ───────────────────────────────────────────────────────────
     if len(batch) > 3:
         log.info(f"  Batch AI: {len(batch)} articles")
         try:
             ai_results = asyncio.run(analyze_articles_batch(batch))
         except RuntimeError:
-            # Fallback if already inside a running event loop
             log.warning("  asyncio.run() unavailable — falling back to serial AI")
             ai_results = [
                 analyze_article(
@@ -580,22 +681,74 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
             for b in batch
         ]
 
-    # ── Phase 3 — save ────────────────────────────────────────────────────────
+    # ── Phase 3: filter + save ────────────────────────────────────────────────
     added = 0
+
     for ai, b, m in zip(ai_results, batch, meta):
+        # AI returned None → scored below its own internal threshold (6)
         if ai is None:
             continue
+
+        # Apply caller-supplied relevance boost before any config checks
         if relevance_boost:
             ai["relevance"] = min(10, ai["relevance"] + relevance_boost)
+
+        # ── min_relevance filter ─────────────────────────────────────────────
+        # The AI processor already drops articles below 6, but the user may
+        # have set a higher threshold (e.g. 8 = only high-priority items).
+        if ai["relevance"] < min_relevance:
+            log.debug(
+                f"  [config] Dropping '{b['title'][:55]}' — "
+                f"relevance {ai['relevance']} < {min_relevance}"
+            )
+            continue
+
+        # ── Domain whitelist ─────────────────────────────────────────────────
+        # AI may assign a comma-separated domain string; check each segment.
+        if domain_whitelist:
+            article_domains = [
+                d.strip().lower()
+                for d in (ai.get("domain") or "").split(",")
+            ]
+            if not any(wd in article_domains for wd in domain_whitelist):
+                log.debug(
+                    f"  [config] Dropping '{b['title'][:55]}' — "
+                    f"domain '{ai.get('domain')}' not in whitelist"
+                )
+                continue
+
+        # ── Must-include keyword check ───────────────────────────────────────
+        # Checked against title + AI summary (not raw body) to keep it fast.
+        if must_include_kws:
+            hay = (b["title"] + " " + (ai.get("summary") or "")).lower()
+            if not any(kw in hay for kw in must_include_kws):
+                log.debug(
+                    f"  [config] Dropping '{b['title'][:55]}' — "
+                    f"no must-include keyword found"
+                )
+                continue
+
+        # ── Assemble tags ────────────────────────────────────────────────────
         tags = ai.get("tags", [])
         if m["forced_tag"] and m["forced_tag"] not in tags:
             tags.insert(0, m["forced_tag"])
         ai["tags"] = tags
 
+        # ── Dry run ──────────────────────────────────────────────────────────
+        if dry_run:
+            log.info(
+                f"  [DRY RUN] Would save: '{b['title'][:60]}' "
+                f"(rel={ai['relevance']}, domain={ai.get('domain')}, "
+                f"juris={ai.get('jurisdiction')})"
+            )
+            added += 1   # count as would-have-added so UI shows a real number
+            continue
+
+        # ── Persist ──────────────────────────────────────────────────────────
         inserted = save_article(
-            title=b["title"],    url=b["url"],       url_hash=m["url_hash"],
-            source=source_name,  jurisdiction=jurisdiction,
-            domain=ai["domain"], relevance=ai["relevance"],
+            title=b["title"],     url=b["url"],        url_hash=m["url_hash"],
+            source=source_name,   jurisdiction=jurisdiction,
+            domain=ai["domain"],  relevance=ai["relevance"],
             sentiment=ai["sentiment"], summary=ai["summary"],
             why_it_matters=ai["why_it_matters"],
             pub_date=m["pub_date"], tags=",".join(ai["tags"]),

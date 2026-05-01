@@ -1,12 +1,24 @@
 """
-PolicyPulse Scholarly Scraper v2
-────────────────────────────────
-Changes from v1:
-  - Canadian think-tank sources now read from `research_sources` DB table
-    (fully manageable from the app UI) instead of a hardcoded dict.
-  - Scholarly search keywords now read from `scholarly_keywords` DB table.
-  - All open-access API sources (OpenAlex, Semantic Scholar, PubMed, DOAJ, arXiv)
-    remain unchanged — they're queried by keyword, not by URL.
+PolicyPulse Scholarly Scraper v3
+─────────────────────────────────
+Changes from v2:
+  - run_scholarly_scrape() now accepts an optional filter_config dict
+    (same shape as scraper.py's filter_config).
+  - Individual databases (OpenAlex, Semantic Scholar, PubMed, DOAJ, arXiv,
+    Canadian Think-Tanks) can be toggled on/off via
+    filter_config["scholarly_databases"].
+  - days_back for OpenAlex is now taken from filter_config["days_back"]
+    instead of being hardcoded at 180.
+  - min_relevance is enforced after AI scoring — articles below the user's
+    threshold are discarded even if they cleared the AI's internal threshold
+    of 6.
+  - domain_whitelist and must_include keyword filters applied after AI
+    scoring, consistent with scraper.py.
+  - dry_run mode: AI scores and logs would-have-saved articles but does not
+    write to the DB.
+  - All fetch functions (OpenAlex, Semantic Scholar, DOAJ, PubMed, arXiv,
+    think-tanks) unchanged — only the orchestrator run_scholarly_scrape()
+    and the save path are touched.
 """
 
 import asyncio
@@ -38,8 +50,46 @@ HTML_HEADERS = {
 }
 TIMEOUT = 20
 
+# ── DEFAULT FILTER CONFIG (scholarly subset) ─────────────────────────────────
+# Only the keys that the scholarly scraper actually uses.  The full default
+# is owned by scraper.py; this is just a local fallback so we never KeyError.
 
-# ── OPENALEX ───────────────────────────────────────────────────────────────────
+_SCHOLARLY_CONFIG_DEFAULTS: dict = {
+    "min_relevance":    6,
+    "days_back":        90,
+    "domain_whitelist": [],
+    "must_include":     [],
+    "dry_run":          False,
+    "scholarly_databases": {
+        "openalex":    True,
+        "semantic":    True,
+        "pubmed":      True,
+        "doaj":        True,
+        "arxiv":       True,
+        "thinktanks":  True,
+    },
+}
+
+
+def _resolve_scholarly_config(filter_config: dict | None) -> dict:
+    """Merge filter_config onto scholarly defaults, clamping numeric fields."""
+    cfg = dict(_SCHOLARLY_CONFIG_DEFAULTS)
+    cfg["scholarly_databases"] = dict(_SCHOLARLY_CONFIG_DEFAULTS["scholarly_databases"])
+
+    if filter_config:
+        for k, v in filter_config.items():
+            if k == "scholarly_databases" and isinstance(v, dict):
+                cfg["scholarly_databases"].update(v)
+            else:
+                cfg[k] = v
+
+    cfg["min_relevance"] = max(1, min(10, int(cfg["min_relevance"])))
+    cfg["days_back"]     = max(7, min(730, int(cfg["days_back"])))
+    cfg["dry_run"]       = bool(cfg["dry_run"])
+    return cfg
+
+
+# ── OPENALEX ──────────────────────────────────────────────────────────────────
 
 def fetch_openalex(keywords: list[str], days_back: int = 90) -> list[dict]:
     results = []
@@ -114,7 +164,7 @@ def _reconstruct_abstract(inv_index: dict) -> str:
     return " ".join(positions[k] for k in sorted(positions.keys()))[:1500]
 
 
-# ── SEMANTIC SCHOLAR ───────────────────────────────────────────────────────────
+# ── SEMANTIC SCHOLAR ──────────────────────────────────────────────────────────
 
 def fetch_semantic_scholar(keywords: list[str]) -> list[dict]:
     results = []
@@ -177,7 +227,7 @@ def fetch_semantic_scholar(keywords: list[str]) -> list[dict]:
     return results
 
 
-# ── DOAJ ──────────────────────────────────────────────────────────────────────
+# ── DOAJ ─────────────────────────────────────────────────────────────────────
 
 def fetch_doaj(keywords: list[str]) -> list[dict]:
     results = []
@@ -360,17 +410,14 @@ def fetch_arxiv(keywords: list[str]) -> list[dict]:
     return results
 
 
-# ── CANADIAN THINK-TANKS — now driven by research_sources DB ─────────────────
+# ── CANADIAN THINK-TANKS ──────────────────────────────────────────────────────
 
 def fetch_canadian_think_tanks() -> list[dict]:
-    """
-    Scrape publications from think-tank sources stored in research_sources table.
-    Falls back to an empty list if the table doesn't exist yet.
+    """Scrape publications from think-tank sources stored in research_sources table.
 
     All source pages are fetched concurrently using fetch_all_think_tank_pages()
-    (one httpx.AsyncClient shared across the batch).  HTML parsing runs
-    sequentially after the parallel fetch completes — parsing is CPU-bound
-    and fast enough that parallelising it offers no benefit.
+    (one httpx.AsyncClient shared across the batch). HTML parsing runs
+    sequentially after the parallel fetch completes.
     """
     from database import get_research_sources
     results = []
@@ -384,12 +431,10 @@ def fetch_canadian_think_tanks() -> list[dict]:
     if not db_sources:
         return results
 
-    # ── Parallel fetch all think-tank pages at once ───────────────────────────
     log.info(f"  Fetching {len(db_sources)} think-tank pages in parallel")
     try:
         page_results = asyncio.run(fetch_all_think_tank_pages(db_sources))
     except RuntimeError:
-        # Already inside a running event loop — fall back to sequential sync
         log.warning("  asyncio.run() unavailable — falling back to sequential think-tank fetch")
         page_results = []
         for source in db_sources:
@@ -401,7 +446,6 @@ def fetch_canadian_think_tanks() -> list[dict]:
                 html = None
             page_results.append((source, html))
 
-    # ── Parse each page (sequential — parsing is fast) ───────────────────────
     for source, html in page_results:
         name     = source["name"]
         url      = source["url"]
@@ -417,7 +461,6 @@ def fetch_canadian_think_tanks() -> list[dict]:
             seen = set()
             source_results = []
 
-            # Generic selectors that work across most think-tank sites
             selectors = ["h2 a", "h3 a", "article a", ".entry-title a",
                          ".views-row a", ".node-title a", ".pub-title a",
                          ".views-field-title a", "td a"]
@@ -428,7 +471,8 @@ def fetch_canadian_think_tanks() -> list[dict]:
                     href  = el.get("href", "")
                     if not title or len(title) < 15 or href in seen:
                         continue
-                    if any(w in title.lower() for w in ["home","about","contact","menu","sign in","donate"]):
+                    if any(w in title.lower() for w in
+                           ["home","about","contact","menu","sign in","donate"]):
                         continue
                     if not href.startswith("http"):
                         href = urljoin(base_url, href)
@@ -458,22 +502,12 @@ def fetch_canadian_think_tanks() -> list[dict]:
     return results
 
 
-# ── PARALLEL THINK-TANK PAGE FETCH ────────────────────────────────────────────
+# ── PARALLEL THINK-TANK PAGE FETCH ───────────────────────────────────────────
 
 async def fetch_think_tank_page_async(
     source: dict,
     session: httpx.AsyncClient,
 ) -> tuple[dict, str | None]:
-    """Fetch one think-tank publications page asynchronously.
-
-    Args:
-        source:  A research_sources row dict with at minimum 'name' and 'url'.
-        session: Shared httpx.AsyncClient from fetch_all_think_tank_pages().
-
-    Returns:
-        (source_dict, html_text | None) — html_text is None on failure so the
-        caller can skip parsing for that source without crashing the batch.
-    """
     name = source["name"]
     url  = source["url"]
     try:
@@ -496,23 +530,6 @@ async def fetch_think_tank_page_async(
 async def fetch_all_think_tank_pages(
     sources: list[dict],
 ) -> list[tuple[dict, str | None]]:
-    """Fetch all active think-tank publications pages concurrently.
-
-    Creates one shared httpx.AsyncClient so TCP connections are reused.
-    Results are returned in the same order as the input sources list.
-    Each element is (source_dict, html_text | None); a None html means
-    that source failed and should be skipped during parsing.
-
-    This replaces the sequential requests.get() + time.sleep(1.5) loop
-    that previously ran inside fetch_canadian_think_tanks().  For 6 default
-    think-tank sources the wall-clock time drops from ~9 s to ~2 s.
-
-    Args:
-        sources: List of active research_sources row dicts.
-
-    Returns:
-        List of (source, html | None) tuples, same order as input.
-    """
     timeout = httpx.Timeout(TIMEOUT, connect=5.0)
     async with httpx.AsyncClient(
         timeout=timeout,
@@ -538,7 +555,7 @@ def _base_url(url: str) -> str:
     return f"{p.scheme}://{p.netloc}"
 
 
-# ── AI ANALYSIS ───────────────────────────────────────────────────────────────
+# ── AI ANALYSIS ──────────────────────────────────────────────────────────────
 
 def analyze_scholarly(title: str, abstract: str, source: str,
                       url: str, database: str) -> dict | None:
@@ -547,7 +564,7 @@ def analyze_scholarly(title: str, abstract: str, source: str,
     return analyze_article(title=title, url=url, source_name=source, article_text=combined)
 
 
-# ── DATABASE HELPERS ──────────────────────────────────────────────────────────
+# ── DATABASE HELPERS ─────────────────────────────────────────────────────────
 
 def ensure_scholarly_table():
     from database import get_conn
@@ -659,7 +676,8 @@ def get_scholarly_stats() -> dict:
     total  = conn.execute("SELECT COUNT(*) FROM scholarly_articles").fetchone()[0]
     unread = conn.execute("SELECT COUNT(*) FROM scholarly_articles WHERE read=0").fetchone()[0]
     dbs    = conn.execute(
-        "SELECT database_name, COUNT(*) as n FROM scholarly_articles GROUP BY database_name ORDER BY n DESC"
+        "SELECT database_name, COUNT(*) as n FROM scholarly_articles "
+        "GROUP BY database_name ORDER BY n DESC"
     ).fetchall()
     conn.close()
     return {"total": total, "unread": unread, "databases": [dict(r) for r in dbs]}
@@ -668,65 +686,119 @@ def get_scholarly_stats() -> dict:
 def update_scholarly_read(article_id: int, read: bool):
     from database import get_conn
     conn = get_conn()
-    conn.execute("UPDATE scholarly_articles SET read=? WHERE id=?", (1 if read else 0, article_id))
+    conn.execute(
+        "UPDATE scholarly_articles SET read=? WHERE id=?",
+        (1 if read else 0, article_id)
+    )
     conn.commit()
     conn.close()
 
 
-# ── MAIN SCRAPE ORCHESTRATOR ───────────────────────────────────────────────────
+# ── MAIN SCRAPE ORCHESTRATOR ──────────────────────────────────────────────────
 
-def run_scholarly_scrape(extra_keywords: list[str] | None = None) -> dict:
+def run_scholarly_scrape(
+    extra_keywords: list[str] | None = None,
+    filter_config: dict | None = None,
+) -> dict:
+    """Fetch, score, filter, and save scholarly articles.
+
+    Args:
+        extra_keywords: Additional keywords beyond the DB watchlist (e.g.
+                        passed in from the frontend's manual trigger).
+        filter_config:  Optional filter rules dict from the frontend UI or
+                        the stored DB config.  Merged with defaults so missing
+                        keys are always safe.  Pass None to use all defaults
+                        (backward-compatible with v2 callers).
+
+    Returns:
+        {"added": int, "skipped": int, "errors": list[str], "dry_run": bool}
+    """
     log.info("=== PolicyPulse Scholarly Scrape started ===")
     ensure_scholarly_table()
 
-    # Keywords: from scholarly_keywords DB table + watchlist + extras passed in
+    cfg = _resolve_scholarly_config(filter_config)
+    dbs = cfg["scholarly_databases"]
+
+    log.info(
+        f"  [config] min_rel={cfg['min_relevance']}, "
+        f"days_back={cfg['days_back']}, dry_run={cfg['dry_run']}, "
+        f"db_toggles={dbs}"
+    )
+
+    # ── Build keyword list ────────────────────────────────────────────────────
     from database import get_scholarly_keywords, get_watchlist_keywords
-    db_kws       = [r["keyword"] for r in get_scholarly_keywords() if r.get("active")]
+    db_kws        = [r["keyword"] for r in get_scholarly_keywords() if r.get("active")]
     watchlist_kws = get_watchlist_keywords()
     keywords = list(set(db_kws + watchlist_kws + (extra_keywords or [])))
     if not keywords:
         log.warning("No scholarly keywords configured — using built-in defaults")
-        keywords = ["Indigenous policy Canada", "post-secondary education Canada",
-                    "reconciliation Canada", "pharmacare Canada"]
+        keywords = [
+            "Indigenous policy Canada",
+            "post-secondary education Canada",
+            "reconciliation Canada",
+            "pharmacare Canada",
+        ]
 
+    # ── Fetch from each enabled database ─────────────────────────────────────
     all_items: list[dict] = []
 
-    try:
-        all_items.extend(fetch_openalex(keywords[:6], days_back=180))
-    except Exception as e:
-        log.error(f"OpenAlex failed: {e}")
-
-    try:
-        all_items.extend(fetch_semantic_scholar(keywords[:4]))
-    except Exception as e:
-        log.error(f"Semantic Scholar failed: {e}")
-
-    try:
-        all_items.extend(fetch_canadian_think_tanks())
-    except Exception as e:
-        log.error(f"Think-tanks failed: {e}")
-
-    try:
-        all_items.extend(fetch_doaj(keywords[:3]))
-    except Exception as e:
-        log.error(f"DOAJ failed: {e}")
-
-    health_kws = [k for k in keywords if any(w in k.lower() for w in
-                  ["health", "pharmacare", "fnha", "indigenous", "mental"])]
-    if health_kws:
+    if dbs.get("openalex", True):
         try:
-            all_items.extend(fetch_pubmed(health_kws[:3]))
+            all_items.extend(fetch_openalex(keywords[:6], days_back=cfg["days_back"]))
         except Exception as e:
-            log.error(f"PubMed failed: {e}")
+            log.error(f"OpenAlex failed: {e}")
+    else:
+        log.info("  [config] OpenAlex skipped (disabled)")
 
-    try:
-        all_items.extend(fetch_arxiv([k for k in keywords if len(k) > 6][:3]))
-    except Exception as e:
-        log.error(f"arXiv failed: {e}")
+    if dbs.get("semantic", True):
+        try:
+            all_items.extend(fetch_semantic_scholar(keywords[:4]))
+        except Exception as e:
+            log.error(f"Semantic Scholar failed: {e}")
+    else:
+        log.info("  [config] Semantic Scholar skipped (disabled)")
 
-    # Deduplicate by URL
+    if dbs.get("thinktanks", True):
+        try:
+            all_items.extend(fetch_canadian_think_tanks())
+        except Exception as e:
+            log.error(f"Think-tanks failed: {e}")
+    else:
+        log.info("  [config] Canadian Think-Tanks skipped (disabled)")
+
+    if dbs.get("doaj", True):
+        try:
+            all_items.extend(fetch_doaj(keywords[:3]))
+        except Exception as e:
+            log.error(f"DOAJ failed: {e}")
+    else:
+        log.info("  [config] DOAJ skipped (disabled)")
+
+    if dbs.get("pubmed", True):
+        health_kws = [
+            k for k in keywords
+            if any(w in k.lower() for w in
+                   ["health", "pharmacare", "fnha", "indigenous", "mental"])
+        ]
+        if health_kws:
+            try:
+                all_items.extend(fetch_pubmed(health_kws[:3]))
+            except Exception as e:
+                log.error(f"PubMed failed: {e}")
+    else:
+        log.info("  [config] PubMed skipped (disabled)")
+
+    if dbs.get("arxiv", True):
+        try:
+            all_items.extend(fetch_arxiv([k for k in keywords if len(k) > 6][:3]))
+        except Exception as e:
+            log.error(f"arXiv failed: {e}")
+    else:
+        log.info("  [config] arXiv skipped (disabled)")
+
+    # ── Deduplicate by URL ────────────────────────────────────────────────────
     seen_urls: set[str] = set()
-    unique_items = []
+    unique_items: list[dict] = []
     for item in all_items:
         url = item.get("url", "").strip()
         if url and url not in seen_urls:
@@ -734,6 +806,12 @@ def run_scholarly_scrape(extra_keywords: list[str] | None = None) -> dict:
             unique_items.append(item)
 
     log.info(f"Scholarly: {len(unique_items)} unique items to process")
+
+    # ── Pre-compute config filter values once ─────────────────────────────────
+    min_relevance    = cfg["min_relevance"]
+    domain_whitelist = [d.lower() for d in cfg.get("domain_whitelist", [])]
+    must_include_kws = [k.lower() for k in cfg.get("must_include", [])]
+    dry_run          = cfg["dry_run"]
 
     added, skipped, errors = 0, 0, []
 
@@ -744,6 +822,7 @@ def run_scholarly_scrape(extra_keywords: list[str] | None = None) -> dict:
             continue
 
         try:
+            # ── AI scoring ───────────────────────────────────────────────────
             ai = analyze_scholarly(
                 title=title,
                 abstract=item.get("abstract", ""),
@@ -755,10 +834,57 @@ def run_scholarly_scrape(extra_keywords: list[str] | None = None) -> dict:
                 skipped += 1
                 continue
 
+            # Apply source-level relevance boost (set per think-tank source)
             boost = item.get("relevance_boost", 0)
             if boost:
                 ai["relevance"] = min(10, ai["relevance"] + boost)
 
+            # ── min_relevance filter ─────────────────────────────────────────
+            if ai["relevance"] < min_relevance:
+                log.debug(
+                    f"  [config] Dropping '{title[:55]}' — "
+                    f"relevance {ai['relevance']} < {min_relevance}"
+                )
+                skipped += 1
+                continue
+
+            # ── Domain whitelist ─────────────────────────────────────────────
+            if domain_whitelist:
+                article_domains = [
+                    d.strip().lower()
+                    for d in (ai.get("domain") or "").split(",")
+                ]
+                if not any(wd in article_domains for wd in domain_whitelist):
+                    log.debug(
+                        f"  [config] Dropping '{title[:55]}' — "
+                        f"domain '{ai.get('domain')}' not whitelisted"
+                    )
+                    skipped += 1
+                    continue
+
+            # ── Must-include keyword check ────────────────────────────────────
+            if must_include_kws:
+                hay = (title + " " + (ai.get("summary") or "") + " " +
+                       item.get("abstract", "")[:500]).lower()
+                if not any(kw in hay for kw in must_include_kws):
+                    log.debug(
+                        f"  [config] Dropping '{title[:55]}' — "
+                        f"no must-include keyword found"
+                    )
+                    skipped += 1
+                    continue
+
+            # ── Dry run ───────────────────────────────────────────────────────
+            if dry_run:
+                log.info(
+                    f"  [DRY RUN] Would save: '{title[:60]}' "
+                    f"(rel={ai['relevance']}, db={item.get('database')}, "
+                    f"domain={ai.get('domain')})"
+                )
+                added += 1
+                continue
+
+            # ── Persist ───────────────────────────────────────────────────────
             if save_scholarly_article(item, ai):
                 added += 1
             else:
@@ -770,5 +896,9 @@ def run_scholarly_scrape(extra_keywords: list[str] | None = None) -> dict:
 
         time.sleep(0.3)
 
-    log.info(f"=== Scholarly done. Added: {added}, Skipped: {skipped}, Errors: {len(errors)} ===")
-    return {"added": added, "skipped": skipped, "errors": errors}
+    dry_note = " (DRY RUN — nothing saved)" if dry_run else ""
+    log.info(
+        f"=== Scholarly done. "
+        f"Added: {added}{dry_note}, Skipped: {skipped}, Errors: {len(errors)} ==="
+    )
+    return {"added": added, "skipped": skipped, "errors": errors, "dry_run": dry_run}

@@ -10,7 +10,6 @@ v2: Added full CRUD for sources (add, toggle, delete, update scrape_type).
 import sqlite3
 import os
 from datetime import datetime
-from typing import Optional
 
 DB_PATH = os.environ.get("DB_PATH", "policypulse.db")
 
@@ -64,27 +63,35 @@ def init_db():
             article_count   INTEGER DEFAULT 0
         );
 
-         CREATE TABLE IF NOT EXISTS scholarly_articles (
+        CREATE TABLE IF NOT EXISTS scholarly_articles (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             title           TEXT NOT NULL,
             url             TEXT NOT NULL,
             url_hash        TEXT UNIQUE NOT NULL,
-            source          TEXT, -- The Journal or Publisher
-            database_name   TEXT, -- e.g., OpenAlex, Semantic Scholar
-            authors         TEXT,
+            source          TEXT,
+            database_name   TEXT,
+            jurisdiction    TEXT,
+            domain          TEXT,
             relevance       INTEGER DEFAULT 5,
             sentiment       TEXT DEFAULT 'Neutral',
             summary         TEXT,
-            abstract        TEXT,
             why_it_matters  TEXT,
+            abstract        TEXT,
+            authors         TEXT,
+            doi             TEXT,
             pub_date        TEXT,
             processed_date  TEXT,
+            open_access     INTEGER DEFAULT 1,
+            tags            TEXT,
             read            INTEGER DEFAULT 0,
-            tags            TEXT
+            staged          INTEGER DEFAULT 0,
+            search_keyword  TEXT
         );
 
-        CREATE INDEX IF NOT EXISTS idx_scholarly_pub_date ON scholarly_articles(pub_date DESC);
-        CREATE INDEX IF NOT EXISTS idx_scholarly_hash     ON scholarly_articles(url_hash);
+        CREATE INDEX IF NOT EXISTS idx_scholarly_pub_date  ON scholarly_articles(pub_date DESC);
+        CREATE INDEX IF NOT EXISTS idx_scholarly_hash      ON scholarly_articles(url_hash);
+        CREATE INDEX IF NOT EXISTS idx_scholarly_relevance ON scholarly_articles(relevance DESC);
+        CREATE INDEX IF NOT EXISTS idx_scholarly_domain    ON scholarly_articles(domain);
 
         CREATE TABLE IF NOT EXISTS research_sources (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -147,6 +154,12 @@ def init_db():
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             keyword      TEXT UNIQUE NOT NULL,
             created_date TEXT
+        );
+                      
+        CREATE TABLE IF NOT EXISTS scraper_config (
+            key    TEXT PRIMARY KEY NOT NULL,
+            value  TEXT NOT NULL,
+            updated_at TEXT
         );
     """)
 
@@ -751,6 +764,28 @@ def remove_exclusion_keyword(keyword: str):
     conn.commit()
     conn.close()
 
+
+def delete_exclusion_keyword_by_id(keyword_id: int):
+    """Delete exclusion keyword by id (used by API endpoint)."""
+    conn = get_conn()
+    conn.execute("DELETE FROM exclusion_keywords WHERE id = ?", (keyword_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_all_exclusion_keywords() -> list:
+    """Return full rows (id + keyword) for UI display."""
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id, keyword FROM exclusion_keywords ORDER BY id"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
 # ── EXCLUSION KEYWORDS (Research Scraper) ─────────────────────────────────────
 
 def get_scholarly_exclusion_keywords() -> list[str]:
@@ -786,3 +821,75 @@ def remove_scholarly_exclusion_keyword(keyword: str):
     )
     conn.commit()
     conn.close()
+
+
+# ── RELEVANCE OVERRIDES ───────────────────────────────────────────────────────
+
+def update_article_relevance(article_id: int, score: int):
+    """Override relevance score for a news article (1-10)."""
+    score = max(1, min(10, int(score)))
+    conn = get_conn()
+    conn.execute("UPDATE articles SET relevance = ? WHERE id = ?", (score, article_id))
+    conn.commit()
+    conn.close()
+
+
+def update_scholarly_relevance(article_id: int, score: int):
+    """Override relevance score for a scholarly article (1-10)."""
+    score = max(1, min(10, int(score)))
+    conn = get_conn()
+    try:
+        conn.execute(
+            "UPDATE scholarly_articles SET relevance = ? WHERE id = ?", (score, article_id)
+        )
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+# ── SCRAPER CONFIG (key-value store for filter settings) ──────────────────────
+
+def get_scraper_config(key: str, default=None):
+    """Read a single config value by key. Returns default if not set."""
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT value FROM scraper_config WHERE key = ?", (key,)
+        ).fetchone()
+        return row["value"] if row else default
+    except Exception:
+        return default
+    finally:
+        conn.close()
+
+
+def set_scraper_config(key: str, value: str):
+    """Write or update a config key. Creates the row if it doesn't exist."""
+    conn = get_conn()
+    try:
+        conn.execute(
+            """INSERT INTO scraper_config (key, value, updated_at)
+               VALUES (?, ?, ?)
+               ON CONFLICT(key) DO UPDATE SET
+                   value      = excluded.value,
+                   updated_at = excluded.updated_at""",
+            (key, value, datetime.utcnow().isoformat())
+        )
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+
+def get_all_scraper_config() -> dict:
+    """Return all config rows as a plain dict {key: value}."""
+    conn = get_conn()
+    try:
+        rows = conn.execute("SELECT key, value FROM scraper_config").fetchall()
+        return {r["key"]: r["value"] for r in rows}
+    except Exception:
+        return {}
+    finally:
+        conn.close()

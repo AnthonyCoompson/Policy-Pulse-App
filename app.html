@@ -752,7 +752,7 @@ function skipApiKey(){
       <div id="alert-tray">
         <div id="alert-tray-header">
           <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold)">🔔 Policy Alerts</span>
-          <button onclick="closeTray();showTab('dashboard')" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:4px" onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--muted)'">View all →</button>
+          <button onclick="closeTray();viewAllHighRelevance()" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:4px" onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--muted)'">View all →</button>
         </div>
         <div id="alert-tray-items"></div>
         <div id="alert-tray-empty" style="display:none;padding:18px;text-align:center;color:var(--dim);font-size:12px">✓ All caught up — no new alerts</div>
@@ -840,6 +840,19 @@ function skipApiKey(){
         </div>
       </div>
       <div style="margin-top:12px">
+        <div class="preview-section-label">Relevance Score Override</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap">
+          <input type="range" id="preview-relevance-slider" min="1" max="10" step="1" value="5"
+            style="flex:1;min-width:160px;accent-color:var(--cyan)"
+            oninput="updatePreviewRelevanceLabel(this.value)">
+          <span id="preview-relevance-label"
+            style="font-size:16px;font-weight:700;color:var(--gold);font-family:'IBM Plex Mono',monospace;min-width:50px;text-align:center">
+            &#x1F4CC; 5/10
+          </span>
+          <button class="btn btn-gold btn-sm" onclick="savePreviewRelevance()">Save</button>
+        </div>
+      </div>
+      <div style="margin-top:12px">
         <div class="preview-section-label">Tags</div>
         <div id="preview-tags" style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap"></div>
         <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
@@ -864,7 +877,7 @@ function skipApiKey(){
 <div id="nav">
   <button class="nav-btn" onclick="showLanding()" id="tab-home" title="Return to home / landing page">🏠 Home</button>
   <button class="nav-btn active" onclick="showTab('dashboard')" id="tab-dashboard">📊 Dashboard</button>
-  <button class="nav-btn" onclick="showTab('scraper')" id="tab-scraper">📰 News <span class="nav-badge" id="scraper-badge" style="display:none">0</span></button>
+  <button class="nav-btn" onclick="showTab('scraper')" id="tab-scraper">📰 News &amp; Articles <span class="nav-badge" id="scraper-badge" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showTab('research')" id="tab-research">&#x1F4DA; Research <span class="nav-badge" id="research-badge" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showTab('digest')" id="tab-digest">🗞️ Digest <span class="nav-badge" id="digest-badge" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showTab('notes')" id="tab-notes">&#x1F4DD; Notes</button>
@@ -900,7 +913,10 @@ function skipApiKey(){
     <div id="alert-panel">
       <div class="alert-header">
         <div class="alert-title"><span class="ping"></span> Recommended Alerts — Auto-Updated</div>
-        <span style="font-size:10px;color:var(--muted)" id="alert-count-label">3 high-relevance items</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:10px;color:var(--muted)" id="alert-count-label">3 high-relevance items</span>
+          <button class="btn btn-gold btn-sm" onclick="viewAllHighRelevance()" style="font-size:10px;padding:3px 10px">View All &#x2192;</button>
+        </div>
       </div>
       <div id="alert-items"></div>
     </div>
@@ -939,13 +955,14 @@ function skipApiKey(){
   <!-- SCRAPER -->
   <div id="page-scraper" style="display:none" class="fade-in">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-      <div><div class="page-title">Scraper</div><div class="page-subtitle" id="scraper-count">Loading articles…</div></div>
+      <div><div class="page-title">News &amp; Articles</div><div class="page-subtitle" id="scraper-count">Loading news &amp; articles…</div></div>
       <button id="scrape-btn" onclick="scrapeNow()">⟳ Scrape Now</button>
     </div>
     <div class="sub-tabs">
       <button class="sub-tab active" onclick="scraperTab('feed')" id="st-feed">Article Feed</button>
-      <button class="sub-tab" onclick="scraperTab('archive')" id="st-archive">Search & Archive</button>
+      <button class="sub-tab" onclick="scraperTab('archive')" id="st-archive">Search &amp; Archive</button>
       <button class="sub-tab" onclick="scraperTab('sources')" id="st-sources">Sources</button>
+      <button class="sub-tab" onclick="scraperTab('settings')" id="st-settings">&#x2699; Filter Settings</button>
     </div>
     <div id="scraper-feed-panel">
       <div id="bulk-bar" style="display:none;align-items:center;gap:8px;padding:8px 12px;background:rgba(0,194,255,0.08);border:1px solid rgba(0,194,255,0.2);border-radius:8px;margin-bottom:10px;flex-wrap:wrap">
@@ -1031,6 +1048,120 @@ function skipApiKey(){
         <tbody id="sources-tbody"></tbody>
       </table></div>
     </div>
+
+    <!-- ═══ NEWS SCRAPER FILTER SETTINGS PANEL ═══ -->
+    <div id="scraper-settings-panel" style="display:none">
+      <div style="max-width:780px">
+
+        <!-- Header -->
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:4px">&#x2699;&#xFE0F; News Scraper Filter Settings</div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.65">
+              These rules are applied <strong style="color:var(--text)">client-side</strong> — the scraper fetches everything as normal,
+              then these filters decide what gets displayed and staged.
+              Changes take effect immediately on the current feed without re-scraping.
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="resetNewsFilters()">&#x21BA; Reset Defaults</button>
+            <button class="btn btn-primary" onclick="applyNewsFilterSettings()">&#x2713; Apply &amp; Save</button>
+          </div>
+        </div>
+
+        <!-- Live indicator -->
+        <div id="news-filter-status" style="display:none;padding:9px 14px;border-radius:7px;font-size:11px;font-weight:600;margin-bottom:16px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);color:#10b981">
+          &#x2713; Filter settings applied — feed updated
+        </div>
+
+        <!-- ── ROW 1: Relevance threshold ── -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F4CA; Relevance Threshold</div>
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:220px">
+              <div style="font-size:12px;color:var(--text);margin-bottom:4px">Minimum relevance score to display</div>
+              <div style="font-size:11px;color:var(--muted)">Articles below this score are hidden from the feed. The AI pre-filters at 6 — raising this just hides lower-scored articles from view.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+              <input type="range" id="news-min-relevance" min="6" max="10" step="1" value="6"
+                style="width:140px;accent-color:var(--cyan)"
+                oninput="document.getElementById('news-min-rel-label').innerHTML=rEmoji(parseInt(this.value))+' '+this.value+'/10'">
+              <span id="news-min-rel-label" style="font-size:16px;font-weight:700;color:var(--gold);font-family:'IBM Plex Mono',monospace;min-width:55px">&#x1F4CC; 6/10</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── ROW 2: Domain whitelist ── -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F3F7; Domain Filter <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(tick to show, untick to hide)</span></div>
+          <div id="news-domain-checkboxes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"></div>
+        </div>
+
+        <!-- ── ROW 3: Jurisdiction filter ── -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F30E; Jurisdiction Filter</div>
+          <div id="news-juris-checkboxes" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        </div>
+
+        <!-- ── ROW 4: Sentiment filter ── -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F4AC; Sentiment Filter</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="news-sent-critical" checked style="accent-color:var(--cyan)"> &#x1F534; Critical
+            </label>
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="news-sent-supportive" checked style="accent-color:var(--cyan)"> &#x1F7E2; Supportive
+            </label>
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="news-sent-neutral" checked style="accent-color:var(--cyan)"> &#x26AA; Neutral
+            </label>
+          </div>
+        </div>
+
+        <!-- ── ROW 5: Source filter ── -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:10px">&#x1F4E1; Source Filter <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(untick to hide a source)</span></div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <button class="btn btn-ghost btn-sm" onclick="newsSourcesSelectAll(true)">Select All</button>
+            <button class="btn btn-ghost btn-sm" onclick="newsSourcesSelectAll(false)">Deselect All</button>
+          </div>
+          <div id="news-source-checkboxes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px;max-height:220px;overflow-y:auto;padding:4px"></div>
+        </div>
+
+        <!-- ── ROW 6: Age cutoff ── -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F4C5; Age Cutoff</div>
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px;font-size:11px;color:var(--muted)">Hide articles older than this many days. Set to 0 to show all.</div>
+            <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+              <input type="number" id="news-max-age-days" value="0" min="0" max="365"
+                style="width:70px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--text);text-align:center">
+              <span style="font-size:12px;color:var(--muted)">days (0 = no limit)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── ROW 7: Must-contain keyword ── -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:10px">&#x1F50D; Must-Contain Keywords <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(leave empty to show all)</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Only show articles whose title or summary contains at least one of these words.</div>
+          <div id="news-must-contain-tags" style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px"></div>
+          <div style="display:flex;gap:8px">
+            <input class="filter-input" id="news-must-contain-inp" placeholder="e.g. DRIPA, pharmacare, reconciliation…" style="max-width:300px" onkeydown="if(event.key==='Enter')addNewsMustContain()">
+            <button class="btn btn-cyan btn-sm" onclick="addNewsMustContain()">+ Add</button>
+          </div>
+        </div>
+
+        <!-- Preview count -->
+        <div style="padding:12px 16px;background:rgba(0,0,0,.2);border-radius:8px;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <span>&#x1F4CB; Articles matching current settings: <strong id="news-filter-preview-count" style="color:var(--cyan)">—</strong></span>
+          <button class="btn btn-ghost btn-sm" onclick="previewNewsFilterCount()">&#x1F50D; Preview Count</button>
+        </div>
+
+      </div>
+    </div><!-- /scraper-settings-panel -->
+
     <div id="scraper-archive-panel" style="display:none">
       <div style="margin-bottom:14px">
         <div class="section-title" style="margin-top:0">Keyword Watchlist</div>
@@ -1038,6 +1169,15 @@ function skipApiKey(){
         <div style="display:flex;gap:8px">
           <input class="filter-input" id="kw-input" placeholder="Add keyword (e.g. pharmacare, TRC, DRIPA)…" style="max-width:300px" onkeydown="if(event.key==='Enter')addKeyword()">
           <button class="btn btn-cyan" onclick="addKeyword()">+ Add</button>
+        </div>
+      </div>
+      <div style="margin-top:20px;margin-bottom:14px">
+        <div class="section-title" style="margin-top:0">&#x1F6AB; Exclusion Keywords</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Articles whose titles contain these words are silently dropped before AI processing. Saves immediately to backend.</div>
+        <div id="exclusion-tags" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px">
+          <input class="filter-input" id="excl-input" placeholder="e.g. sports, recipe, lottery&#x2026;" style="max-width:300px" onkeydown="if(event.key==='Enter')addExclusionKeyword()">
+          <button class="btn btn-red btn-sm" onclick="addExclusionKeyword()">+ Block</button>
         </div>
       </div>
       <div class="sub-tabs" style="margin-top:16px">
@@ -1738,8 +1878,9 @@ function skipApiKey(){
     <!-- Sub-tabs -->
     <div class="sub-tabs" style="margin-bottom:12px">
       <button class="sub-tab active" id="rst-feed" onclick="researchTab('feed')">Article Feed</button>
-      <button class="sub-tab" id="rst-search" onclick="researchTab('search')">Search & Filter</button>
+      <button class="sub-tab" id="rst-search" onclick="researchTab('search')">Search &amp; Filter</button>
       <button class="sub-tab" id="rst-sources" onclick="researchTab('sources')">About Sources</button>
+      <button class="sub-tab" id="rst-settings" onclick="researchTab('settings')">&#x2699; Filter Settings</button>
     </div>
 
     <!-- FEED PANEL -->
@@ -1933,6 +2074,130 @@ function skipApiKey(){
     </div>
   </div>
 
+    <!-- ═══ RESEARCH SCRAPER FILTER SETTINGS PANEL ═══ -->
+    <div id="research-settings-panel" style="display:none">
+      <div style="max-width:780px">
+
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:4px">&#x2699;&#xFE0F; Research Scraper Filter Settings</div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.65">
+              These rules filter the <strong style="color:var(--text)">displayed</strong> research articles client-side.
+              The fetch config (databases, keywords) is sent to the backend when you click
+              <strong style="color:var(--text)">Fetch New Research</strong>. Changes take effect immediately on the current feed.
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="resetResearchFilters()">&#x21BA; Reset Defaults</button>
+            <button class="btn btn-primary" onclick="applyResearchFilterSettings()">&#x2713; Apply &amp; Save</button>
+          </div>
+        </div>
+
+        <div id="research-filter-status" style="display:none;padding:9px 14px;border-radius:7px;font-size:11px;font-weight:600;margin-bottom:16px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc">
+          &#x2713; Research filter settings applied — feed updated
+        </div>
+
+        <!-- Relevance threshold -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:14px">&#x1F4CA; Relevance Threshold</div>
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:220px;font-size:11px;color:var(--muted)">Hide research articles below this AI relevance score.</div>
+            <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+              <input type="range" id="research-min-relevance" min="6" max="10" step="1" value="6"
+                style="width:140px;accent-color:#6366f1"
+                oninput="document.getElementById('research-min-rel-label').innerHTML=rEmoji(parseInt(this.value))+' '+this.value+'/10'">
+              <span id="research-min-rel-label" style="font-size:16px;font-weight:700;color:var(--gold);font-family:'IBM Plex Mono',monospace;min-width:55px">&#x1F4CC; 6/10</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Database source filter -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:12px">&#x1F4DA; Database Sources <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(untick to exclude from display and from next fetch)</span></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.18);border-radius:7px;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="rdb-openalex" checked style="accent-color:#6366f1"> <span class="research-db-badge db-openalex">OpenAlex</span> <span style="color:var(--muted);font-size:10px">250M works</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.18);border-radius:7px;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="rdb-semantic" checked style="accent-color:#10b981"> <span class="research-db-badge db-semantic">Semantic Scholar</span> <span style="color:var(--muted);font-size:10px">220M papers</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);border-radius:7px;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="rdb-pubmed" checked style="accent-color:#ef4444"> <span class="research-db-badge db-pubmed">PubMed Central</span> <span style="color:var(--muted);font-size:10px">biomedical</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.18);border-radius:7px;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="rdb-doaj" checked style="accent-color:#f59e0b"> <span class="research-db-badge db-doaj">DOAJ</span> <span style="color:var(--muted);font-size:10px">open journals</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.18);border-radius:7px;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="rdb-arxiv" checked style="accent-color:#00c2ff"> <span class="research-db-badge db-arxiv">arXiv</span> <span style="color:var(--muted);font-size:10px">preprints</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.18);border-radius:7px;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="rdb-canadian" checked style="accent-color:#dc2626"> <span class="research-db-badge db-canadian">Canadian Think-Tanks</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Domain filter -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:12px">&#x1F3F7; Domain Filter</div>
+          <div id="research-domain-checkboxes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"></div>
+        </div>
+
+        <!-- Open access only -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:12px">&#x1F513; Access Type</div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
+              <input type="radio" name="research-access" id="research-access-all" value="all" checked style="accent-color:#6366f1"> Show all articles
+            </label>
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
+              <input type="radio" name="research-access" id="research-access-oa" value="oa" style="accent-color:#6366f1"> Open access only &#x1F513;
+            </label>
+          </div>
+        </div>
+
+        <!-- Age cutoff -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:14px">&#x1F4C5; Publication Age Cutoff</div>
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px;font-size:11px;color:var(--muted)">Only show articles published within this many days. Set 0 for no limit.</div>
+            <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+              <input type="number" id="research-max-age-days" value="0" min="0" max="3650"
+                style="width:70px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--text);text-align:center">
+              <span style="font-size:12px;color:var(--muted)">days (0 = no limit)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Must-contain keywords -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:10px">&#x1F50D; Must-Contain Keywords <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(leave empty to show all)</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Only show research articles whose title or abstract contains at least one of these words.</div>
+          <div id="research-must-contain-tags" style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px"></div>
+          <div style="display:flex;gap:8px">
+            <input class="filter-input" id="research-must-contain-inp" placeholder="e.g. OCAP, reconciliation, pharmacare…" style="max-width:300px" onkeydown="if(event.key==='Enter')addResearchMustContain()">
+            <button class="btn btn-sm" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc" onclick="addResearchMustContain()">+ Add</button>
+          </div>
+        </div>
+
+        <!-- Fetch config info box -->
+        <div style="padding:14px 16px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:8px;margin-bottom:14px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:8px">&#x1F4E4; Next Fetch Config</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.75">
+            When you click <strong style="color:var(--text)">Fetch New Research</strong>, the selected databases above are sent
+            to the backend so only those sources are queried. Unticked databases are skipped entirely — saving API time and reducing noise.
+            <br><span style="color:#a5b4fc">Enabled databases: <strong id="research-enabled-db-count" style="color:var(--white)">6</strong> of 6</span>
+          </div>
+        </div>
+
+        <!-- Preview count -->
+        <div style="padding:12px 16px;background:rgba(0,0,0,.2);border-radius:8px;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <span>&#x1F4CB; Research articles matching current settings: <strong id="research-filter-preview-count" style="color:#a5b4fc">—</strong></span>
+          <button class="btn btn-ghost btn-sm" onclick="previewResearchFilterCount()">&#x1F50D; Preview Count</button>
+        </div>
+
+      </div>
+    </div><!-- /research-settings-panel -->
+
 <script>
 /* ═══════════════════════════════════════════════════
    RESEARCH / SCHOLARLY MODULE
@@ -1944,11 +2209,14 @@ var _researchPageSize = 20;
 var _researchSearchTimer = null;
 
 function researchTab(t){
-  ['feed','search','sources'].forEach(function(x){
-    document.getElementById('research-'+x+'-panel').style.display = x===t?'block':'none';
-    document.getElementById('rst-'+x).classList.toggle('active', x===t);
+  ['feed','search','sources','settings'].forEach(function(x){
+    var panel = document.getElementById('research-'+x+'-panel');
+    var btn   = document.getElementById('rst-'+x);
+    if(panel) panel.style.display = x===t ? 'block' : 'none';
+    if(btn)   btn.classList.toggle('active', x===t);
   });
-  if(t==='feed') renderResearchFeed();
+  if(t==='feed')     renderResearchFeed();
+  if(t==='settings') initResearchFilterSettings();
 }
 
 async function loadResearchArticles(){
@@ -2166,6 +2434,8 @@ function renderResearchFeedPage(){
       var hay = ((a.title||'')+' '+(a.abstract||a.summary||'')+' '+(a.authors||'')+' '+(a.source||'')).toLowerCase();
       if(!hay.includes(q)) return false;
     }
+    // ── Research filter settings ───────────────────────────────
+    if(typeof applyResearchSettingsFilter==='function' && !applyResearchSettingsFilter(a)) return false;
     return true;
   });
 
@@ -2280,7 +2550,9 @@ async function triggerScholarlyScrape(){
   var kwResp = await apiFetch('/watchlist');
   var extraKws = (kwResp && kwResp.keywords) ? kwResp.keywords : [];
 
-  var d = await apiFetch('/scholarly/scrape', {method:'POST', body:JSON.stringify({keywords:extraKws})});
+  // Build fetch config from settings panel
+  var _fetchCfg = buildResearchFetchConfig();
+  var d = await apiFetch('/scholarly/scrape', {method:'POST', body:JSON.stringify({keywords:extraKws, fetch_config:_fetchCfg})});
   if(d && d.ok){
     showToast('&#x1F50D;','Research Fetch Started','Results will appear in ~90 seconds.',5000);
     setTimeout(async function(){
@@ -2401,6 +2673,10 @@ function openResearchPreview(id){
   if(chatEl) chatEl.innerHTML = '';
   var chatInp = document.getElementById('preview-chat-inp');
   if(chatInp) chatInp.value = '';
+
+  // Relevance slider — init to current research article score
+  var _rslider = document.getElementById('preview-relevance-slider');
+  if(_rslider && a.relevance){ _rslider.value = a.relevance; updatePreviewRelevanceLabel(a.relevance); }
 
   document.getElementById('preview-modal').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -2714,18 +2990,26 @@ async function apiLoadArticles(p) {
   }
 }
 
+var _watchlistSynced = false;
 async function apiSyncWatchlist(){
   if(!API_BASE) return;
-  // Push local watchlist to backend
+  // Only sync once per session — subsequent calls just pull remote state
+  if(_watchlistSynced){
+    var quick = await apiFetch('/watchlist');
+    if(quick && quick.keywords) watchlist = quick.keywords;
+    renderWatchlist();
+    return;
+  }
+  _watchlistSynced = true;
+  // Push local watchlist keywords not already on backend
   var remote = await apiFetch('/watchlist');
   var remoteKws = remote && remote.keywords ? remote.keywords : [];
-  // Add any local keywords not on backend
   for(var i=0;i<watchlist.length;i++){
     if(!remoteKws.includes(watchlist[i])){
       await apiFetch('/watchlist',{method:'POST',body:JSON.stringify({keyword:watchlist[i]})});
     }
   }
-  // Pull backend keywords into local
+  // Pull final merged list back into local state
   var updated = await apiFetch('/watchlist');
   if(updated && updated.keywords) watchlist = updated.keywords;
   renderWatchlist();
@@ -2996,6 +3280,10 @@ function openPreview(id, event){
 
   // Tags
   renderPreviewTags(a);
+
+  // Relevance slider — init to current article score
+  var _slider = document.getElementById('preview-relevance-slider');
+  if(_slider && a.relevance){ _slider.value = a.relevance; updatePreviewRelevanceLabel(a.relevance); }
 
   // Clear chat
   document.getElementById('preview-chat').innerHTML = '';
@@ -3389,11 +3677,9 @@ async function showTab(n){
       showSkeletons('dashboard-feed', 3);
       await apiLoadArticles({limit:50});
       await apiLoadStats();
-      // Also refresh research stats for dashboard widget
       if(_researchInitialized){
         await loadResearchStats();
       } else {
-        // Lazy-load research on first dashboard visit if not already loaded
         _researchInitialized = true;
         await loadResearchArticles();
         await loadResearchStats();
@@ -3408,7 +3694,7 @@ async function showTab(n){
       await apiLoadSources();
       await apiSyncWatchlist();
     }
-    renderFeed();renderSources();renderWatchlist();renderArchive();
+    renderFeed();renderSources();renderWatchlist();renderArchive();loadExclusionKeywords();
   }
   if(n==='digest'){ if(API_BASE){ await apiLoadDigests(); } renderDigest();renderDigestHistory(); }
   if(n==='subscribers') renderSubscribers();
@@ -3653,6 +3939,8 @@ function renderFeedPage(){
     if(_src&&a.source!==_src)return false;
     if(_showFlaggedOnly&&!a.flagged)return false;
     if(activeTag){var _tags=(a.tags||'').split(',').map(function(t){return t.trim().toLowerCase();});if(!_tags.some(function(t){return t===activeTag.toLowerCase();}))return false;}
+    // ── News scraper filter settings ──────────────────────────
+    if(!applyNewsSettingsFilter(a)) return false;
     return true;
   });
   var _sm=document.getElementById('sort-select')?document.getElementById('sort-select').value:'date_desc';
@@ -3741,9 +4029,15 @@ function renderWatchlist(){document.getElementById('watchlist-tags').innerHTML=w
 /* addKeyword/removeKeyword: see async versions above */
 
 function scraperTab(t){
-  ['feed','sources','archive'].forEach(x=>{document.getElementById('scraper-'+x+'-panel').style.display=x===t?'block':'none';document.getElementById('st-'+x).classList.toggle('active',x===t);});
-  if(t==='sources')renderSources();
-  if(t==='archive'){renderWatchlist();renderArchive();}
+  ['feed','sources','archive','settings'].forEach(function(x){
+    var panel = document.getElementById('scraper-'+x+'-panel');
+    var btn   = document.getElementById('st-'+x);
+    if(panel) panel.style.display = x===t ? 'block' : 'none';
+    if(btn)   btn.classList.toggle('active', x===t);
+  });
+  if(t==='sources')  { renderSources(); }
+  if(t==='archive')  { renderWatchlist(); renderArchive(); loadExclusionKeywords(); }
+  if(t==='settings') { initNewsFilterSettings(); }
 }
 function archiveTab(t){
   ['search','month','year','domain'].forEach(x=>{document.getElementById('archive-'+x+'-panel').style.display=x===t?'block':'none';document.getElementById('at-'+x).classList.toggle('active',x===t);});
@@ -6007,8 +6301,605 @@ function initNotionTab(){
   updateNotionButtons();
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════
+   NEWS SCRAPER FILTER SETTINGS — state, init, apply, helpers
+══════════════════════════════════════════════════════════════════════ */
+
+var _newsFilterSettings = {
+  minRelevance:   6,
+  domains:        [],       // empty = all allowed
+  jurisdictions:  [],       // empty = all allowed
+  sentiments:     ['Critical','Supportive','Neutral'],
+  sources:        [],       // empty = all allowed
+  maxAgeDays:     0,        // 0 = no limit
+  mustContain:    [],       // empty = no keyword restriction
+};
+
+var _newsMustContainList = [];
+
+var NEWS_DOMAINS = [
+  'Higher Education','Research Funding','Indigenous','Reconciliation',
+  'Health','Pharmacare','Budget','Legislation','Infrastructure',
+  'Workforce','Consultation','Political','Environment','Housing',
+  'Child Care','International','Other'
+];
+
+var NEWS_JURISDICTIONS = ['Federal','BC','Municipal','Pan-Canadian','International'];
+
+function initNewsFilterSettings(){
+  // Build domain checkboxes from master list
+  var domWrap = document.getElementById('news-domain-checkboxes');
+  if(domWrap && !domWrap.dataset.built){
+    domWrap.dataset.built = '1';
+    domWrap.innerHTML = NEWS_DOMAINS.map(function(d){
+      var checked = _newsFilterSettings.domains.length===0 || _newsFilterSettings.domains.includes(d);
+      return '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text);padding:5px 8px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:6px">'
+        +'<input type="checkbox" class="news-domain-chk" value="'+d+'"'+(checked?' checked':'')+' style="accent-color:var(--cyan)"> '+d
+        +'</label>';
+    }).join('');
+  }
+
+  // Build jurisdiction checkboxes
+  var jurWrap = document.getElementById('news-juris-checkboxes');
+  if(jurWrap && !jurWrap.dataset.built){
+    jurWrap.dataset.built = '1';
+    jurWrap.innerHTML = NEWS_JURISDICTIONS.map(function(j){
+      var checked = _newsFilterSettings.jurisdictions.length===0 || _newsFilterSettings.jurisdictions.includes(j);
+      return '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text);padding:5px 12px;background:rgba(240,165,0,0.06);border:1px solid rgba(240,165,0,0.18);border-radius:6px">'
+        +'<input type="checkbox" class="news-juris-chk" value="'+j+'"'+(checked?' checked':'')+' style="accent-color:var(--gold)"> '+j
+        +'</label>';
+    }).join('');
+  }
+
+  // Build source checkboxes from live articles list
+  var srcWrap = document.getElementById('news-source-checkboxes');
+  if(srcWrap){
+    var uniqueSrcs = Array.from(new Set(articles.map(function(a){return a.source;}).filter(Boolean))).sort();
+    srcWrap.innerHTML = uniqueSrcs.map(function(s){
+      var checked = _newsFilterSettings.sources.length===0 || _newsFilterSettings.sources.includes(s);
+      return '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:var(--muted);padding:4px 8px;border-radius:5px">'
+        +'<input type="checkbox" class="news-source-chk" value="'+escHtml(s)+'"'+(checked?' checked':'')+' style="accent-color:var(--cyan)"> '+escHtml(s)
+        +'</label>';
+    }).join('');
+  }
+
+  // Restore slider + other controls
+  var slider = document.getElementById('news-min-relevance');
+  if(slider){ slider.value = _newsFilterSettings.minRelevance; updatePreviewRelevanceLabel(_newsFilterSettings.minRelevance); document.getElementById('news-min-rel-label').innerHTML = rEmoji(_newsFilterSettings.minRelevance)+' '+_newsFilterSettings.minRelevance+'/10'; }
+  var ageInp = document.getElementById('news-max-age-days');
+  if(ageInp) ageInp.value = _newsFilterSettings.maxAgeDays;
+  renderNewsMustContainTags();
+  previewNewsFilterCount();
+}
+
+function applyNewsFilterSettings(){
+  // Read all controls into state
+  _newsFilterSettings.minRelevance = parseInt(document.getElementById('news-min-relevance').value)||6;
+  _newsFilterSettings.maxAgeDays   = parseInt(document.getElementById('news-max-age-days').value)||0;
+
+  var domChks = document.querySelectorAll('.news-domain-chk');
+  var allDomChecked = Array.from(domChks).every(function(c){return c.checked;});
+  _newsFilterSettings.domains = allDomChecked ? [] : Array.from(domChks).filter(function(c){return c.checked;}).map(function(c){return c.value;});
+
+  var jurChks = document.querySelectorAll('.news-juris-chk');
+  var allJurChecked = Array.from(jurChks).every(function(c){return c.checked;});
+  _newsFilterSettings.jurisdictions = allJurChecked ? [] : Array.from(jurChks).filter(function(c){return c.checked;}).map(function(c){return c.value;});
+
+  var sentList = [];
+  ['critical','supportive','neutral'].forEach(function(s){
+    if(document.getElementById('news-sent-'+s) && document.getElementById('news-sent-'+s).checked)
+      sentList.push(s.charAt(0).toUpperCase()+s.slice(1));
+  });
+  _newsFilterSettings.sentiments = sentList.length ? sentList : ['Critical','Supportive','Neutral'];
+
+  var srcChks = document.querySelectorAll('.news-source-chk');
+  var allSrcChecked = Array.from(srcChks).every(function(c){return c.checked;});
+  _newsFilterSettings.sources = allSrcChecked ? [] : Array.from(srcChks).filter(function(c){return c.checked;}).map(function(c){return c.value;});
+
+  _newsFilterSettings.mustContain = _newsMustContainList.slice();
+
+  // Persist to localStorage
+  try { localStorage.setItem('pp_news_filter_settings', JSON.stringify(_newsFilterSettings)); } catch(e){}
+
+  // Re-render feed with new settings
+  _page = 0;
+  renderFeed();
+
+  // Show confirmation
+  var statusEl = document.getElementById('news-filter-status');
+  if(statusEl){ statusEl.style.display='block'; setTimeout(function(){ statusEl.style.display='none'; }, 3000); }
+
+  showToast('&#x2699;&#xFE0F;','News Filter Applied','Feed updated with '+countNewsFiltered()+' articles matching your settings.',3000);
+}
+
+function applyNewsSettingsFilter(a){
+  var s = _newsFilterSettings;
+  // Relevance
+  if((a.relevance||0) < s.minRelevance) return false;
+  // Domain
+  if(s.domains.length){
+    var aDoms = (a.domain||'').split(',').map(function(d){return d.trim();});
+    if(!aDoms.some(function(d){return s.domains.includes(d);})) return false;
+  }
+  // Jurisdiction
+  if(s.jurisdictions.length && !s.jurisdictions.includes(a.jurisdiction||'')) return false;
+  // Sentiment
+  if(s.sentiments.length && !s.sentiments.includes(a.sentiment||'')) return false;
+  // Source
+  if(s.sources.length && !s.sources.includes(a.source||'')) return false;
+  // Age cutoff
+  if(s.maxAgeDays > 0){
+    var pub = a.pub_date||a.pubDate||'';
+    if(pub){ var age = (Date.now()-new Date(pub))/864e5; if(age > s.maxAgeDays) return false; }
+  }
+  // Must-contain keywords
+  if(s.mustContain.length){
+    var hay = ((a.title||'')+' '+(a.summary||'')).toLowerCase();
+    if(!s.mustContain.some(function(kw){return hay.includes(kw.toLowerCase());})) return false;
+  }
+  return true;
+}
+
+function countNewsFiltered(){
+  return articles.filter(function(a){return applyNewsSettingsFilter(a);}).length;
+}
+
+function previewNewsFilterCount(){
+  var count = countNewsFiltered();
+  var el = document.getElementById('news-filter-preview-count');
+  if(el) el.textContent = count + ' of ' + articles.length + ' articles';
+}
+
+function resetNewsFilters(){
+  _newsFilterSettings = {minRelevance:6,domains:[],jurisdictions:[],sentiments:['Critical','Supportive','Neutral'],sources:[],maxAgeDays:0,mustContain:[]};
+  _newsMustContainList = [];
+  // Reset panel UI
+  document.querySelectorAll('.news-domain-chk,.news-juris-chk,.news-source-chk').forEach(function(c){c.checked=true;});
+  ['critical','supportive','neutral'].forEach(function(s){ var el=document.getElementById('news-sent-'+s); if(el) el.checked=true; });
+  var sl=document.getElementById('news-min-relevance'); if(sl){sl.value=6; document.getElementById('news-min-rel-label').innerHTML='&#x1F4CC; 6/10';}
+  var ag=document.getElementById('news-max-age-days'); if(ag) ag.value=0;
+  renderNewsMustContainTags();
+  try { localStorage.removeItem('pp_news_filter_settings'); } catch(e){}
+  renderFeed();
+  showToast('&#x21BA;','Filters Reset','All news filter settings cleared.',2500);
+}
+
+function newsSourcesSelectAll(checked){
+  document.querySelectorAll('.news-source-chk').forEach(function(c){c.checked=checked;});
+}
+
+function addNewsMustContain(){
+  var inp = document.getElementById('news-must-contain-inp');
+  var kw = (inp&&inp.value||'').trim();
+  if(!kw || _newsMustContainList.includes(kw)) return;
+  _newsMustContainList.push(kw);
+  if(inp) inp.value = '';
+  renderNewsMustContainTags();
+  previewNewsFilterCount();
+}
+
+function removeNewsMustContain(kw){
+  _newsMustContainList = _newsMustContainList.filter(function(k){return k!==kw;});
+  renderNewsMustContainTags();
+  previewNewsFilterCount();
+}
+
+function renderNewsMustContainTags(){
+  var wrap = document.getElementById('news-must-contain-tags');
+  if(!wrap) return;
+  if(!_newsMustContainList.length){ wrap.innerHTML='<span style="font-size:11px;color:var(--dim)">No keywords set — all articles shown.</span>'; return; }
+    wrap.innerHTML = _newsMustContainList.map(function(kw, i){
+    return '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,194,255,0.1);border:1px solid rgba(0,194,255,0.25);border-radius:5px;padding:3px 10px;font-size:11px;font-weight:600;color:var(--cyan)">'
+      +escHtml(kw)+'<span data-nmc="'+i+'" style="cursor:pointer;opacity:.6;font-size:13px">&#xD7;</span></span>';
+  }).join('');
+  wrap.querySelectorAll('[data-nmc]').forEach(function(el){
+    el.addEventListener('click',function(){ removeNewsMustContain(_newsMustContainList[parseInt(this.getAttribute('data-nmc'))]); });
+  });
+}
+
+// Restore saved settings on startup
+(function loadSavedNewsSettings(){
+  try {
+    var saved = localStorage.getItem('pp_news_filter_settings');
+    if(saved) _newsFilterSettings = Object.assign(_newsFilterSettings, JSON.parse(saved));
+    _newsMustContainList = _newsFilterSettings.mustContain||[];
+  } catch(e){}
+})();
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   RESEARCH SCRAPER FILTER SETTINGS — state, init, apply, helpers
+══════════════════════════════════════════════════════════════════════ */
+
+var _researchFilterSettings = {
+  minRelevance:   6,
+  databases:      ['OpenAlex','Semantic Scholar','PubMed Central','DOAJ','arXiv','Canadian Think Tank'],
+  domains:        [],
+  openAccessOnly: false,
+  maxAgeDays:     0,
+  mustContain:    [],
+};
+
+var _researchMustContainList = [];
+
+var RESEARCH_DOMAINS = [
+  'Higher Education','Research Funding','Indigenous','Reconciliation',
+  'Health','Pharmacare','Budget','Legislation','Workforce',
+  'Consultation','Political','Environment','Housing','International','Other'
+];
+
+var DB_ID_MAP = {
+  'rdb-openalex':  'OpenAlex',
+  'rdb-semantic':  'Semantic Scholar',
+  'rdb-pubmed':    'PubMed Central',
+  'rdb-doaj':      'DOAJ',
+  'rdb-arxiv':     'arXiv',
+  'rdb-canadian':  'Canadian Think Tank',
+};
+
+function initResearchFilterSettings(){
+  // Domain checkboxes
+  var domWrap = document.getElementById('research-domain-checkboxes');
+  if(domWrap && !domWrap.dataset.built){
+    domWrap.dataset.built = '1';
+    domWrap.innerHTML = RESEARCH_DOMAINS.map(function(d){
+      var checked = _researchFilterSettings.domains.length===0 || _researchFilterSettings.domains.includes(d);
+      return '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text);padding:5px 8px;background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:6px">'
+        +'<input type="checkbox" class="research-domain-chk" value="'+d+'"'+(checked?' checked':'')+' style="accent-color:#6366f1"> '+d
+        +'</label>';
+    }).join('');
+  }
+
+  // Database checkboxes — restore from saved settings
+  Object.keys(DB_ID_MAP).forEach(function(eid){
+    var el = document.getElementById(eid);
+    if(el) el.checked = _researchFilterSettings.databases.includes(DB_ID_MAP[eid]);
+  });
+
+  // DB count label
+  updateResearchDbCount();
+
+  // Listen to DB checkbox changes for live count
+  Object.keys(DB_ID_MAP).forEach(function(eid){
+    var el = document.getElementById(eid);
+    if(el) el.onchange = updateResearchDbCount;
+  });
+
+  // Other controls
+  var sl = document.getElementById('research-min-relevance');
+  if(sl){ sl.value = _researchFilterSettings.minRelevance; document.getElementById('research-min-rel-label').innerHTML = rEmoji(_researchFilterSettings.minRelevance)+' '+_researchFilterSettings.minRelevance+'/10'; }
+  var ag = document.getElementById('research-max-age-days');
+  if(ag) ag.value = _researchFilterSettings.maxAgeDays;
+  var oaAll = document.getElementById('research-access-all');
+  var oaOnly = document.getElementById('research-access-oa');
+  if(_researchFilterSettings.openAccessOnly){ if(oaOnly) oaOnly.checked=true; } else { if(oaAll) oaAll.checked=true; }
+  _researchMustContainList = _researchFilterSettings.mustContain||[];
+  renderResearchMustContainTags();
+  previewResearchFilterCount();
+}
+
+function updateResearchDbCount(){
+  var count = Object.keys(DB_ID_MAP).filter(function(eid){ var el=document.getElementById(eid); return el&&el.checked; }).length;
+  var el = document.getElementById('research-enabled-db-count');
+  if(el) el.textContent = count;
+}
+
+function applyResearchFilterSettings(){
+  _researchFilterSettings.minRelevance  = parseInt(document.getElementById('research-min-relevance').value)||6;
+  _researchFilterSettings.maxAgeDays    = parseInt(document.getElementById('research-max-age-days').value)||0;
+  _researchFilterSettings.openAccessOnly = document.getElementById('research-access-oa')&&document.getElementById('research-access-oa').checked;
+
+  // Databases
+  var enabledDbs = [];
+  Object.keys(DB_ID_MAP).forEach(function(eid){ var el=document.getElementById(eid); if(el&&el.checked) enabledDbs.push(DB_ID_MAP[eid]); });
+  _researchFilterSettings.databases = enabledDbs;
+
+  // Domains
+  var domChks = document.querySelectorAll('.research-domain-chk');
+  var allDom = Array.from(domChks).every(function(c){return c.checked;});
+  _researchFilterSettings.domains = allDom ? [] : Array.from(domChks).filter(function(c){return c.checked;}).map(function(c){return c.value;});
+
+  _researchFilterSettings.mustContain = _researchMustContainList.slice();
+
+  // Persist
+  try { localStorage.setItem('pp_research_filter_settings', JSON.stringify(_researchFilterSettings)); } catch(e){}
+
+  // Re-render
+  _researchPageNum = 0;
+  renderResearchFeed();
+
+  var statusEl = document.getElementById('research-filter-status');
+  if(statusEl){ statusEl.style.display='block'; setTimeout(function(){ statusEl.style.display='none'; }, 3000); }
+
+  showToast('&#x2699;&#xFE0F;','Research Filter Applied','Feed updated — '+countResearchFiltered()+' articles match your settings.',3000);
+}
+
+function applyResearchSettingsFilter(a){
+  var s = _researchFilterSettings;
+  if((a.relevance||0) < s.minRelevance) return false;
+  if(s.databases.length){
+    var dbName = a.database_name||'';
+    if(!s.databases.some(function(d){ return dbName.toLowerCase().includes(d.toLowerCase())||d.toLowerCase().includes(dbName.toLowerCase()); })) return false;
+  }
+  if(s.domains.length){
+    var aDoms = (a.domain||'').split(',').map(function(d){return d.trim();});
+    if(!aDoms.some(function(d){return s.domains.includes(d);})) return false;
+  }
+  if(s.openAccessOnly && !(a.open_access===1||a.open_access===true)) return false;
+  if(s.maxAgeDays > 0){
+    var pub = a.pub_date||'';
+    if(pub){ var age=(Date.now()-new Date(pub))/864e5; if(age>s.maxAgeDays) return false; }
+  }
+  if(s.mustContain.length){
+    var hay = ((a.title||'')+' '+(a.abstract||a.summary||'')).toLowerCase();
+    if(!s.mustContain.some(function(kw){return hay.includes(kw.toLowerCase());})) return false;
+  }
+  return true;
+}
+
+function buildResearchFetchConfig(){
+  // Sent to backend with /scholarly/scrape so only selected databases are queried
+  return {
+    databases:    _researchFilterSettings.databases,
+    min_relevance: _researchFilterSettings.minRelevance,
+  };
+}
+
+function countResearchFiltered(){
+  return (_researchArticles||[]).filter(function(a){return applyResearchSettingsFilter(a);}).length;
+}
+
+function previewResearchFilterCount(){
+  var count = countResearchFiltered();
+  var el = document.getElementById('research-filter-preview-count');
+  if(el) el.textContent = count + ' of ' + (_researchArticles||[]).length + ' articles';
+}
+
+function resetResearchFilters(){
+  _researchFilterSettings = {minRelevance:6,databases:['OpenAlex','Semantic Scholar','PubMed Central','DOAJ','arXiv','Canadian Think Tank'],domains:[],openAccessOnly:false,maxAgeDays:0,mustContain:[]};
+  _researchMustContainList = [];
+  Object.keys(DB_ID_MAP).forEach(function(eid){ var el=document.getElementById(eid); if(el) el.checked=true; });
+  document.querySelectorAll('.research-domain-chk').forEach(function(c){c.checked=true;});
+  var oaAll=document.getElementById('research-access-all'); if(oaAll) oaAll.checked=true;
+  var sl=document.getElementById('research-min-relevance'); if(sl){sl.value=6; document.getElementById('research-min-rel-label').innerHTML='&#x1F4CC; 6/10';}
+  var ag=document.getElementById('research-max-age-days'); if(ag) ag.value=0;
+  updateResearchDbCount();
+  renderResearchMustContainTags();
+  try { localStorage.removeItem('pp_research_filter_settings'); } catch(e){}
+  renderResearchFeed();
+  showToast('&#x21BA;','Research Filters Reset','All research filter settings cleared.',2500);
+}
+
+function addResearchMustContain(){
+  var inp = document.getElementById('research-must-contain-inp');
+  var kw = (inp&&inp.value||'').trim();
+  if(!kw || _researchMustContainList.includes(kw)) return;
+  _researchMustContainList.push(kw);
+  if(inp) inp.value='';
+  renderResearchMustContainTags();
+  previewResearchFilterCount();
+}
+
+function removeResearchMustContain(kw){
+  _researchMustContainList = _researchMustContainList.filter(function(k){return k!==kw;});
+  renderResearchMustContainTags();
+  previewResearchFilterCount();
+}
+
+function renderResearchMustContainTags(){
+  var wrap = document.getElementById('research-must-contain-tags');
+  if(!wrap) return;
+  if(!_researchMustContainList.length){ wrap.innerHTML='<span style="font-size:11px;color:var(--dim)">No keywords set — all articles shown.</span>'; return; }
+    wrap.innerHTML = _researchMustContainList.map(function(kw, i){
+    return '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);border-radius:5px;padding:3px 10px;font-size:11px;font-weight:600;color:#a5b4fc">'
+      +escHtml(kw)+'<span data-rmc="'+i+'" style="cursor:pointer;opacity:.6;font-size:13px">&#xD7;</span></span>';
+  }).join('');
+  wrap.querySelectorAll('[data-rmc]').forEach(function(el){
+    el.addEventListener('click',function(){ removeResearchMustContain(_researchMustContainList[parseInt(this.getAttribute('data-rmc'))]); });
+  });
+}
+
+// Restore saved research settings on startup
+(function loadSavedResearchSettings(){
+  try {
+    var saved = localStorage.getItem('pp_research_filter_settings');
+    if(saved) _researchFilterSettings = Object.assign(_researchFilterSettings, JSON.parse(saved));
+    _researchMustContainList = _researchFilterSettings.mustContain||[];
+  } catch(e){}
+})();
+
 const storedKey=sessionStorage.getItem('pp_groq_key');
 if(storedKey){apiKey=storedKey;document.getElementById('api-modal').classList.remove('show');init();}
+
+/* ══════════════════════════════════════════════════════════════
+   FIX 3 — EXCLUSION KEYWORDS
+══════════════════════════════════════════════════════════════ */
+var _exclusionKeywords = [];
+
+var _exclusionLoaded = false;
+async function loadExclusionKeywords(){
+  if(!API_BASE) return;
+  if(_exclusionLoaded){
+    renderExclusionKeywords();
+    return;
+  }
+  _exclusionLoaded = true;
+  var d = await apiFetch('/exclusion-keywords');
+  if(d && d.keywords) _exclusionKeywords = d.keywords;
+  renderExclusionKeywords();
+}
+
+function invalidateExclusionCache(){
+  _exclusionLoaded = false;
+}
+
+function renderExclusionKeywords(){
+  var container = document.getElementById('exclusion-tags');
+  if(!container) return;
+  if(!_exclusionKeywords.length){
+    container.innerHTML = '<span style="font-size:11px;color:var(--dim)">No exclusions yet.</span>';
+    return;
+  }
+  container.innerHTML = _exclusionKeywords.map(function(k){
+    return '<span style="display:inline-flex;align-items:center;gap:6px;'
+      +'background:rgba(244,63,94,0.1);border:1px solid rgba(244,63,94,0.25);'
+      +'border-radius:5px;padding:4px 10px;margin:3px;font-size:11px;'
+      +'font-weight:600;color:#fb7185">'
+      +escHtml(k.keyword)
+      +'<span onclick="deleteExclusionKeyword('+k.id+')" '
+      +'style="cursor:pointer;font-size:14px;opacity:.6">&#xD7;</span>'
+      +'</span>';
+  }).join('');
+}
+
+async function addExclusionKeyword(){
+  var inp = document.getElementById('excl-input');
+  var kw = (inp.value||'').trim();
+  if(!kw) return;
+  if(API_BASE){
+    var d = await apiFetch('/exclusion-keywords',{method:'POST',body:JSON.stringify({keyword:kw})});
+    if(d && d.ok){
+      inp.value = '';
+      invalidateExclusionCache();
+      await loadExclusionKeywords();
+      showToast('&#x1F6AB;','Keyword Blocked','"'+kw+'" will be filtered from all future scrapes.',3000);
+    }
+  } else {
+    _exclusionKeywords.push({id:Date.now(),keyword:kw});
+    inp.value = '';
+    renderExclusionKeywords();
+    showToast('&#x1F6AB;','Blocked (local)','"'+kw+'" blocked locally.',3000);
+  }
+}
+
+async function deleteExclusionKeyword(id){
+  if(API_BASE){
+    await apiFetch('/exclusion-keywords/'+id,{method:'DELETE'});
+    invalidateExclusionCache();
+    await loadExclusionKeywords();
+  } else {
+    _exclusionKeywords = _exclusionKeywords.filter(function(k){return k.id!==id;});
+    renderExclusionKeywords();
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   FIX 5 — RELEVANCE SCORE SLIDER
+══════════════════════════════════════════════════════════════ */
+function updatePreviewRelevanceLabel(val){
+  var label = document.getElementById('preview-relevance-label');
+  var emoji = parseInt(val)>=9?'&#x1F525;':parseInt(val)>=7?'&#x2B50;':'&#x1F4CC;';
+  if(label) label.innerHTML = emoji+' '+val+'/10';
+}
+
+async function savePreviewRelevance(){
+  var slider = document.getElementById('preview-relevance-slider');
+  if(!slider) return;
+  var newScore = parseInt(slider.value);
+
+  if(_researchPreviewId){
+    var ra = _researchArticles.find(function(x){return x.id===_researchPreviewId;});
+    if(ra){ ra.relevance = newScore; reResearchCard(_researchPreviewId); }
+    if(API_BASE) await apiFetch('/scholarly/'+_researchPreviewId+'/relevance',{method:'PATCH',body:JSON.stringify({relevance:newScore})});
+    showToast('&#x2B50;','Relevance Updated','Research article scored '+newScore+'/10.',2500);
+    return;
+  }
+  if(!_previewArticleId) return;
+  var a = articles.find(function(x){return x.id===_previewArticleId;});
+  if(a){ a.relevance = newScore; reCard(_previewArticleId); }
+  if(API_BASE) await apiFetch('/articles/'+_previewArticleId+'/relevance',{method:'PATCH',body:JSON.stringify({relevance:newScore})});
+  showToast('&#x2B50;','Relevance Updated','Article scored '+newScore+'/10.',2500);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   FIX 7 — HIGH-RELEVANCE MODAL
+══════════════════════════════════════════════════════════════ */
+function viewAllHighRelevance(){
+  document.getElementById('high-relevance-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  renderHighRelevanceModal();
+}
+
+function closeHighRelevanceModal(){
+  document.getElementById('high-relevance-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function renderHighRelevanceModal(){
+  var minScore = parseInt((document.getElementById('hr-min-score')||{}).value||'8');
+
+  var newsItems = articles
+    .filter(function(a){return (a.relevance||0)>=minScore;})
+    .map(function(a){return Object.assign({},a,{_type:'news'});});
+
+  var researchItems = (_researchArticles||[])
+    .filter(function(a){return (a.relevance||0)>=minScore;})
+    .map(function(a){return Object.assign({},a,{_type:'research'});});
+
+  var combined = newsItems.concat(researchItems).sort(function(a,b){
+    var aUnread = !(a.read===1||a.read===true)?1:0;
+    var bUnread = !(b.read===1||b.read===true)?1:0;
+    if(bUnread!==aUnread) return bUnread-aUnread;
+    if(b.relevance!==a.relevance) return b.relevance-a.relevance;
+    return new Date(b.pub_date||b.pubDate||0)-new Date(a.pub_date||a.pubDate||0);
+  });
+
+  var subtitleEl = document.getElementById('hr-modal-subtitle');
+  if(subtitleEl){
+    var unread = combined.filter(function(a){return !(a.read===1||a.read===true);}).length;
+    subtitleEl.textContent = combined.length+' articles scoring '+minScore+'+/10 · '+unread+' unread';
+  }
+
+  var feedEl = document.getElementById('hr-modal-feed');
+  if(!feedEl) return;
+
+  if(!combined.length){
+    feedEl.innerHTML = '<div class="empty" style="padding:40px">'
+      +'<div class="empty-icon">&#x1F514;</div>'
+      +'<div class="empty-text">No articles score '+minScore+'+/10 yet.<br>Run a scrape to fetch new articles.</div>'
+      +'</div>';
+    return;
+  }
+
+  feedEl.innerHTML = combined.map(function(a){
+    return a._type==='research' ? buildResearchCard(a,false) : buildCard(a);
+  }).join('');
+}
+
+// Close high-relevance modal on backdrop click
+document.addEventListener('click',function(e){
+  var modal = document.getElementById('high-relevance-modal');
+  if(modal && modal.style.display!=='none'){
+    var inner = modal.querySelector('div');
+    if(inner && !inner.contains(e.target)) closeHighRelevanceModal();
+  }
+});
+
 </script>
+
+<!-- HIGH-RELEVANCE MODAL -->
+<div id="high-relevance-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:600;align-items:flex-start;justify-content:center;backdrop-filter:blur(6px);padding-top:60px;overflow-y:auto">
+  <div style="background:linear-gradient(135deg,#0b1829,#0f2040);border:1px solid rgba(240,165,0,0.25);border-radius:14px;width:min(760px,95vw);max-height:80vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.7);position:relative;margin-bottom:40px">
+    <div style="position:sticky;top:0;padding:18px 24px 14px;background:linear-gradient(135deg,#0b1829,#0f2040);border-bottom:1px solid rgba(240,165,0,0.2);display:flex;align-items:center;justify-content:space-between;z-index:2">
+      <div>
+        <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#fff;margin-bottom:2px">&#x1F514; All High-Relevance Articles</div>
+        <div id="hr-modal-subtitle" style="font-size:11px;color:var(--muted)">Loading&#x2026;</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="hr-min-score" class="filter-select" style="width:auto" onchange="renderHighRelevanceModal()">
+          <option value="8">Score 8&#x2013;10</option>
+          <option value="7">Score 7&#x2013;10</option>
+          <option value="9">Score 9&#x2013;10 only</option>
+          <option value="6">Score 6&#x2013;10</option>
+        </select>
+        <button onclick="closeHighRelevanceModal()" style="background:rgba(255,255,255,.07);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px">&#x2715;</button>
+      </div>
+    </div>
+    <div id="hr-modal-feed" style="padding:16px 20px"></div>
+  </div>
+</div>
+
 </body>
 </html>
+
