@@ -16,9 +16,20 @@ Changes from v2:
     scoring, consistent with scraper.py.
   - dry_run mode: AI scores and logs would-have-saved articles but does not
     write to the DB.
-  - All fetch functions (OpenAlex, Semantic Scholar, DOAJ, PubMed, arXiv,
-    think-tanks) unchanged — only the orchestrator run_scholarly_scrape()
-    and the save path are touched.
+
+Bug fixes (v3.1):
+  - fetch_canadian_think_tanks() now uses plain sequential requests.get()
+    instead of asyncio.run(). The previous asyncio.run() call raised a silent
+    RuntimeError when invoked from inside FastAPI's already-running event loop
+    (via BackgroundTasks), causing the think-tank fetch — and sometimes the
+    entire scrape — to produce zero results.
+  - analyze_scholarly() now passes a context prefix to the AI that instructs
+    it to score academic abstracts generously. Previously, formal academic
+    language caused many relevant papers to score below 6 and be silently
+    dropped.
+  - asyncio import retained for the async helper functions (fetch_think_tank_
+    page_async, fetch_all_think_tank_pages) which are kept for potential
+    future use but are no longer called by the main scrape path.
 """
 
 import asyncio
@@ -415,9 +426,10 @@ def fetch_arxiv(keywords: list[str]) -> list[dict]:
 def fetch_canadian_think_tanks() -> list[dict]:
     """Scrape publications from think-tank sources stored in research_sources table.
 
-    All source pages are fetched concurrently using fetch_all_think_tank_pages()
-    (one httpx.AsyncClient shared across the batch). HTML parsing runs
-    sequentially after the parallel fetch completes.
+    Uses plain sequential requests.get() so it is safe to call from inside
+    FastAPI's async event loop (via BackgroundTasks) without triggering the
+    'This event loop is already running' RuntimeError that asyncio.run() raises
+    in that context.
     """
     from database import get_research_sources
     results = []
@@ -431,20 +443,16 @@ def fetch_canadian_think_tanks() -> list[dict]:
     if not db_sources:
         return results
 
-    log.info(f"  Fetching {len(db_sources)} think-tank pages in parallel")
-    try:
-        page_results = asyncio.run(fetch_all_think_tank_pages(db_sources))
-    except RuntimeError:
-        log.warning("  asyncio.run() unavailable — falling back to sequential think-tank fetch")
-        page_results = []
-        for source in db_sources:
-            try:
-                resp = requests.get(source["url"], headers=HTML_HEADERS, timeout=TIMEOUT)
-                html = resp.text if resp.status_code == 200 else None
-            except Exception as e:
-                log.warning(f"Think-tank sync fallback [{source['name']}]: {e}")
-                html = None
-            page_results.append((source, html))
+    log.info(f"  Fetching {len(db_sources)} think-tank pages sequentially")
+    page_results = []
+    for source in db_sources:
+        try:
+            resp = requests.get(source["url"], headers=HTML_HEADERS, timeout=TIMEOUT)
+            html = resp.text if resp.status_code == 200 else None
+        except Exception as e:
+            log.warning(f"Think-tank fetch [{source['name']}]: {e}")
+            html = None
+        page_results.append((source, html))
 
     for source, html in page_results:
         name     = source["name"]
@@ -559,8 +567,27 @@ def _base_url(url: str) -> str:
 
 def analyze_scholarly(title: str, abstract: str, source: str,
                       url: str, database: str) -> dict | None:
+    """Score a scholarly article for relevance.
+
+    Academic abstracts use formal language that Gemini tends to score lower
+    than government press releases when using the default news prompt.  The
+    context prefix below tells the model to treat the text as academic content
+    and to score generously — a paper on Indigenous data sovereignty or
+    post-secondary funding is relevant even without the words 'BC Government'
+    or 'policy announcement'.
+    """
     from ai_processor import analyze_article
-    combined = f"[ABSTRACT FROM {database}]\n\n{abstract}" if abstract else ""
+    if abstract:
+        combined = (
+            f"[SCHOLARLY ARTICLE FROM {database} — this is peer-reviewed academic "
+            f"content. Score relevance generously: any paper relating to Indigenous "
+            f"policy, post-secondary education, health policy, reconciliation, research "
+            f"funding, or Canadian governance should score at least 6. Do not penalise "
+            f"academic language or the absence of direct government quotes.]\n\n"
+            f"ABSTRACT:\n{abstract}"
+        )
+    else:
+        combined = ""
     return analyze_article(title=title, url=url, source_name=source, article_text=combined)
 
 
