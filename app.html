@@ -1845,6 +1845,28 @@ function skipApiKey(){
       <strong style="color:var(--text)">Fetching research</strong> <span style="color:var(--muted)">— querying OpenAlex, Semantic Scholar, Canadian think-tanks, PubMed, DOAJ, arXiv&hellip; This takes 60&ndash;90 seconds. The feed will refresh automatically.</span>
     </div>
 
+
+    <!-- Stats + DB legend — always visible above sub-tabs -->
+    <div class="research-stats-grid" id="research-stats-grid" style="margin-bottom:10px">
+      <div class="research-stat"><div class="research-stat-val" id="rs-total">—</div><div class="research-stat-label">Total Articles</div></div>
+      <div class="research-stat"><div class="research-stat-val" id="rs-unread" style="color:#a5b4fc">—</div><div class="research-stat-label">Unread</div></div>
+      <div class="research-stat"><div class="research-stat-val" id="rs-week" style="color:var(--gold)">—</div><div class="research-stat-label">Added This Week</div></div>
+      <div class="research-stat"><div class="research-stat-val" id="rs-dbs">6</div><div class="research-stat-label">Databases</div></div>
+      <div class="research-stat"><div class="research-stat-val" id="rs-oa" style="color:#10b981">100%</div><div class="research-stat-label">Open Access</div></div>
+    </div>
+    <div style="padding:10px 14px;background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
+      <div style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Data Sources</div>
+      <div class="source-breakdown" id="research-source-breakdown">
+        <span class="research-db-badge db-openalex">&#x1F30D; OpenAlex</span>
+        <span class="research-db-badge db-semantic">&#x1F9E0; Semantic Scholar</span>
+        <span class="research-db-badge db-pubmed">&#x1F9EA; PubMed Central</span>
+        <span class="research-db-badge db-doaj">&#x1F4D6; DOAJ</span>
+        <span class="research-db-badge db-arxiv">&#x1F4CA; arXiv</span>
+        <span class="research-db-badge db-canadian">&#x1F341; Canadian Think-Tanks</span>
+        <div style="width:100%;height:0"></div>
+        <span style="font-size:10px;color:var(--dim);align-self:center">All sources are freely accessible, open access, and scraping-permitted.</span>
+      </div>
+    </div>
     <!-- Sub-tabs — directly under title row, matching News & Articles layout -->
     <div class="sub-tabs">
       <button class="sub-tab active" id="rst-feed" onclick="researchTab('feed')">Article Feed</button>
@@ -1854,32 +1876,7 @@ function skipApiKey(){
     </div>
 
     <!-- FEED PANEL -->
-    <div id="research-feed-panel">
-
-      <!-- Stats row — inside feed panel, below sub-tabs -->
-      <div class="research-stats-grid" id="research-stats-grid" style="margin-top:12px">
-        <div class="research-stat"><div class="research-stat-val" id="rs-total">—</div><div class="research-stat-label">Total Articles</div></div>
-        <div class="research-stat"><div class="research-stat-val" id="rs-unread" style="color:#a5b4fc">—</div><div class="research-stat-label">Unread</div></div>
-        <div class="research-stat"><div class="research-stat-val" id="rs-week" style="color:var(--gold)">—</div><div class="research-stat-label">Added This Week</div></div>
-        <div class="research-stat"><div class="research-stat-val" id="rs-dbs">6</div><div class="research-stat-label">Databases</div></div>
-        <div class="research-stat"><div class="research-stat-val" id="rs-oa" style="color:#10b981">100%</div><div class="research-stat-label">Open Access</div></div>
-      </div>
-
-      <!-- Database legend -->
-      <div style="padding:10px 14px;background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
-        <div style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Data Sources</div>
-        <div class="source-breakdown" id="research-source-breakdown">
-          <span class="research-db-badge db-openalex">&#x1F30D; OpenAlex</span>
-          <span class="research-db-badge db-semantic">&#x1F9E0; Semantic Scholar</span>
-          <span class="research-db-badge db-pubmed">&#x1F9EA; PubMed Central</span>
-          <span class="research-db-badge db-doaj">&#x1F4D6; DOAJ</span>
-          <span class="research-db-badge db-arxiv">&#x1F4CA; arXiv</span>
-          <span class="research-db-badge db-canadian">&#x1F341; Canadian Think-Tanks</span>
-          <div style="width:100%;height:0"></div>
-          <span style="font-size:10px;color:var(--dim);align-self:center">All sources are freely accessible, open access, and scraping-permitted.</span>
-        </div>
-      </div>
-
+    <div id="research-feed-panel" style="padding-top:12px">
       <!-- Bulk action bar -->
       <div id="research-bulk-bar" style="display:none;align-items:center;gap:8px;padding:8px 12px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:8px;margin-bottom:10px;flex-wrap:wrap">
         <span id="research-bulk-count" style="font-size:12px;font-weight:600;color:#a5b4fc">0 selected</span>
@@ -1953,7 +1950,7 @@ function skipApiKey(){
     </div>
 
     <!-- SEARCH PANEL -->
-    <div id="research-search-panel" style="display:none;margin-top:12px">
+    <div id="research-search-panel" style="display:none;padding-top:12px">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
         <input class="filter-input" id="research-adv-search" placeholder="Search by title, author, abstract, DOI…" style="flex:1">
         <button class="btn btn-primary" onclick="runAdvancedResearchSearch()">Search</button>
@@ -1969,7 +1966,7 @@ function skipApiKey(){
     </div>
 
     <!-- SOURCES PANEL -->
-    <div id="research-sources-panel" style="display:none">
+    <div id="research-sources-panel" style="display:none;padding-top:12px">
       <!-- HOW THE RESEARCH SCRAPER WORKS -->
       <div style="background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(139,92,246,0.05));border:1px solid rgba(99,102,241,0.2);border-radius:12px;padding:20px 22px;margin-bottom:20px;max-width:900px;position:relative;overflow:hidden">
         <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#6366f1,#8b5cf6,transparent);opacity:0.7"></div>
@@ -2070,7 +2067,7 @@ function skipApiKey(){
   </div>
 
     <!-- ═══ RESEARCH SCRAPER FILTER SETTINGS PANEL ═══ -->
-    <div id="research-settings-panel" style="display:none">
+    <div id="research-settings-panel" style="display:none;padding-top:12px">
       <div style="max-width:780px">
 
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
@@ -2212,6 +2209,14 @@ function researchTab(t){
   });
   if(t==='feed')     renderResearchFeed();
   if(t==='settings') initResearchFilterSettings();
+  // Double-rAF: fires after chunked card renderer (which itself uses rAF) finishes
+  // injecting DOM nodes — guarantees scroll lands at top AFTER all layout is done
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      var mainEl = document.getElementById('main');
+      if(mainEl) mainEl.scrollTop = 0;
+    });
+  });
 }
 
 async function loadResearchArticles(){
@@ -3664,6 +3669,13 @@ async function showTab(n){
     var tb=document.getElementById('tab-'+t);
     if(pg) pg.style.display=t===n?'block':'none';
     if(tb) tb.classList.toggle('active',t===n);
+  });
+  // Double-rAF scroll: fires after any async render triggered by the tab switch
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      var mainEl = document.getElementById('main');
+      if(mainEl) mainEl.scrollTop = 0;
+    });
   });
   // Track tab navigation in Google Analytics
   if(typeof gtag!=='undefined') gtag('event','tab_view',{event_category:'Navigation',event_label:n});
