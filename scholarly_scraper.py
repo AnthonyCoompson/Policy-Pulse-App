@@ -200,7 +200,10 @@ def fetch_semantic_scholar(keywords: list[str]) -> list[dict]:
             for paper in resp.json().get("data", []):
                 title = (paper.get("title") or "").strip()
                 abstract = (paper.get("abstract") or "").strip()
-                if not title or not abstract:
+                # Only require a title — many valid papers have no abstract in
+                # the Semantic Scholar API. Dropping on missing abstract was
+                # silently discarding the majority of results.
+                if not title:
                     continue
 
                 pdf = (paper.get("openAccessPdf") or {}).get("url", "")
@@ -567,28 +570,53 @@ def _base_url(url: str) -> str:
 
 def analyze_scholarly(title: str, abstract: str, source: str,
                       url: str, database: str) -> dict | None:
-    """Score a scholarly article for relevance.
+    """Score a scholarly article for relevance using the AI processor.
 
-    Academic abstracts use formal language that Gemini tends to score lower
-    than government press releases when using the default news prompt.  The
-    context prefix below tells the model to treat the text as academic content
-    and to score generously — a paper on Indigenous data sovereignty or
-    post-secondary funding is relevant even without the words 'BC Government'
-    or 'policy announcement'.
+    Two key behaviours that prevent zero-result scrapes:
+
+    1. The scholarly context hint is ALWAYS included in article_text, even
+       when abstract is empty. Without it, `_build_payload` uses the
+       title-only prompt with no scholarly instruction, and academic titles
+       score 3-5 against the news-calibrated prompt — all silently dropped.
+
+    2. If the AI still returns None (scored < 6 despite the hint, because
+       the prompt's "return null" instruction can override our hint in the
+       article text), we fall back to the keyword-based default analyser
+       instead of discarding the paper. Papers that survived fetching and
+       dedup are worth keeping; the keyword fallback always returns
+       relevance >= 6 for policy-adjacent titles.
     """
-    from ai_processor import analyze_article
+    from ai_processor import analyze_article, _default_analysis
+
+    # Always include the scholarly hint so it reaches the AI whether or not
+    # an abstract is available. The hint must be long enough (>150 chars)
+    # that _build_payload treats it as article_text and uses ANALYSIS_PROMPT_FULL
+    # rather than the title-only fallback prompt.
+    scholarly_hint = (
+        f"[SCHOLARLY ARTICLE FROM {database} — this is peer-reviewed academic "
+        f"content. Score relevance generously: any paper relating to Indigenous "
+        f"policy, post-secondary education, health policy, reconciliation, research "
+        f"funding, or Canadian governance should score at least 6. Do not penalise "
+        f"academic language or the absence of direct government quotes.]\n\n"
+    )
+
     if abstract:
-        combined = (
-            f"[SCHOLARLY ARTICLE FROM {database} — this is peer-reviewed academic "
-            f"content. Score relevance generously: any paper relating to Indigenous "
-            f"policy, post-secondary education, health policy, reconciliation, research "
-            f"funding, or Canadian governance should score at least 6. Do not penalise "
-            f"academic language or the absence of direct government quotes.]\n\n"
-            f"ABSTRACT:\n{abstract}"
-        )
+        combined = scholarly_hint + f"ABSTRACT:\n{abstract}"
     else:
-        combined = ""
-    return analyze_article(title=title, url=url, source_name=source, article_text=combined)
+        # No abstract — give the model just the hint so it scores on title
+        # with the generous instruction rather than the news-calibrated default.
+        combined = scholarly_hint + "NOTE: No abstract available — score based on title alone using the generous instruction above."
+
+    result = analyze_article(title=title, url=url, source_name=source, article_text=combined)
+
+    # If the AI still returned None (relevance < 6) despite the hint, use the
+    # keyword-based fallback. This is the safety net that prevents relevant
+    # academic papers from being silently discarded.
+    if result is None:
+        log.debug(f"  AI returned None for scholarly '{title[:60]}' — using keyword fallback")
+        result = _default_analysis(title, source)
+
+    return result
 
 
 # ── DATABASE HELPERS ─────────────────────────────────────────────────────────
