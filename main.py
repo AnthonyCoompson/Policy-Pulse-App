@@ -624,6 +624,7 @@ def trigger_scholarly_scrape(background_tasks: BackgroundTasks, body: dict = Non
     body = body or {}
     extra_keywords = body.get("keywords", [])
     fetch_config   = body.get("fetch_config", {})
+    background_tasks.add_task(_run_scholarly_bg, extra_keywords, fetch_config)
     # Persist so the scheduler uses the same config
     if fetch_config:
         import json
@@ -634,8 +635,12 @@ def trigger_scholarly_scrape(background_tasks: BackgroundTasks, body: dict = Non
 
 def _run_scholarly_bg(extra_keywords: list, fetch_config: dict = None):
     from scholarly_scraper import run_scholarly_scrape
-    run_scholarly_scrape(extra_keywords=extra_keywords, fetch_config=fetch_config or {})
-
+    try:
+        run_scholarly_scrape(extra_keywords=extra_keywords, fetch_config=fetch_config)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Scholarly background task crashed: {e}", exc_info=True)
+    
 
 @app.patch("/scholarly/{article_id}/read")
 def mark_scholarly_read(article_id: int, body: dict = None):

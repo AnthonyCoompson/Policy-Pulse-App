@@ -83,20 +83,62 @@ _SCHOLARLY_CONFIG_DEFAULTS: dict = {
 
 
 def _resolve_scholarly_config(filter_config: dict | None) -> dict:
-    """Merge filter_config onto scholarly defaults, clamping numeric fields."""
+    """Merge filter_config onto scholarly defaults, clamping numeric fields.
+
+    Handles two incoming formats:
+
+    Format A — internal/scraper format (scholarly_databases is a dict of bools):
+      { "scholarly_databases": { "openalex": true, "semantic": false, ... } }
+
+    Format B — frontend format (databases is a list of display-name strings):
+      { "databases": ["OpenAlex", "Semantic Scholar", "DOAJ", ...],
+        "min_relevance": 7 }
+
+    Both are normalised into Format A before being stored in cfg so the rest
+    of the scraper only ever sees one shape.
+    """
     cfg = dict(_SCHOLARLY_CONFIG_DEFAULTS)
     cfg["scholarly_databases"] = dict(_SCHOLARLY_CONFIG_DEFAULTS["scholarly_databases"])
 
-    if filter_config:
-        for k, v in filter_config.items():
-            if k == "scholarly_databases" and isinstance(v, dict):
-                cfg["scholarly_databases"].update(v)
-            else:
-                cfg[k] = v
+    if not filter_config:
+        return cfg
 
-    cfg["min_relevance"] = max(1, min(10, int(cfg["min_relevance"])))
-    cfg["days_back"]     = max(7, min(730, int(cfg["days_back"])))
-    cfg["dry_run"]       = bool(cfg["dry_run"])
+    # ── Translate Format B → Format A ────────────────────────────────────────
+    # The frontend (app.html buildResearchFetchConfig) sends a "databases" list
+    # of human-readable names. Convert that to the bool-dict the scraper uses.
+    if "databases" in filter_config and isinstance(filter_config["databases"], list):
+        enabled = [d.lower().replace(" ", "").replace("central", "") for d in filter_config["databases"]]
+        # Map frontend display names to internal keys
+        name_map = {
+            "openalex":          "openalex",
+            "semanticscholar":   "semantic",
+            "pubmedcentral":     "pubmed",
+            "pubmed":            "pubmed",
+            "doaj":              "doaj",
+            "arxiv":             "arxiv",
+            "canadianthinktank": "thinktanks",
+            "canadianthink":     "thinktanks",
+        }
+        # Start with everything disabled, then enable what the frontend listed
+        db_cfg = {k: False for k in cfg["scholarly_databases"]}
+        for display in enabled:
+            internal = name_map.get(display)
+            if internal and internal in db_cfg:
+                db_cfg[internal] = True
+        cfg["scholarly_databases"] = db_cfg
+
+    # ── Merge remaining keys (works for both formats) ─────────────────────────
+    for k, v in filter_config.items():
+        if k == "databases":
+            continue  # already handled above
+        if k == "scholarly_databases" and isinstance(v, dict):
+            cfg["scholarly_databases"].update(v)
+        else:
+            cfg[k] = v
+
+    cfg["min_relevance"] = max(1, min(10, int(cfg.get("min_relevance", 6))))
+    cfg["days_back"]     = max(7, min(730, int(cfg.get("days_back", 90))))
+    cfg["dry_run"]       = bool(cfg.get("dry_run", False))
     return cfg
 
 
@@ -754,206 +796,230 @@ def update_scholarly_read(article_id: int, read: bool):
 def run_scholarly_scrape(
     extra_keywords: list[str] | None = None,
     filter_config: dict | None = None,
+    fetch_config: dict | None = None,
 ) -> dict:
     """Fetch, score, filter, and save scholarly articles.
 
     Args:
         extra_keywords: Additional keywords beyond the DB watchlist (e.g.
                         passed in from the frontend's manual trigger).
-        filter_config:  Optional filter rules dict from the frontend UI or
-                        the stored DB config.  Merged with defaults so missing
-                        keys are always safe.  Pass None to use all defaults
-                        (backward-compatible with v2 callers).
+        filter_config:  Filter rules dict using the internal format.
+        fetch_config:   Alias for filter_config — this is the key name that
+                        app.html sends in its POST body via buildResearchFetchConfig().
+                        Either name works; filter_config takes precedence if both
+                        are supplied.
 
     Returns:
         {"added": int, "skipped": int, "errors": list[str], "dry_run": bool}
     """
+    # Accept fetch_config as an alias for filter_config.
+    # app.html sends "fetch_config" in its POST body; the internal format uses
+    # "filter_config". Either name works here so both callers are satisfied.
+    resolved_config = filter_config or fetch_config or None
+
     log.info("=== PolicyPulse Scholarly Scrape started ===")
-    ensure_scholarly_table()
 
-    cfg = _resolve_scholarly_config(filter_config)
-    dbs = cfg["scholarly_databases"]
+    # Wrap entire body so any uncaught exception surfaces in Railway logs
+    # instead of silently killing the background task with zero output.
+    try:
+        ensure_scholarly_table()
 
-    log.info(
-        f"  [config] min_rel={cfg['min_relevance']}, "
-        f"days_back={cfg['days_back']}, dry_run={cfg['dry_run']}, "
-        f"db_toggles={dbs}"
-    )
+        cfg = _resolve_scholarly_config(resolved_config)
+        dbs = cfg["scholarly_databases"]
 
-    # ── Build keyword list ────────────────────────────────────────────────────
-    from database import get_scholarly_keywords, get_watchlist_keywords
-    db_kws        = [r["keyword"] for r in get_scholarly_keywords() if r.get("active")]
-    watchlist_kws = get_watchlist_keywords()
-    keywords = list(set(db_kws + watchlist_kws + (extra_keywords or [])))
-    if not keywords:
-        log.warning("No scholarly keywords configured — using built-in defaults")
-        keywords = [
-            "Indigenous policy Canada",
-            "post-secondary education Canada",
-            "reconciliation Canada",
-            "pharmacare Canada",
-        ]
+        log.info(
+            f"  [config] min_rel={cfg['min_relevance']}, "
+            f"days_back={cfg['days_back']}, dry_run={cfg['dry_run']}, "
+            f"db_toggles={dbs}"
+        )
 
-    # ── Fetch from each enabled database ─────────────────────────────────────
-    all_items: list[dict] = []
+        # ── Build keyword list ────────────────────────────────────────────────
+        from database import get_scholarly_keywords, get_watchlist_keywords
+        db_kws        = [r["keyword"] for r in get_scholarly_keywords() if r.get("active")]
+        watchlist_kws = get_watchlist_keywords()
+        keywords = list(set(db_kws + watchlist_kws + (extra_keywords or [])))
+        if not keywords:
+            log.warning("No scholarly keywords configured — using built-in defaults")
+            keywords = [
+                "Indigenous policy Canada",
+                "post-secondary education Canada",
+                "reconciliation Canada",
+                "pharmacare Canada",
+            ]
 
-    if dbs.get("openalex", True):
-        try:
-            all_items.extend(fetch_openalex(keywords[:6], days_back=cfg["days_back"]))
-        except Exception as e:
-            log.error(f"OpenAlex failed: {e}")
-    else:
-        log.info("  [config] OpenAlex skipped (disabled)")
+        log.info(f"  Keywords ({len(keywords)}): {keywords[:6]}")
 
-    if dbs.get("semantic", True):
-        try:
-            all_items.extend(fetch_semantic_scholar(keywords[:4]))
-        except Exception as e:
-            log.error(f"Semantic Scholar failed: {e}")
-    else:
-        log.info("  [config] Semantic Scholar skipped (disabled)")
+        # ── Fetch from each enabled database ──────────────────────────────────
+        all_items: list[dict] = []
 
-    if dbs.get("thinktanks", True):
-        try:
-            all_items.extend(fetch_canadian_think_tanks())
-        except Exception as e:
-            log.error(f"Think-tanks failed: {e}")
-    else:
-        log.info("  [config] Canadian Think-Tanks skipped (disabled)")
-
-    if dbs.get("doaj", True):
-        try:
-            all_items.extend(fetch_doaj(keywords[:3]))
-        except Exception as e:
-            log.error(f"DOAJ failed: {e}")
-    else:
-        log.info("  [config] DOAJ skipped (disabled)")
-
-    if dbs.get("pubmed", True):
-        health_kws = [
-            k for k in keywords
-            if any(w in k.lower() for w in
-                   ["health", "pharmacare", "fnha", "indigenous", "mental"])
-        ]
-        if health_kws:
+        if dbs.get("openalex", True):
             try:
-                all_items.extend(fetch_pubmed(health_kws[:3]))
+                all_items.extend(fetch_openalex(keywords[:6], days_back=cfg["days_back"]))
             except Exception as e:
-                log.error(f"PubMed failed: {e}")
-    else:
-        log.info("  [config] PubMed skipped (disabled)")
+                log.error(f"OpenAlex failed: {e}", exc_info=True)
+        else:
+            log.info("  [config] OpenAlex skipped (disabled)")
 
-    if dbs.get("arxiv", True):
-        try:
-            all_items.extend(fetch_arxiv([k for k in keywords if len(k) > 6][:3]))
-        except Exception as e:
-            log.error(f"arXiv failed: {e}")
-    else:
-        log.info("  [config] arXiv skipped (disabled)")
+        if dbs.get("semantic", True):
+            try:
+                all_items.extend(fetch_semantic_scholar(keywords[:4]))
+            except Exception as e:
+                log.error(f"Semantic Scholar failed: {e}", exc_info=True)
+        else:
+            log.info("  [config] Semantic Scholar skipped (disabled)")
 
-    # ── Deduplicate by URL ────────────────────────────────────────────────────
-    seen_urls: set[str] = set()
-    unique_items: list[dict] = []
-    for item in all_items:
-        url = item.get("url", "").strip()
-        if url and url not in seen_urls:
-            seen_urls.add(url)
-            unique_items.append(item)
+        if dbs.get("thinktanks", True):
+            try:
+                all_items.extend(fetch_canadian_think_tanks())
+            except Exception as e:
+                log.error(f"Think-tanks failed: {e}", exc_info=True)
+        else:
+            log.info("  [config] Canadian Think-Tanks skipped (disabled)")
 
-    log.info(f"Scholarly: {len(unique_items)} unique items to process")
+        if dbs.get("doaj", True):
+            try:
+                all_items.extend(fetch_doaj(keywords[:3]))
+            except Exception as e:
+                log.error(f"DOAJ failed: {e}", exc_info=True)
+        else:
+            log.info("  [config] DOAJ skipped (disabled)")
 
-    # ── Pre-compute config filter values once ─────────────────────────────────
-    min_relevance    = cfg["min_relevance"]
-    domain_whitelist = [d.lower() for d in cfg.get("domain_whitelist", [])]
-    must_include_kws = [k.lower() for k in cfg.get("must_include", [])]
-    dry_run          = cfg["dry_run"]
+        if dbs.get("pubmed", True):
+            health_kws = [
+                k for k in keywords
+                if any(w in k.lower() for w in
+                       ["health", "pharmacare", "fnha", "indigenous", "mental"])
+            ]
+            if health_kws:
+                try:
+                    all_items.extend(fetch_pubmed(health_kws[:3]))
+                except Exception as e:
+                    log.error(f"PubMed failed: {e}", exc_info=True)
+        else:
+            log.info("  [config] PubMed skipped (disabled)")
 
-    added, skipped, errors = 0, 0, []
+        if dbs.get("arxiv", True):
+            try:
+                all_items.extend(fetch_arxiv([k for k in keywords if len(k) > 6][:3]))
+            except Exception as e:
+                log.error(f"arXiv failed: {e}", exc_info=True)
+        else:
+            log.info("  [config] arXiv skipped (disabled)")
 
-    for item in unique_items:
-        title = (item.get("title") or "").strip()
-        url   = (item.get("url")   or "").strip()
-        if not title or not url or len(title) < 10:
-            continue
+        # ── Deduplicate by URL ────────────────────────────────────────────────
+        seen_urls: set[str] = set()
+        unique_items: list[dict] = []
+        for item in all_items:
+            url = item.get("url", "").strip()
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                unique_items.append(item)
 
-        try:
-            # ── AI scoring ───────────────────────────────────────────────────
-            ai = analyze_scholarly(
-                title=title,
-                abstract=item.get("abstract", ""),
-                source=item.get("source", ""),
-                url=url,
-                database=item.get("database", ""),
-            )
-            if ai is None:
-                skipped += 1
+        log.info(f"Scholarly: {len(unique_items)} unique items to process")
+
+        # ── Pre-compute config filter values once ─────────────────────────────
+        min_relevance    = cfg["min_relevance"]
+        domain_whitelist = [d.lower() for d in cfg.get("domain_whitelist", [])]
+        must_include_kws = [k.lower() for k in cfg.get("must_include", [])]
+        dry_run          = cfg["dry_run"]
+
+        added, skipped, errors = 0, 0, []
+
+        for item in unique_items:
+            title = (item.get("title") or "").strip()
+            url   = (item.get("url")   or "").strip()
+            if not title or not url or len(title) < 10:
                 continue
 
-            # Apply source-level relevance boost (set per think-tank source)
-            boost = item.get("relevance_boost", 0)
-            if boost:
-                ai["relevance"] = min(10, ai["relevance"] + boost)
+            try:
+                # ── AI scoring ────────────────────────────────────────────────
+                ai = analyze_scholarly(
+                    title=title,
+                    abstract=item.get("abstract", ""),
+                    source=item.get("source", ""),
+                    url=url,
+                    database=item.get("database", ""),
+                )
+                if ai is None:
+                    log.debug(f"  AI returned None for: {title[:60]}")
+                    skipped += 1
+                    continue
 
-            # ── min_relevance filter ─────────────────────────────────────────
-            if ai["relevance"] < min_relevance:
+                # Apply source-level relevance boost (set per think-tank source)
+                boost = item.get("relevance_boost", 0)
+                if boost:
+                    ai["relevance"] = min(10, ai["relevance"] + boost)
+
                 log.debug(
-                    f"  [config] Dropping '{title[:55]}' — "
-                    f"relevance {ai['relevance']} < {min_relevance}"
+                    f"  Scored: '{title[:55]}' "
+                    f"rel={ai['relevance']} domain={ai.get('domain')} "
+                    f"db={item.get('database')}"
                 )
-                skipped += 1
-                continue
 
-            # ── Domain whitelist ─────────────────────────────────────────────
-            if domain_whitelist:
-                article_domains = [
-                    d.strip().lower()
-                    for d in (ai.get("domain") or "").split(",")
-                ]
-                if not any(wd in article_domains for wd in domain_whitelist):
+                # ── min_relevance filter ──────────────────────────────────────
+                if ai["relevance"] < min_relevance:
                     log.debug(
                         f"  [config] Dropping '{title[:55]}' — "
-                        f"domain '{ai.get('domain')}' not whitelisted"
+                        f"relevance {ai['relevance']} < {min_relevance}"
                     )
                     skipped += 1
                     continue
 
-            # ── Must-include keyword check ────────────────────────────────────
-            if must_include_kws:
-                hay = (title + " " + (ai.get("summary") or "") + " " +
-                       item.get("abstract", "")[:500]).lower()
-                if not any(kw in hay for kw in must_include_kws):
-                    log.debug(
-                        f"  [config] Dropping '{title[:55]}' — "
-                        f"no must-include keyword found"
+                # ── Domain whitelist ──────────────────────────────────────────
+                if domain_whitelist:
+                    article_domains = [
+                        d.strip().lower()
+                        for d in (ai.get("domain") or "").split(",")
+                    ]
+                    if not any(wd in article_domains for wd in domain_whitelist):
+                        log.debug(
+                            f"  [config] Dropping '{title[:55]}' — "
+                            f"domain '{ai.get('domain')}' not whitelisted"
+                        )
+                        skipped += 1
+                        continue
+
+                # ── Must-include keyword check ────────────────────────────────
+                if must_include_kws:
+                    hay = (title + " " + (ai.get("summary") or "") + " " +
+                           item.get("abstract", "")[:500]).lower()
+                    if not any(kw in hay for kw in must_include_kws):
+                        log.debug(
+                            f"  [config] Dropping '{title[:55]}' — "
+                            f"no must-include keyword found"
+                        )
+                        skipped += 1
+                        continue
+
+                # ── Dry run ───────────────────────────────────────────────────
+                if dry_run:
+                    log.info(
+                        f"  [DRY RUN] Would save: '{title[:60]}' "
+                        f"(rel={ai['relevance']}, db={item.get('database')}, "
+                        f"domain={ai.get('domain')})"
                     )
-                    skipped += 1
+                    added += 1
                     continue
 
-            # ── Dry run ───────────────────────────────────────────────────────
-            if dry_run:
-                log.info(
-                    f"  [DRY RUN] Would save: '{title[:60]}' "
-                    f"(rel={ai['relevance']}, db={item.get('database')}, "
-                    f"domain={ai.get('domain')})"
-                )
-                added += 1
-                continue
+                # ── Persist ───────────────────────────────────────────────────
+                if save_scholarly_article(item, ai):
+                    added += 1
+                else:
+                    skipped += 1  # duplicate url_hash — already in DB
 
-            # ── Persist ───────────────────────────────────────────────────────
-            if save_scholarly_article(item, ai):
-                added += 1
-            else:
-                skipped += 1
+            except Exception as e:
+                errors.append(f"{title[:40]}: {e}")
+                log.warning(f"Scholarly analysis error for '{title[:40]}': {e}", exc_info=True)
 
-        except Exception as e:
-            errors.append(f"{title[:40]}: {e}")
-            log.warning(f"Scholarly analysis error: {e}")
+            time.sleep(0.3)
 
-        time.sleep(0.3)
+        dry_note = " (DRY RUN — nothing saved)" if dry_run else ""
+        log.info(
+            f"=== Scholarly done. "
+            f"Added: {added}{dry_note}, Skipped: {skipped}, Errors: {len(errors)} ==="
+        )
+        return {"added": added, "skipped": skipped, "errors": errors, "dry_run": dry_run}
 
-    dry_note = " (DRY RUN — nothing saved)" if dry_run else ""
-    log.info(
-        f"=== Scholarly done. "
-        f"Added: {added}{dry_note}, Skipped: {skipped}, Errors: {len(errors)} ==="
-    )
-    return {"added": added, "skipped": skipped, "errors": errors, "dry_run": dry_run}
+    except Exception as e:
+        log.error(f"=== Scholarly scrape crashed: {e} ===", exc_info=True)
+        return {"added": 0, "skipped": 0, "errors": [str(e)], "dry_run": False}
