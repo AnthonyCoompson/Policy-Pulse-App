@@ -1845,38 +1845,41 @@ function skipApiKey(){
       <strong style="color:var(--text)">Fetching research</strong> <span style="color:var(--muted)">— querying OpenAlex, Semantic Scholar, Canadian think-tanks, PubMed, DOAJ, arXiv&hellip; This takes 60&ndash;90 seconds. The feed will refresh automatically.</span>
     </div>
 
-
-    <!-- Stats + DB legend — always visible above sub-tabs -->
-    <div class="research-stats-grid" id="research-stats-grid" style="margin-bottom:10px">
-      <div class="research-stat"><div class="research-stat-val" id="rs-total">—</div><div class="research-stat-label">Total Articles</div></div>
-      <div class="research-stat"><div class="research-stat-val" id="rs-unread" style="color:#a5b4fc">—</div><div class="research-stat-label">Unread</div></div>
-      <div class="research-stat"><div class="research-stat-val" id="rs-week" style="color:var(--gold)">—</div><div class="research-stat-label">Added This Week</div></div>
-      <div class="research-stat"><div class="research-stat-val" id="rs-dbs">6</div><div class="research-stat-label">Databases</div></div>
-      <div class="research-stat"><div class="research-stat-val" id="rs-oa" style="color:#10b981">100%</div><div class="research-stat-label">Open Access</div></div>
-    </div>
-    <div style="padding:10px 14px;background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
-      <div style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Data Sources</div>
-      <div class="source-breakdown" id="research-source-breakdown">
-        <span class="research-db-badge db-openalex">&#x1F30D; OpenAlex</span>
-        <span class="research-db-badge db-semantic">&#x1F9E0; Semantic Scholar</span>
-        <span class="research-db-badge db-pubmed">&#x1F9EA; PubMed Central</span>
-        <span class="research-db-badge db-doaj">&#x1F4D6; DOAJ</span>
-        <span class="research-db-badge db-arxiv">&#x1F4CA; arXiv</span>
-        <span class="research-db-badge db-canadian">&#x1F341; Canadian Think-Tanks</span>
-        <div style="width:100%;height:0"></div>
-        <span style="font-size:10px;color:var(--dim);align-self:center">All sources are freely accessible, open access, and scraping-permitted.</span>
-      </div>
-    </div>
     <!-- Sub-tabs — directly under title row, matching News & Articles layout -->
     <div class="sub-tabs">
-      <button class="sub-tab active" id="rst-feed" onclick="researchTab('feed')">Article Feed</button>
-      <button class="sub-tab" id="rst-search" onclick="researchTab('search')">Search &amp; Filter</button>
-      <button class="sub-tab" id="rst-sources" onclick="researchTab('sources')">About Sources</button>
-      <button class="sub-tab" id="rst-settings" onclick="researchTab('settings')">&#x2699; Filter Settings</button>
+      <button class="sub-tab active" id="rst-feed"     onclick="researchTab('feed')">Article Feed</button>
+      <button class="sub-tab"        id="rst-archive"  onclick="researchTab('archive')">Search &amp; Archive</button>
+      <button class="sub-tab"        id="rst-sources"  onclick="researchTab('sources')">Sources</button>
+      <button class="sub-tab"        id="rst-settings" onclick="researchTab('settings')">&#x2699; Filter Settings</button>
     </div>
 
     <!-- FEED PANEL -->
-    <div id="research-feed-panel" style="padding-top:12px">
+    <div id="research-feed-panel">
+
+      <!-- Stats row — inside feed panel, below sub-tabs -->
+      <div class="research-stats-grid" id="research-stats-grid" style="margin-top:12px">
+        <div class="research-stat"><div class="research-stat-val" id="rs-total">—</div><div class="research-stat-label">Total Articles</div></div>
+        <div class="research-stat"><div class="research-stat-val" id="rs-unread" style="color:#a5b4fc">—</div><div class="research-stat-label">Unread</div></div>
+        <div class="research-stat"><div class="research-stat-val" id="rs-week" style="color:var(--gold)">—</div><div class="research-stat-label">Added This Week</div></div>
+        <div class="research-stat"><div class="research-stat-val" id="rs-dbs">6</div><div class="research-stat-label">Databases</div></div>
+        <div class="research-stat"><div class="research-stat-val" id="rs-oa" style="color:#10b981">100%</div><div class="research-stat-label">Open Access</div></div>
+      </div>
+
+      <!-- Database legend -->
+      <div style="padding:10px 14px;background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
+        <div style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Data Sources</div>
+        <div class="source-breakdown" id="research-source-breakdown">
+          <span class="research-db-badge db-openalex">&#x1F30D; OpenAlex</span>
+          <span class="research-db-badge db-semantic">&#x1F9E0; Semantic Scholar</span>
+          <span class="research-db-badge db-pubmed">&#x1F9EA; PubMed Central</span>
+          <span class="research-db-badge db-doaj">&#x1F4D6; DOAJ</span>
+          <span class="research-db-badge db-arxiv">&#x1F4CA; arXiv</span>
+          <span class="research-db-badge db-canadian">&#x1F341; Canadian Think-Tanks</span>
+          <div style="width:100%;height:0"></div>
+          <span style="font-size:10px;color:var(--dim);align-self:center">All sources are freely accessible, open access, and scraping-permitted.</span>
+        </div>
+      </div>
+
       <!-- Bulk action bar -->
       <div id="research-bulk-bar" style="display:none;align-items:center;gap:8px;padding:8px 12px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:8px;margin-bottom:10px;flex-wrap:wrap">
         <span id="research-bulk-count" style="font-size:12px;font-weight:600;color:#a5b4fc">0 selected</span>
@@ -1950,124 +1953,147 @@ function skipApiKey(){
     </div>
 
     <!-- SEARCH PANEL -->
-    <div id="research-search-panel" style="display:none;padding-top:12px">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-        <input class="filter-input" id="research-adv-search" placeholder="Search by title, author, abstract, DOI…" style="flex:1">
-        <button class="btn btn-primary" onclick="runAdvancedResearchSearch()">Search</button>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">
-        Or fetch new papers on a specific topic using the API:
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
-        <input class="filter-input" id="research-custom-kw" placeholder="Topic or keyword (e.g. 'OCAP data sovereignty')" style="flex:1;max-width:360px">
-        <button class="btn btn-cyan" onclick="fetchByKeyword()">&#x1F50D; Fetch from APIs</button>
-      </div>
-      <div id="research-adv-results"></div>
-    </div>
+    <!-- ══ SEARCH & ARCHIVE PANEL (mirrors scraper-archive-panel) ══ -->
+    <div id="research-archive-panel" style="display:none">
 
-    <!-- SOURCES PANEL -->
-    <div id="research-sources-panel" style="display:none;padding-top:12px">
-      <!-- HOW THE RESEARCH SCRAPER WORKS -->
-      <div style="background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(139,92,246,0.05));border:1px solid rgba(99,102,241,0.2);border-radius:12px;padding:20px 22px;margin-bottom:20px;max-width:900px;position:relative;overflow:hidden">
-        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#6366f1,#8b5cf6,transparent);opacity:0.7"></div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#818cf8;margin-bottom:14px;display:flex;align-items:center;gap:6px">
-          <span style="font-size:14px">&#x2699;&#xFE0F;</span> How the Research Scraper Works
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:16px">
-          <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:12px 14px">
-            <div style="font-size:11px;font-weight:700;color:#a5b4fc;margin-bottom:5px;display:flex;align-items:center;gap:5px">&#x1F50D; Step 1 — Keyword Matching</div>
-            <div style="font-size:11px;color:var(--muted);line-height:1.7">The scraper uses your <strong style="color:var(--text)">Keyword Watchlist</strong> (from the Scraper tab) plus a set of default policy topics to query each database. It automatically targets terms like &ldquo;Indigenous policy Canada&rdquo;, &ldquo;DRIPA UNDRIP&rdquo;, &ldquo;pharmacare&rdquo;, and &ldquo;post-secondary education Canada&rdquo;.</div>
-          </div>
-          <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:12px 14px">
-            <div style="font-size:11px;font-weight:700;color:#a5b4fc;margin-bottom:5px;display:flex;align-items:center;gap:5px">&#x1F4E1; Step 2 — Multi-Database Query</div>
-            <div style="font-size:11px;color:var(--muted);line-height:1.7">Six open-access databases are queried in parallel: <strong style="color:var(--text)">OpenAlex</strong> (250M works), <strong style="color:var(--text)">Semantic Scholar</strong> (220M papers), <strong style="color:var(--text)">PubMed Central</strong> (biomedical), <strong style="color:var(--text)">DOAJ</strong> (peer-reviewed journals), <strong style="color:var(--text)">arXiv</strong> (preprints), and <strong style="color:var(--text)">6 Canadian think-tanks</strong>. No API keys required.</div>
-          </div>
-          <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:12px 14px">
-            <div style="font-size:11px;font-weight:700;color:#a5b4fc;margin-bottom:5px;display:flex;align-items:center;gap:5px">&#x1F916; Step 3 — AI Relevance Scoring</div>
-            <div style="font-size:11px;color:var(--muted);line-height:1.7">Every article is passed through <strong style="color:var(--text)">Gemini AI</strong> which scores it 1–10 for relevance to BC/Canadian policy. Only articles scoring <strong style="color:#10b981">6 or higher</strong> are saved. Low-relevance academic noise is automatically discarded.</div>
-          </div>
-          <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:12px 14px">
-            <div style="font-size:11px;font-weight:700;color:#a5b4fc;margin-bottom:5px;display:flex;align-items:center;gap:5px">&#x1F4C5; Step 4 — Scheduled Weekly</div>
-            <div style="font-size:11px;color:var(--muted);line-height:1.7">The research scraper runs <strong style="color:var(--text)">every Monday at 8:00 AM</strong> (Vancouver time) automatically via the Railway backend scheduler. You can also trigger it manually with <strong style="color:var(--text)">Fetch New Research</strong> above. Results appear in the Article Feed within ~90 seconds.</div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:flex-start;gap:8px;padding:10px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:7px">
-          <span style="font-size:14px;flex-shrink:0;margin-top:1px">&#x1F513;</span>
-          <div style="font-size:11px;color:var(--muted);line-height:1.7"><strong style="color:var(--text)">100% Open Access:</strong> PolicyPulse only indexes freely available research. Every article in the Research feed can be opened and read without a subscription. The scraper never touches paywalled content — JSTOR, Scopus, and Elsevier are explicitly excluded.</div>
+      <!-- Scholarly keywords watchlist -->
+      <div style="margin-bottom:14px">
+        <div class="section-title" style="margin-top:0">&#x1F4D6; Scholarly Search Keywords</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">These keywords are sent to OpenAlex, Semantic Scholar, PubMed, DOAJ, and arXiv on every research scrape run.</div>
+        <div id="scholarly-keywords-list" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px">
+          <input class="filter-input" id="skw-input" placeholder="Add keyword (e.g. 'OCAP Indigenous data')" style="max-width:300px" onkeydown="if(event.key==='Enter')submitAddScholarlyKeyword()">
+          <button class="btn btn-cyan" onclick="submitAddScholarlyKeyword()">+ Add</button>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:900px">
 
-        <div class="card">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-            <span class="research-db-badge db-openalex">OpenAlex</span>
-            <span class="oa-badge">&#x1F513; Free</span>
-          </div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px">OpenAlex</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">250M+ scholarly works. No API key required. Covers all disciplines. The most comprehensive free scholarly database available.</div>
-          <a href="https://openalex.org" target="_blank" style="font-size:10px;color:var(--cyan)">openalex.org &#x2197;</a>
+      <!-- Scholarly exclusion keywords -->
+      <div style="margin-top:20px;margin-bottom:14px">
+        <div class="section-title" style="margin-top:0">&#x1F6AB; Exclusion Keywords</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Research articles whose titles contain these words are silently dropped before AI processing. Saves immediately to backend.</div>
+        <div id="scholarly-exclusion-tags" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px">
+          <input class="filter-input" id="scholarly-excl-input" placeholder="e.g. predatory journal, retracted, erratum&hellip;" style="max-width:300px" onkeydown="if(event.key==='Enter')addScholarlyExclusionKeyword()">
+          <button class="btn btn-red btn-sm" onclick="addScholarlyExclusionKeyword()">+ Block</button>
         </div>
-
-        <div class="card">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-            <span class="research-db-badge db-semantic">Semantic Scholar</span>
-            <span class="oa-badge">&#x1F513; Free</span>
-          </div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px">Semantic Scholar</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">AI-powered academic search by Allen Institute. 220M papers with high-quality abstracts and author graphs. 100 req/min free.</div>
-          <a href="https://www.semanticscholar.org" target="_blank" style="font-size:10px;color:var(--cyan)">semanticscholar.org &#x2197;</a>
-        </div>
-
-        <div class="card">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-            <span class="research-db-badge db-pubmed">PubMed Central</span>
-            <span class="oa-badge">&#x1F513; Free</span>
-          </div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px">PubMed Central (NCBI)</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">Full-text biomedical and health research. Especially relevant for Indigenous health policy, pharmacare, and FNHA-related research. Official NCBI E-utilities API.</div>
-          <a href="https://www.ncbi.nlm.nih.gov/pmc/" target="_blank" style="font-size:10px;color:var(--cyan)">ncbi.nlm.nih.gov/pmc &#x2197;</a>
-        </div>
-
-        <div class="card">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-            <span class="research-db-badge db-doaj">DOAJ</span>
-            <span class="oa-badge">&#x1F513; Free</span>
-          </div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px">DOAJ — Directory of Open Access Journals</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">Indexes 20,000+ peer-reviewed open access journals. Rigorous quality criteria. Strong coverage of social sciences, law, and policy.</div>
-          <a href="https://doaj.org" target="_blank" style="font-size:10px;color:var(--cyan)">doaj.org &#x2197;</a>
-        </div>
-
-        <div class="card">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-            <span class="research-db-badge db-arxiv">arXiv</span>
-            <span class="oa-badge">&#x1F513; Free</span>
-          </div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px">arXiv Preprints</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">Working papers and preprints in economics, social science, computer science (including AI policy). Often 6–12 months ahead of journal publication.</div>
-          <a href="https://arxiv.org" target="_blank" style="font-size:10px;color:var(--cyan)">arxiv.org &#x2197;</a>
-        </div>
-
-        <div class="card">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-            <span class="research-db-badge db-canadian">Canadian Think-Tanks</span>
-          </div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px">Canadian Policy Research Organisations</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.75;margin-bottom:8px">
-            Publications from: <strong>Yellowhead Institute</strong> (Indigenous policy), <strong>CCPA</strong>, <strong>NCCIH</strong>, <strong>CD Howe Institute</strong>, <strong>Macdonald-Laurier Institute</strong>, <strong>Broadbent Institute</strong>. All freely accessible.
-          </div>
-        </div>
-
       </div>
 
-      <div style="margin-top:16px;padding:12px 16px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.18);border-radius:8px;font-size:12px;color:var(--muted);line-height:1.8">
-        <strong style="color:var(--text)">&#x1F512; What we cannot access:</strong> JSTOR, Scopus, Web of Science, Elsevier, Springer, Wiley, and most Canadian political science journals require institutional subscriptions. PolicyPulse only fetches open access content and never scrapes paywalled material.
+      <!-- Archive sub-tabs -->
+      <div class="sub-tabs" style="margin-top:16px">
+        <button class="sub-tab active" onclick="researchArchiveTab('search')" id="rat-search">Full Search</button>
+        <button class="sub-tab"        onclick="researchArchiveTab('month')"  id="rat-month">By Month</button>
+        <button class="sub-tab"        onclick="researchArchiveTab('year')"   id="rat-year">By Year</button>
+        <button class="sub-tab"        onclick="researchArchiveTab('domain')" id="rat-domain">By Domain</button>
+        <button class="sub-tab"        onclick="researchArchiveTab('db')"     id="rat-db">By Database</button>
       </div>
-    </div>
-  </div>
+
+      <!-- Full search -->
+      <div id="research-archive-search-panel">
+        <div class="filters">
+          <input class="filter-input" id="research-archive-search" placeholder="Full-text search research archives&hellip;" oninput="renderResearchArchive()">
+          <select class="filter-select" id="research-archive-domain" onchange="renderResearchArchive()">
+            <option value="">All Domains</option>
+            <option>Higher Education</option><option>Research Funding</option><option>Indigenous</option>
+            <option>Reconciliation</option><option>Health</option><option>Budget</option><option>Legislation</option>
+          </select>
+          <select class="filter-select" id="research-archive-db" onchange="renderResearchArchive()">
+            <option value="">All Databases</option>
+            <option>OpenAlex</option><option>Semantic Scholar</option><option>PubMed Central</option>
+            <option>DOAJ</option><option>arXiv</option><option>Canadian Think Tank</option>
+          </select>
+        </div>
+        <div id="research-archive-results"></div>
+      </div>
+
+      <div id="research-archive-month-panel"  style="display:none"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="research-month-btns"></div><div id="research-month-results"></div></div>
+      <div id="research-archive-year-panel"   style="display:none"><div style="display:flex;gap:6px;margin-bottom:12px" id="research-year-btns"></div><div id="research-year-results"></div></div>
+      <div id="research-archive-domain-panel" style="display:none"><div id="research-domain-results"></div></div>
+      <div id="research-archive-db-panel"     style="display:none"><div id="research-db-results"></div></div>
+
+    </div><!-- /research-archive-panel -->
+
+    <!-- ══ SOURCES PANEL (mirrors scraper-sources-panel) ══ -->
+    <div id="research-sources-panel" style="display:none">
+
+      <!-- Think-tank / custom sources -->
+      <div style="margin-bottom:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <div style="font-size:12px;color:var(--muted)" id="research-sources-count">Loading sources&hellip;</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="detectResearchDuplicates()">&#x1F50D; Find Dupes</button>
+            <button class="btn btn-primary"      onclick="showAddResearchSourceModal()">+ Add Source</button>
+          </div>
+        </div>
+
+        <!-- Duplicate alert -->
+        <div id="research-duplicate-alert" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(244,63,94,0.08);border:1px solid rgba(244,63,94,0.25);border-radius:8px">
+          <div style="font-size:11px;font-weight:700;color:#fb7185;margin-bottom:6px">&#x26A0; Potential Duplicate Articles Detected</div>
+          <div id="research-duplicate-list" style="font-size:11px;color:var(--muted);line-height:1.8"></div>
+        </div>
+
+        <!-- Inline add-source form -->
+        <div id="add-research-source-form" style="display:none;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:16px 18px;margin-bottom:14px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:12px">+ Add Research Source</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <input class="filter-input" id="nrs-name" placeholder="Organisation name *"    style="grid-column:1/-1">
+            <input class="filter-input" id="nrs-url"  placeholder="Publications page URL *" style="grid-column:1/-1">
+            <select class="filter-select" id="nrs-type">
+              <option value="think_tank">Think Tank</option>
+              <option value="government">Government</option>
+              <option value="university">University</option>
+              <option value="ngo">NGO / Non-profit</option>
+              <option value="other">Other</option>
+            </select>
+            <select class="filter-select" id="nrs-boost" title="Relevance boost adds points to the AI score for articles from this source">
+              <option value="0">No boost (neutral)</option>
+              <option value="1">+1 boost (relevant)</option>
+              <option value="2">+2 boost (highly relevant)</option>
+            </select>
+            <input class="filter-input" id="nrs-notes" placeholder="Notes (optional)" style="grid-column:1/-1">
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:7px 10px;background:rgba(0,0,0,.2);border-radius:6px">
+            &#x1F4A1; The scraper crawls this URL for publication links using generic heading selectors (h2/h3).
+            Works best on sites that list publications with linked headings.
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" style="background:linear-gradient(135deg,#4f46e5,#6366f1)" onclick="submitAddResearchSource()">+ Add Source</button>
+            <button class="btn btn-ghost"   onclick="hideAddResearchSourceModal()">Cancel</button>
+          </div>
+          <div id="add-research-source-status" style="font-size:11px;margin-top:8px;display:none"></div>
+        </div>
+
+        <!-- Sources table -->
+        <div class="table-wrap" style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Organisation</th><th>URL</th><th>Type</th><th>Boost</th><th>Status</th><th>Last Scraped</th><th>Articles</th><th>Actions</th></tr></thead>
+            <tbody id="research-sources-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Open-access API sources info (read-only) -->
+      <div>
+        <div class="section-title">&#x1F310; Open-Access API Sources</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:14px">These databases are queried automatically using your keywords (set in Search &amp; Archive). No credentials required — always active.</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;max-width:900px">
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-openalex">OpenAlex</span><span class="oa-badge">&#x1F513; Free</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">250M+ scholarly works. No API key. Best coverage for policy and social science.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-semantic">Semantic Scholar</span><span class="oa-badge">&#x1F513; Free</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">220M papers with AI-powered abstracts. Allen Institute. Strong on interdisciplinary work.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-pubmed">PubMed Central</span><span class="oa-badge">&#x1F513; Free</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">Full-text biomedical research. Best for Indigenous health, pharmacare, and FNHA-related papers.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-doaj">DOAJ</span><span class="oa-badge">&#x1F513; Free</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">20,000+ peer-reviewed open access journals. Strong on law, policy, and social sciences.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-arxiv">arXiv</span><span class="oa-badge">&#x1F513; Free</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">Preprints in economics, social science, AI policy. Often 6&ndash;12 months ahead of journals.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-canadian">Canadian Think-Tanks</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">Yellowhead Institute, CCPA, NCCIH, CD Howe, Macdonald-Laurier, Broadbent. Managed via the Sources table above.</div></div>
+        </div>
+        <div style="margin-top:14px;padding:12px 16px;background:rgba(244,63,94,0.05);border:1px solid rgba(244,63,94,0.15);border-radius:8px;font-size:12px;color:var(--muted);line-height:1.8;max-width:900px">
+          <strong style="color:#fb7185">&#x1F512; What we cannot access:</strong> JSTOR, Scopus, Web of Science, Elsevier, Springer, Wiley, and paywalled journals. PolicyPulse only fetches open-access content.
+        </div>
+      </div>
+
+    </div><!-- /research-sources-panel -->
+
+
 
     <!-- ═══ RESEARCH SCRAPER FILTER SETTINGS PANEL ═══ -->
-    <div id="research-settings-panel" style="display:none;padding-top:12px">
+    <div id="research-settings-panel" style="display:none">
       <div style="max-width:780px">
 
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
@@ -2190,34 +2216,546 @@ function skipApiKey(){
       </div>
     </div><!-- /research-settings-panel -->
 
+</div><!-- /page-research -->
+
 <script>
 /* ═══════════════════════════════════════════════════
    RESEARCH / SCHOLARLY MODULE
 ═══════════════════════════════════════════════════ */
 
 var _researchArticles = [];
-var _researchPage = 0;
-var _researchPageSize = 20;
-var _researchSearchTimer = null;
+/* _researchPageNum, _researchPageSz, _researchSearchTimer declared below with the rest of research state */
 
 function researchTab(t){
-  ['feed','search','sources','settings'].forEach(function(x){
+  ['feed','archive','sources','settings'].forEach(function(x){
     var panel = document.getElementById('research-'+x+'-panel');
     var btn   = document.getElementById('rst-'+x);
     if(panel) panel.style.display = x===t ? 'block' : 'none';
     if(btn)   btn.classList.toggle('active', x===t);
   });
-  if(t==='feed')     renderResearchFeed();
-  if(t==='settings') initResearchFilterSettings();
-  // Double-rAF: fires after chunked card renderer (which itself uses rAF) finishes
-  // injecting DOM nodes — guarantees scroll lands at top AFTER all layout is done
-  requestAnimationFrame(function(){
-    requestAnimationFrame(function(){
-      var mainEl = document.getElementById('main');
-      if(mainEl) mainEl.scrollTop = 0;
-    });
+  if(t==='feed')    { renderResearchFeed(); }
+  if(t==='archive') { renderScholarlyKeywords(); loadScholarlyExclusionKeywords(); researchArchiveTab('search'); }
+  if(t==='sources') { renderResearchSourcesTable(); }
+  if(t==='settings'){ initResearchFilterSettings(); }
+}
+
+/* ── Archive sub-tab router (mirrors archiveTab()) ── */
+function researchArchiveTab(t){
+  ['search','month','year','domain','db'].forEach(function(x){
+    var panel = document.getElementById('research-archive-'+x+'-panel');
+    var btn   = document.getElementById('rat-'+x);
+    if(panel) panel.style.display = x===t ? 'block' : 'none';
+    if(btn)   btn.classList.toggle('active', x===t);
+  });
+  if(t==='month')  renderResearchByMonth();
+  if(t==='year')   renderResearchByYear();
+  if(t==='domain') renderResearchByDomain();
+  if(t==='db')     renderResearchByDatabase();
+}
+
+/* ── Full-text archive search ── */
+function renderResearchArchive(){
+  var q   = (document.getElementById('research-archive-search')||{}).value||'';
+  var dom = (document.getElementById('research-archive-domain')||{}).value||'';
+  var db  = (document.getElementById('research-archive-db')||{}).value||'';
+  var list = _researchArticles.filter(function(a){
+    if(dom && !(a.domain||'').toLowerCase().includes(dom.toLowerCase())) return false;
+    if(db  && (a.database_name||'') !== db) return false;
+    if(q){ var hay=((a.title||'')+' '+(a.abstract||a.summary||'')+' '+(a.authors||'')).toLowerCase(); if(!hay.includes(q.toLowerCase())) return false; }
+    return true;
+  }).sort(function(a,b){ return new Date(b.pub_date||0)-new Date(a.pub_date||0); });
+  var el = document.getElementById('research-archive-results');
+  if(!el) return;
+  el.innerHTML = list.length
+    ? list.map(function(a){ return buildResearchCard(a,false); }).join('')
+    : '<div class="empty"><div class="empty-icon">&#x1F50D;</div><div class="empty-text">No research articles match.</div></div>';
+}
+
+/* ── By month ── */
+function renderResearchByMonth(){
+  var monthSet=new Set();
+  _researchArticles.forEach(function(a){ var d=a.pub_date||''; if(d.length>=7) monthSet.add(d.slice(0,7)); });
+  var months=Array.from(monthSet).sort(function(a,b){return b.localeCompare(a);});
+  var btnEl=document.getElementById('research-month-btns');
+  if(!months.length){ if(btnEl) btnEl.innerHTML='<span style="color:var(--dim);font-size:12px">No articles yet.</span>'; return; }
+  btnEl.innerHTML=months.map(function(m,i){
+    var label=new Date(m+'-02').toLocaleDateString('en-CA',{year:'numeric',month:'long'});
+    var count=_researchArticles.filter(function(a){return (a.pub_date||'').startsWith(m);}).length;
+    return '<button class="pill'+(i===0?' active':'')+'" onclick="showResearchMonth(\''+m+'\',this)">'+label+' <span style="font-size:10px;opacity:.7">('+count+')</span></button>';
+  }).join('');
+  showResearchMonth(months[0],btnEl.children[0]);
+}
+function showResearchMonth(m,btn){
+  document.querySelectorAll('#research-month-btns .pill').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  var list=_researchArticles.filter(function(a){return (a.pub_date||'').startsWith(m);}).sort(function(a,b){return new Date(b.pub_date||0)-new Date(a.pub_date||0);});
+  var el=document.getElementById('research-month-results');
+  if(el) el.innerHTML=list.length ? list.map(function(a){return buildResearchCard(a,false);}).join('') : '<div class="empty"><div class="empty-icon">&#x1F4C5;</div><div class="empty-text">No research published this month.</div></div>';
+}
+
+/* ── By year ── */
+function renderResearchByYear(){
+  var yearSet=new Set();
+  _researchArticles.forEach(function(a){ var d=a.pub_date||''; if(d.length>=4) yearSet.add(d.slice(0,4)); });
+  var years=Array.from(yearSet).sort(function(a,b){return b.localeCompare(a);});
+  var btnEl=document.getElementById('research-year-btns');
+  if(!years.length){ if(btnEl) btnEl.innerHTML='<span style="color:var(--dim);font-size:12px">No articles yet.</span>'; return; }
+  btnEl.innerHTML=years.map(function(y,i){
+    var count=_researchArticles.filter(function(a){return (a.pub_date||'').startsWith(y);}).length;
+    return '<button class="pill'+(i===0?' active':'')+'" onclick="showResearchYear(\''+y+'\',this)">'+y+' <span style="font-size:10px;opacity:.7">('+count+')</span></button>';
+  }).join('');
+  showResearchYear(years[0],btnEl.children[0]);
+}
+function showResearchYear(y,btn){
+  document.querySelectorAll('#research-year-btns .pill').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  var list=_researchArticles.filter(function(a){return (a.pub_date||'').startsWith(y);}).sort(function(a,b){return new Date(b.pub_date||0)-new Date(a.pub_date||0);});
+  var el=document.getElementById('research-year-results');
+  if(el) el.innerHTML=list.length ? list.map(function(a){return buildResearchCard(a,false);}).join('') : '<div class="empty"><div class="empty-icon">&#x1F4C5;</div><div class="empty-text">No research published this year.</div></div>';
+}
+
+/* ── By domain ── */
+function renderResearchByDomain(){
+  var domainSet=new Set();
+  _researchArticles.forEach(function(a){ (a.domain||'Other').split(',').forEach(function(d){domainSet.add(d.trim());}); });
+  var el=document.getElementById('research-domain-results');
+  if(!el) return;
+  el.innerHTML=Array.from(domainSet).sort().map(function(d){
+    var list=_researchArticles.filter(function(a){return (a.domain||'').split(',').map(function(x){return x.trim();}).includes(d);}).sort(function(a,b){return new Date(b.pub_date||0)-new Date(a.pub_date||0);});
+    return '<div class="section-title">'+escHtml(d)+' <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:11px;letter-spacing:0">('+list.length+')</span></div>'+list.map(function(a){return buildResearchCard(a,false);}).join('');
+  }).join('');
+}
+
+/* ── By database ── */
+function renderResearchByDatabase(){
+  var dbSet=new Set();
+  _researchArticles.forEach(function(a){dbSet.add(a.database_name||'Unknown');});
+  var el=document.getElementById('research-db-results');
+  if(!el) return;
+  el.innerHTML=Array.from(dbSet).sort().map(function(db){
+    var list=_researchArticles.filter(function(a){return (a.database_name||'Unknown')===db;}).sort(function(a,b){return new Date(b.pub_date||0)-new Date(a.pub_date||0);});
+    var cls=dbBadgeClass(db);
+    return '<div class="section-title"><span class="research-db-badge '+cls+'">'+escHtml(db)+'</span> <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:11px;letter-spacing:0">('+list.length+')</span></div>'+list.map(function(a){return buildResearchCard(a,false);}).join('');
+  }).join('');
+}
+
+/* ── Research sources CRUD (mirrors renderSources / toggleSource / addSource) ── */
+var _researchSources=[];
+
+async function loadResearchSources(){
+  if(!API_BASE) return;
+  var d=await apiFetch('/research-sources');
+  if(d&&d.sources) _researchSources=d.sources;
+}
+
+async function renderResearchSourcesTable(){
+  await loadResearchSources();
+  var tbody=document.getElementById('research-sources-tbody');
+  var countEl=document.getElementById('research-sources-count');
+  if(!tbody) return;
+  if(!_researchSources.length){
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:24px">No research sources yet. Click + Add Source to add one.</td></tr>';
+    if(countEl) countEl.textContent='0 sources configured';
+    return;
+  }
+  var typeLabels={think_tank:'Think Tank',government:'Government',university:'University',ngo:'NGO',other:'Other'};
+  tbody.innerHTML=_researchSources.map(function(s){
+    var active=s.active===1||s.active===true;
+    var boost=s.relevance_boost||0;
+    var boostDisplay=boost>0?'<span style="font-size:10px;font-weight:700;color:var(--green)">+'+boost+'</span>':'<span style="font-size:10px;color:var(--dim)">—</span>';
+    var lastScraped=s.last_scraped?s.last_scraped.slice(0,16).replace('T',' '):'—';
+    return '<tr>'
+      +'<td style="font-weight:600;color:var(--white);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(s.notes||'')+'">'+escHtml(s.name)+'</td>'
+      +'<td><a href="'+escHtml(s.url)+'" target="_blank" style="color:var(--cyan);font-size:10px;font-family:\'IBM Plex Mono\',monospace;max-width:160px;overflow:hidden;text-overflow:ellipsis;display:block;white-space:nowrap">'+escHtml(s.url)+'</a></td>'
+      +'<td style="font-size:11px;color:var(--muted)">'+escHtml(typeLabels[s.source_type]||s.source_type||'')+'</td>'
+      +'<td style="text-align:center">'+boostDisplay+'</td>'
+      +'<td><span class="source-status"><span class="dot" style="background:'+(active?'var(--green)':'var(--red)')+'"></span>'+(active?'Active':'Paused')+'</span></td>'
+      +'<td style="font-size:11px;color:var(--muted);font-family:\'IBM Plex Mono\',monospace;white-space:nowrap">'+lastScraped+'</td>'
+      +'<td style="font-family:\'IBM Plex Mono\',monospace">'+(s.article_count||0)+'</td>'
+      +'<td><div style="display:flex;gap:5px">'
+      +'<button class="btn '+(active?'btn-red':'btn-green')+' btn-sm" onclick="toggleResearchSource('+s.id+')">'+(active?'Pause':'Activate')+'</button>'
+      +'<button class="btn btn-ghost btn-sm" onclick="deleteResearchSource('+s.id+',\''+escHtml(s.name).replace(/'/g,"\\'")+'\')" style="color:#fb7185">Delete</button>'
+      +'</div></td>'
+      +'</tr>';
+  }).join('');
+  if(countEl) countEl.textContent=_researchSources.length+' source'+(_researchSources.length!==1?'s':'')+' configured';
+  populateResearchSourceCheckboxes();
+}
+
+function showAddResearchSourceModal(){
+  document.getElementById('add-research-source-form').style.display='block';
+  document.getElementById('nrs-name').focus();
+}
+function hideAddResearchSourceModal(){
+  document.getElementById('add-research-source-form').style.display='none';
+  document.getElementById('add-research-source-status').style.display='none';
+  ['nrs-name','nrs-url','nrs-notes'].forEach(function(id){document.getElementById(id).value='';});
+}
+
+async function submitAddResearchSource(){
+  var name=(document.getElementById('nrs-name').value||'').trim();
+  var url=(document.getElementById('nrs-url').value||'').trim();
+  var type=document.getElementById('nrs-type').value;
+  var boost=parseInt(document.getElementById('nrs-boost').value)||0;
+  var notes=(document.getElementById('nrs-notes').value||'').trim();
+  var status=document.getElementById('add-research-source-status');
+  if(!name||!url){ status.style.display='block';status.style.color='var(--red)';status.textContent='⚠ Name and URL are required.';return; }
+  if(!url.startsWith('http')){ status.style.display='block';status.style.color='var(--red)';status.textContent='⚠ URL must start with https://';return; }
+  status.style.display='block';status.style.color='var(--muted)';status.textContent='Adding…';
+  if(API_BASE){
+    var d=await apiFetch('/research-sources',{method:'POST',body:JSON.stringify({name:name,url:url,source_type:type,relevance_boost:boost,notes:notes})});
+    if(d&&d.ok){ hideAddResearchSourceModal(); await renderResearchSourcesTable(); showToast('✅','Research Source Added','"'+name+'" added. It will be scraped on the next research run.',3500); }
+    else{ status.style.color='var(--red)';status.textContent='⚠ Could not save — check your backend connection.'; }
+  } else {
+    _researchSources.push({id:Date.now(),name:name,url:url,source_type:type,relevance_boost:boost,notes:notes,active:1,article_count:0});
+    hideAddResearchSourceModal(); renderResearchSourcesTable();
+    showToast('✅','Research Source Added (local)','"'+name+'" added locally.',3500);
+  }
+}
+
+async function toggleResearchSource(id){
+  if(API_BASE){ var d=await apiFetch('/research-sources/'+id+'/toggle',{method:'PATCH'}); if(d&&d.ok){var s=_researchSources.find(function(x){return x.id===id;}); if(s) s.active=d.active?1:0;} }
+  else { var s=_researchSources.find(function(x){return x.id===id;}); if(s) s.active=s.active?0:1; }
+  renderResearchSourcesTable();
+}
+
+async function deleteResearchSource(id,name){
+  if(!confirm('Delete research source "'+name+'"? This cannot be undone.')) return;
+  if(API_BASE) await apiFetch('/research-sources/'+id,{method:'DELETE'});
+  _researchSources=_researchSources.filter(function(s){return s.id!==id;});
+  renderResearchSourcesTable();
+  showToast('🗑','Source Deleted','"'+name+'" removed.',2500);
+}
+
+function detectResearchDuplicates(){
+  var dupes=[]; var seen={};
+  _researchArticles.forEach(function(a){
+    var key=(a.title||'').toLowerCase().replace(/[^a-z0-9 ]/g,'').split(' ').filter(function(w){return w.length>4;}).slice(0,6).join(' ');
+    if(key&&seen[key]&&seen[key].id!==a.id){dupes.push({a:seen[key],b:a});}else if(key){seen[key]=a;}
+  });
+  var alertEl=document.getElementById('research-duplicate-alert');
+  var listEl=document.getElementById('research-duplicate-list');
+  if(!alertEl) return;
+  if(!dupes.length){showToast('✓','No Duplicates Found','All research articles appear to be unique.',3000);alertEl.style.display='none';return;}
+  alertEl.style.display='block';
+  if(listEl) listEl.innerHTML=dupes.slice(0,10).map(function(d){
+    return '<div style="margin-bottom:6px;padding:6px;background:rgba(0,0,0,.2);border-radius:5px"><div style="font-size:11px;font-weight:600;color:#fb7185">'+escHtml(d.a.title.slice(0,80))+'</div><div style="font-size:10px;color:var(--muted);margin-top:2px">'+escHtml(d.a.database_name||'')+' &amp; '+escHtml(d.b.database_name||'')+'</div></div>';
+  }).join('');
+  showToast('⚠','Duplicates Found',dupes.length+' potential duplicate(s).',4000);
+}
+
+/* ── Scholarly keywords (archive panel) ── */
+var _scholarlyKeywords=[];
+
+async function loadScholarlyKeywords(){
+  if(!API_BASE) return;
+  var d=await apiFetch('/scholarly-keywords');
+  if(d&&d.keywords) _scholarlyKeywords=d.keywords;
+}
+
+async function renderScholarlyKeywords(){
+  await loadScholarlyKeywords();
+  var container=document.getElementById('scholarly-keywords-list');
+  if(!container) return;
+  if(!_scholarlyKeywords.length){ container.innerHTML='<div style="font-size:12px;color:var(--dim);padding:8px 0">No keywords yet. Add some below.</div>'; return; }
+  container.innerHTML=_scholarlyKeywords.map(function(k){
+    var active=k.active===1||k.active===true;
+    return '<span style="display:inline-flex;align-items:center;gap:6px;background:'+(active?'rgba(99,102,241,0.12)':'rgba(255,255,255,.04)')+';border:1px solid '+(active?'rgba(99,102,241,0.3)':'rgba(255,255,255,.1)')+';border-radius:5px;padding:4px 10px;margin:3px;font-size:11px;font-weight:600;color:'+(active?'#a5b4fc':'var(--dim)')+'">'+escHtml(k.keyword)
+      +'<span onclick="toggleScholarlyKeyword('+k.id+')" style="cursor:pointer;font-size:13px;opacity:.6" title="'+(active?'Pause':'Activate')+'">'+(active?'⏸':'▶')+'</span>'
+      +'<span onclick="deleteScholarlyKeyword('+k.id+')" style="cursor:pointer;font-size:13px;opacity:.5;color:var(--red)" title="Delete">×</span>'
+      +'</span>';
+  }).join('');
+}
+
+async function submitAddScholarlyKeyword(){
+  var inp=document.getElementById('skw-input');
+  var kw=(inp?inp.value:'').trim();
+  if(!kw) return;
+  if(API_BASE){
+    var d=await apiFetch('/scholarly-keywords',{method:'POST',body:JSON.stringify({keyword:kw})});
+    if(d&&d.ok){if(inp)inp.value=''; renderScholarlyKeywords(); showToast('🔑','Keyword Added','"'+kw+'" will be used on the next research scrape.',3000);}
+    else showToast('⚠','Could Not Add','Check your backend connection.',3000);
+  } else { _scholarlyKeywords.push({id:Date.now(),keyword:kw,active:1}); if(inp)inp.value=''; renderScholarlyKeywords(); showToast('🔑','Keyword Added (local)','"'+kw+'" added locally.',3000); }
+}
+
+async function toggleScholarlyKeyword(id){
+  if(API_BASE){ var d=await apiFetch('/scholarly-keywords/'+id+'/toggle',{method:'PATCH'}); if(d&&d.ok){var k=_scholarlyKeywords.find(function(x){return x.id===id;}); if(k) k.active=d.active?1:0;} }
+  else { var k=_scholarlyKeywords.find(function(x){return x.id===id;}); if(k) k.active=k.active?0:1; }
+  renderScholarlyKeywords();
+}
+
+async function deleteScholarlyKeyword(id){
+  if(API_BASE) await apiFetch('/scholarly-keywords/'+id,{method:'DELETE'});
+  _scholarlyKeywords=_scholarlyKeywords.filter(function(k){return k.id!==id;});
+  renderScholarlyKeywords();
+}
+
+/* ── Scholarly exclusion keywords (mirrors news exclusion keywords) ── */
+var _scholarlyExclusions=[];
+var _scholarlyExclusionLoaded=false;
+
+async function loadScholarlyExclusionKeywords(){
+  if(!API_BASE) return;
+  if(_scholarlyExclusionLoaded){renderScholarlyExclusionKeywords();return;}
+  _scholarlyExclusionLoaded=true;
+  var d=await apiFetch('/scholarly-exclusion-keywords');
+  if(d&&d.keywords) _scholarlyExclusions=d.keywords;
+  renderScholarlyExclusionKeywords();
+}
+
+function renderScholarlyExclusionKeywords(){
+  var container=document.getElementById('scholarly-exclusion-tags');
+  if(!container) return;
+  if(!_scholarlyExclusions.length){ container.innerHTML='<span style="font-size:11px;color:var(--dim)">No exclusions yet.</span>'; return; }
+  container.innerHTML=_scholarlyExclusions.map(function(k){
+    return '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(244,63,94,0.1);border:1px solid rgba(244,63,94,0.25);border-radius:5px;padding:4px 10px;margin:3px;font-size:11px;font-weight:600;color:#fb7185">'+escHtml(k.keyword)
+      +'<span onclick="deleteScholarlyExclusionKeyword('+k.id+')" style="cursor:pointer;font-size:14px;opacity:.6">&#xD7;</span></span>';
+  }).join('');
+}
+
+async function addScholarlyExclusionKeyword(){
+  var inp=document.getElementById('scholarly-excl-input');
+  var kw=(inp?inp.value:'').trim();
+  if(!kw) return;
+  if(API_BASE){
+    var d=await apiFetch('/scholarly-exclusion-keywords',{method:'POST',body:JSON.stringify({keyword:kw})});
+    if(d&&d.ok){if(inp)inp.value=''; _scholarlyExclusionLoaded=false; await loadScholarlyExclusionKeywords(); showToast('🚫','Keyword Blocked','"'+kw+'" filtered from future research scrapes.',3000);}
+  } else { _scholarlyExclusions.push({id:Date.now(),keyword:kw}); if(inp)inp.value=''; renderScholarlyExclusionKeywords(); showToast('🚫','Blocked (local)','"'+kw+'" blocked locally.',3000); }
+}
+
+async function deleteScholarlyExclusionKeyword(id){
+  if(API_BASE) await apiFetch('/scholarly-exclusion-keywords/'+id,{method:'DELETE'});
+  _scholarlyExclusions=_scholarlyExclusions.filter(function(k){return k.id!==id;});
+  renderScholarlyExclusionKeywords();
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   RESEARCH FILTER SETTINGS — state, init, apply, helpers
+   (mirrors the news scraper filter settings module exactly)
+══════════════════════════════════════════════════════════════════════ */
+
+var _researchFilterSettings = {
+  minRelevance:   6,
+  databases:      ['OpenAlex','Semantic Scholar','PubMed Central','DOAJ','arXiv','Canadian Think Tank'],
+  domains:        [],       /* empty = all */
+  sentiments:     ['Critical','Supportive','Neutral'],
+  sources:        [],       /* empty = all */
+  openAccessOnly: false,
+  maxAgeDays:     0,
+  mustContain:    [],
+};
+var _researchMustContainList = [];
+
+var RESEARCH_DOMAINS_LIST = [
+  'Higher Education','Research Funding','Indigenous','Reconciliation',
+  'Health','Pharmacare','Budget','Legislation','Infrastructure',
+  'Workforce','Consultation','Political','Environment','Housing','International','Other'
+];
+
+var DB_ID_MAP = {
+  'rdb-openalex':  'OpenAlex',
+  'rdb-semantic':  'Semantic Scholar',
+  'rdb-pubmed':    'PubMed Central',
+  'rdb-doaj':      'DOAJ',
+  'rdb-arxiv':     'arXiv',
+  'rdb-canadian':  'Canadian Think Tank',
+};
+
+function initResearchFilterSettings(){
+  /* Domain checkboxes — build once */
+  var domWrap = document.getElementById('research-domain-checkboxes');
+  if(domWrap && !domWrap.dataset.built){
+    domWrap.dataset.built = '1';
+    domWrap.innerHTML = RESEARCH_DOMAINS_LIST.map(function(d){
+      var checked = _researchFilterSettings.domains.length===0 || _researchFilterSettings.domains.includes(d);
+      return '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text);padding:5px 8px;background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:6px">'
+        +'<input type="checkbox" class="research-domain-chk" value="'+d+'"'+(checked?' checked':'')+' style="accent-color:#6366f1"> '+d+'</label>';
+    }).join('');
+  }
+
+  /* DB checkboxes */
+  Object.keys(DB_ID_MAP).forEach(function(eid){
+    var el = document.getElementById(eid);
+    if(el) el.checked = _researchFilterSettings.databases.includes(DB_ID_MAP[eid]);
+  });
+
+  /* Sentiment checkboxes */
+  ['critical','supportive','neutral'].forEach(function(s){
+    var el = document.getElementById('rsent-'+s);
+    if(el) el.checked = _researchFilterSettings.sentiments.includes(s.charAt(0).toUpperCase()+s.slice(1));
+  });
+
+  /* Relevance slider */
+  var sl = document.getElementById('research-min-relevance');
+  if(sl){ sl.value = _researchFilterSettings.minRelevance; var lbl = document.getElementById('research-min-rel-label'); if(lbl) lbl.innerHTML = rEmoji(_researchFilterSettings.minRelevance)+' '+_researchFilterSettings.minRelevance+'/10'; }
+
+  /* Age cutoff */
+  var ag = document.getElementById('research-max-age-days');
+  if(ag) ag.value = _researchFilterSettings.maxAgeDays;
+
+  /* Open-access radio */
+  var oaEl = document.getElementById(_researchFilterSettings.openAccessOnly ? 'research-access-oa' : 'research-access-all');
+  if(oaEl) oaEl.checked = true;
+
+  /* Must-contain tags */
+  _researchMustContainList = _researchFilterSettings.mustContain.slice();
+  renderResearchMustContainTags();
+
+  /* Source checkboxes from live _researchSources or article source names */
+  populateResearchSourceCheckboxes();
+
+  previewResearchFilterCount();
+}
+
+function populateResearchSourceCheckboxes(){
+  var wrap = document.getElementById('research-source-checkboxes');
+  if(!wrap) return;
+  var srcs = _researchSources.length
+    ? _researchSources.map(function(s){ return s.name; })
+    : Array.from(new Set((_researchArticles||[]).map(function(a){ return a.source; }).filter(Boolean))).sort();
+  wrap.innerHTML = srcs.map(function(s){
+    var checked = _researchFilterSettings.sources.length===0 || _researchFilterSettings.sources.includes(s);
+    return '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:var(--muted);padding:4px 8px;border-radius:5px">'
+      +'<input type="checkbox" class="research-source-chk" value="'+escHtml(s)+'"'+(checked?' checked':'')+' style="accent-color:#6366f1"> '+escHtml(s)+'</label>';
+  }).join('');
+}
+
+function researchSourcesSelectAll(checked){
+  document.querySelectorAll('.research-source-chk').forEach(function(c){ c.checked = checked; });
+}
+
+function applyResearchFilterSettings(){
+  _researchFilterSettings.minRelevance   = parseInt(document.getElementById('research-min-relevance').value)||6;
+  _researchFilterSettings.maxAgeDays     = parseInt(document.getElementById('research-max-age-days').value)||0;
+  _researchFilterSettings.openAccessOnly = !!(document.getElementById('research-access-oa') && document.getElementById('research-access-oa').checked);
+
+  /* Databases */
+  var enabledDbs = [];
+  Object.keys(DB_ID_MAP).forEach(function(eid){ var el=document.getElementById(eid); if(el&&el.checked) enabledDbs.push(DB_ID_MAP[eid]); });
+  _researchFilterSettings.databases = enabledDbs;
+
+  /* Domains */
+  var domChks = document.querySelectorAll('.research-domain-chk');
+  var allDom  = Array.from(domChks).every(function(c){ return c.checked; });
+  _researchFilterSettings.domains = allDom ? [] : Array.from(domChks).filter(function(c){ return c.checked; }).map(function(c){ return c.value; });
+
+  /* Sentiments */
+  var sentList = [];
+  ['critical','supportive','neutral'].forEach(function(s){ var el=document.getElementById('rsent-'+s); if(el&&el.checked) sentList.push(s.charAt(0).toUpperCase()+s.slice(1)); });
+  _researchFilterSettings.sentiments = sentList.length ? sentList : ['Critical','Supportive','Neutral'];
+
+  /* Sources */
+  var srcChks = document.querySelectorAll('.research-source-chk');
+  var allSrc  = Array.from(srcChks).every(function(c){ return c.checked; });
+  _researchFilterSettings.sources = allSrc ? [] : Array.from(srcChks).filter(function(c){ return c.checked; }).map(function(c){ return c.value; });
+
+  _researchFilterSettings.mustContain = _researchMustContainList.slice();
+
+  try { localStorage.setItem('pp_research_filter_settings', JSON.stringify(_researchFilterSettings)); } catch(e){}
+
+  _researchPageNum = 0;
+  renderResearchFeed();
+
+  var statusEl = document.getElementById('research-filter-status');
+  if(statusEl){ statusEl.style.display='block'; setTimeout(function(){ statusEl.style.display='none'; }, 3000); }
+
+  showToast('&#x2699;&#xFE0F;','Research Filter Applied','Feed updated — '+countResearchFiltered()+' articles match your settings.',3000);
+}
+
+function applyResearchSettingsFilter(a){
+  var s = _researchFilterSettings;
+  if((a.relevance||0) < s.minRelevance) return false;
+  if(s.databases.length){
+    var dbName = a.database_name||'';
+    if(!s.databases.some(function(d){ return dbName.toLowerCase().includes(d.toLowerCase())||d.toLowerCase().includes(dbName.toLowerCase()); })) return false;
+  }
+  if(s.domains.length){
+    var aDoms = (a.domain||'').split(',').map(function(d){ return d.trim(); });
+    if(!aDoms.some(function(d){ return s.domains.includes(d); })) return false;
+  }
+  if(s.sentiments.length && !s.sentiments.includes(a.sentiment||'')) return false;
+  if(s.sources.length && !s.sources.includes(a.source||'')) return false;
+  if(s.openAccessOnly && !(a.open_access===1||a.open_access===true)) return false;
+  if(s.maxAgeDays > 0){
+    var pub = a.pub_date||'';
+    if(pub){ var age=(Date.now()-new Date(pub))/864e5; if(age>s.maxAgeDays) return false; }
+  }
+  if(s.mustContain.length){
+    var hay = ((a.title||'')+' '+(a.abstract||a.summary||'')).toLowerCase();
+    if(!s.mustContain.some(function(kw){ return hay.includes(kw.toLowerCase()); })) return false;
+  }
+  return true;
+}
+
+function countResearchFiltered(){
+  return (_researchArticles||[]).filter(function(a){ return applyResearchSettingsFilter(a); }).length;
+}
+
+function previewResearchFilterCount(){
+  var el = document.getElementById('research-filter-preview-count');
+  if(el) el.textContent = countResearchFiltered()+' of '+(_researchArticles||[]).length+' articles';
+}
+
+function resetResearchFilters(){
+  _researchFilterSettings = {
+    minRelevance:6, databases:['OpenAlex','Semantic Scholar','PubMed Central','DOAJ','arXiv','Canadian Think Tank'],
+    domains:[], sentiments:['Critical','Supportive','Neutral'], sources:[],
+    openAccessOnly:false, maxAgeDays:0, mustContain:[]
+  };
+  _researchMustContainList = [];
+  document.querySelectorAll('.research-domain-chk,.research-source-chk').forEach(function(c){ c.checked=true; });
+  Object.keys(DB_ID_MAP).forEach(function(eid){ var el=document.getElementById(eid); if(el) el.checked=true; });
+  ['critical','supportive','neutral'].forEach(function(s){ var el=document.getElementById('rsent-'+s); if(el) el.checked=true; });
+  var sl=document.getElementById('research-min-relevance'); if(sl){ sl.value=6; var lbl=document.getElementById('research-min-rel-label'); if(lbl) lbl.innerHTML='&#x1F4CC; 6/10'; }
+  var ag=document.getElementById('research-max-age-days'); if(ag) ag.value=0;
+  var oaAll=document.getElementById('research-access-all'); if(oaAll) oaAll.checked=true;
+  renderResearchMustContainTags();
+  try { localStorage.removeItem('pp_research_filter_settings'); } catch(e){}
+  renderResearchFeed();
+  showToast('&#x21BA;','Research Filters Reset','All research filter settings cleared.',2500);
+}
+
+function addResearchMustContain(){
+  var inp = document.getElementById('research-must-contain-inp');
+  var kw  = (inp ? inp.value : '').trim();
+  if(!kw || _researchMustContainList.includes(kw)) return;
+  _researchMustContainList.push(kw);
+  if(inp) inp.value='';
+  renderResearchMustContainTags();
+  previewResearchFilterCount();
+}
+
+function removeResearchMustContain(kw){
+  _researchMustContainList = _researchMustContainList.filter(function(k){ return k!==kw; });
+  renderResearchMustContainTags();
+  previewResearchFilterCount();
+}
+
+function renderResearchMustContainTags(){
+  var wrap = document.getElementById('research-must-contain-tags');
+  if(!wrap) return;
+  if(!_researchMustContainList.length){ wrap.innerHTML='<span style="font-size:11px;color:var(--dim)">No keywords set — all articles shown.</span>'; return; }
+  wrap.innerHTML = _researchMustContainList.map(function(kw,i){
+    return '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);border-radius:5px;padding:3px 10px;font-size:11px;font-weight:600;color:#a5b4fc">'
+      +escHtml(kw)+'<span data-rmc="'+i+'" style="cursor:pointer;opacity:.6;font-size:13px">&#xD7;</span></span>';
+  }).join('');
+  wrap.querySelectorAll('[data-rmc]').forEach(function(el){
+    el.addEventListener('click',function(){ removeResearchMustContain(_researchMustContainList[parseInt(this.getAttribute('data-rmc'))]); });
   });
 }
+
+function buildResearchFetchConfig(){
+  return { databases: _researchFilterSettings.databases, min_relevance: _researchFilterSettings.minRelevance };
+}
+
+/* Restore saved research filter settings on startup */
+(function _loadSavedResearchSettings(){
+  try {
+    var saved = localStorage.getItem('pp_research_filter_settings');
+    if(saved) _researchFilterSettings = Object.assign(_researchFilterSettings, JSON.parse(saved));
+    _researchMustContainList = (_researchFilterSettings.mustContain||[]).slice();
+  } catch(e){}
+})();
 
 async function loadResearchArticles(){
   if(!API_BASE) return;
@@ -2377,11 +2915,13 @@ function buildResearchCard(a, forDashboard){
       ?'<button class="btn btn-ghost btn-sm" onclick="markResearchRead('+a.id+',false)">&#x21A9; Unread</button>'
       :'<button class="btn btn-ghost btn-sm" onclick="markResearchRead('+a.id+',true)">&#x2713; Read</button>'
     )
+    +(a.staged
+      ?'<button class="btn btn-gold btn-sm" onclick="researchBulkStageOne('+a.id+')">&#x2715; Remove</button>'
+      :'<button class="btn btn-green btn-sm" onclick="researchBulkStageOne('+a.id+')">+ Add to Digest</button>'
+    )
     +'<button class="btn btn-cyan btn-sm" onclick="openResearchPreview('+a.id+')">&#x25BA; Preview</button>'
     +'<button class="btn btn-ghost btn-sm" onclick="addResearchToCitations('+a.id+')" title="Add to bibliography">&#x1F4DA; Cite</button>'
-    +'<button class="hbtn" onclick="event.stopPropagation();addResearchToCitations(' + a.id + ')" title="Add to bibliography">&#x1F4DA; Cite</button>'
-    +'<button class="hbtn" onclick="event.stopPropagation();openNoteForResearchPaper(' + a.id + ')" title="Open in Notes">&#x1F4DD; Notes</button>'
-    // sentiment picker like article scraper
+    +'<button class="btn btn-ghost btn-sm" onclick="openNoteForResearchPaper('+a.id+')" title="Open in Notes">&#x1F4DD; Notes</button>'
     +'<select class="sentiment-picker" onchange="setResearchSentiment('+a.id+',this.value)" title="Override sentiment">'
     +'<option value="Critical" '+(a.sentiment==='Critical'?'selected':'')+'>&#x1F534; Critical</option>'
     +'<option value="Supportive" '+(a.sentiment==='Supportive'?'selected':'')+'>&#x1F7E2; Supportive</option>'
@@ -2399,6 +2939,7 @@ var _researchActiveTag = '';
 var _researchPageNum = 0;
 var _researchPageSz = 20;
 var _researchSelectedIds = new Set();
+var _researchSearchTimer = null;
 
 function renderResearchFeed(){
   if(!API_BASE){ showResearchEmpty('feed-list'); return; }
@@ -2574,35 +3115,9 @@ async function triggerScholarlyScrape(){
   if(typeof gtag!=='undefined') gtag('event','scholarly_scrape',{event_category:'Research'});
 }
 
-async function fetchByKeyword(){
-  var inp = document.getElementById('research-custom-kw');
-  var kw = (inp&&inp.value||'').trim();
-  if(!kw){ showToast('&#x26A0;','Enter a keyword','Type a research topic first.',3000); return; }
-  if(!API_BASE){ showToast('&#x128268;','No Backend','Railway backend required.',4000); return; }
-  showToast('&#x1F50D;','Fetching…','Querying APIs for: '+kw,4000);
-  var d = await apiFetch('/scholarly/scrape', {method:'POST', body:JSON.stringify({keywords:[kw]})});
-  if(d && d.ok){
-    showToast('&#x1F4DA;','Fetch Started','Results for "'+kw+'" will appear shortly.',5000);
-    setTimeout(async function(){
-      await loadResearchArticles();
-      renderResearchFeed();
-    }, 90000);
-  }
-}
-
-function runAdvancedResearchSearch(){
-  var q = (document.getElementById('research-adv-search')||{}).value||'';
-  var container = document.getElementById('research-adv-results');
-  if(!q.trim() || !container) return;
-  var filtered = _researchArticles.filter(function(a){
-    var haystack = (a.title+' '+(a.abstract||'')+(a.authors||'')+(a.doi||'')).toLowerCase();
-    return haystack.includes(q.toLowerCase());
-  });
-  container.innerHTML = filtered.length
-    ? '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'+filtered.length+' results for "'+escHtml(q)+'"</div>'
-      + filtered.map(buildResearchCard).join('')
-    : '<div class="empty"><div class="empty-icon">&#x1F50D;</div><div class="empty-text">No matches for "'+escHtml(q)+'"</div></div>';
-}
+/* fetchByKeyword / runAdvancedResearchSearch removed —
+   archive search is now handled by renderResearchArchive() in the
+   Search & Archive sub-tab, which uses existing DOM elements. */
 
 async function markResearchRead(id, read){
   var a = _researchArticles.find(function(x){return x.id===id;});
@@ -2876,6 +3391,24 @@ async function researchBulkMarkUnread(){
   Array.from(_researchSelectedIds).forEach(function(id){markResearchRead(id,false);});
   showToast('&#x21A9;','Marked Unread',_researchSelectedIds.size+' articles.',2500);
   clearResearchSelection();
+}
+function researchBulkStage(){
+  Array.from(_researchSelectedIds).forEach(function(id){
+    var a=_researchArticles.find(function(x){return x.id===id;});
+    if(a&&!a.staged){a.staged=true; reResearchCard(id);}
+  });
+  showToast('+','Staged',_researchSelectedIds.size+' research articles added to digest.',2500);
+  updateResearchBadge();
+  clearResearchSelection();
+}
+function researchBulkStageOne(id){
+  var a=_researchArticles.find(function(x){return x.id===id;});
+  if(!a) return;
+  a.staged=!a.staged;
+  reResearchCard(id);
+  updateResearchBadge();
+  if(a.staged) showToast('&#x2705;','Added to Digest','Research article staged.',2000);
+  else          showToast('&#x2715;','Removed','Research article removed from digest.',2000);
 }
 async function researchBulkTag(tag){
   if(!tag)return;
@@ -3670,13 +4203,6 @@ async function showTab(n){
     if(pg) pg.style.display=t===n?'block':'none';
     if(tb) tb.classList.toggle('active',t===n);
   });
-  // Double-rAF scroll: fires after any async render triggered by the tab switch
-  requestAnimationFrame(function(){
-    requestAnimationFrame(function(){
-      var mainEl = document.getElementById('main');
-      if(mainEl) mainEl.scrollTop = 0;
-    });
-  });
   // Track tab navigation in Google Analytics
   if(typeof gtag!=='undefined') gtag('event','tab_view',{event_category:'Navigation',event_label:n});
   if(n==='dashboard'){
@@ -3713,8 +4239,10 @@ async function showTab(n){
       _researchInitialized = true;
       await loadResearchArticles();
       await loadResearchStats();
+      await loadResearchSources();
     }
-    renderResearchFeed();
+    /* Always land on the feed sub-tab */
+    researchTab('feed');
     updateResearchBadge();
   }
 }
@@ -6515,206 +7043,8 @@ function renderNewsMustContainTags(){
 })();
 
 
-/* ══════════════════════════════════════════════════════════════════════
-   RESEARCH SCRAPER FILTER SETTINGS — state, init, apply, helpers
-══════════════════════════════════════════════════════════════════════ */
-
-var _researchFilterSettings = {
-  minRelevance:   6,
-  databases:      ['OpenAlex','Semantic Scholar','PubMed Central','DOAJ','arXiv','Canadian Think Tank'],
-  domains:        [],
-  openAccessOnly: false,
-  maxAgeDays:     0,
-  mustContain:    [],
-};
-
-var _researchMustContainList = [];
-
-var RESEARCH_DOMAINS = [
-  'Higher Education','Research Funding','Indigenous','Reconciliation',
-  'Health','Pharmacare','Budget','Legislation','Workforce',
-  'Consultation','Political','Environment','Housing','International','Other'
-];
-
-var DB_ID_MAP = {
-  'rdb-openalex':  'OpenAlex',
-  'rdb-semantic':  'Semantic Scholar',
-  'rdb-pubmed':    'PubMed Central',
-  'rdb-doaj':      'DOAJ',
-  'rdb-arxiv':     'arXiv',
-  'rdb-canadian':  'Canadian Think Tank',
-};
-
-function initResearchFilterSettings(){
-  // Domain checkboxes
-  var domWrap = document.getElementById('research-domain-checkboxes');
-  if(domWrap && !domWrap.dataset.built){
-    domWrap.dataset.built = '1';
-    domWrap.innerHTML = RESEARCH_DOMAINS.map(function(d){
-      var checked = _researchFilterSettings.domains.length===0 || _researchFilterSettings.domains.includes(d);
-      return '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text);padding:5px 8px;background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:6px">'
-        +'<input type="checkbox" class="research-domain-chk" value="'+d+'"'+(checked?' checked':'')+' style="accent-color:#6366f1"> '+d
-        +'</label>';
-    }).join('');
-  }
-
-  // Database checkboxes — restore from saved settings
-  Object.keys(DB_ID_MAP).forEach(function(eid){
-    var el = document.getElementById(eid);
-    if(el) el.checked = _researchFilterSettings.databases.includes(DB_ID_MAP[eid]);
-  });
-
-  // DB count label
-  updateResearchDbCount();
-
-  // Listen to DB checkbox changes for live count
-  Object.keys(DB_ID_MAP).forEach(function(eid){
-    var el = document.getElementById(eid);
-    if(el) el.onchange = updateResearchDbCount;
-  });
-
-  // Other controls
-  var sl = document.getElementById('research-min-relevance');
-  if(sl){ sl.value = _researchFilterSettings.minRelevance; document.getElementById('research-min-rel-label').innerHTML = rEmoji(_researchFilterSettings.minRelevance)+' '+_researchFilterSettings.minRelevance+'/10'; }
-  var ag = document.getElementById('research-max-age-days');
-  if(ag) ag.value = _researchFilterSettings.maxAgeDays;
-  var oaAll = document.getElementById('research-access-all');
-  var oaOnly = document.getElementById('research-access-oa');
-  if(_researchFilterSettings.openAccessOnly){ if(oaOnly) oaOnly.checked=true; } else { if(oaAll) oaAll.checked=true; }
-  _researchMustContainList = _researchFilterSettings.mustContain||[];
-  renderResearchMustContainTags();
-  previewResearchFilterCount();
-}
-
-function updateResearchDbCount(){
-  var count = Object.keys(DB_ID_MAP).filter(function(eid){ var el=document.getElementById(eid); return el&&el.checked; }).length;
-  var el = document.getElementById('research-enabled-db-count');
-  if(el) el.textContent = count;
-}
-
-function applyResearchFilterSettings(){
-  _researchFilterSettings.minRelevance  = parseInt(document.getElementById('research-min-relevance').value)||6;
-  _researchFilterSettings.maxAgeDays    = parseInt(document.getElementById('research-max-age-days').value)||0;
-  _researchFilterSettings.openAccessOnly = document.getElementById('research-access-oa')&&document.getElementById('research-access-oa').checked;
-
-  // Databases
-  var enabledDbs = [];
-  Object.keys(DB_ID_MAP).forEach(function(eid){ var el=document.getElementById(eid); if(el&&el.checked) enabledDbs.push(DB_ID_MAP[eid]); });
-  _researchFilterSettings.databases = enabledDbs;
-
-  // Domains
-  var domChks = document.querySelectorAll('.research-domain-chk');
-  var allDom = Array.from(domChks).every(function(c){return c.checked;});
-  _researchFilterSettings.domains = allDom ? [] : Array.from(domChks).filter(function(c){return c.checked;}).map(function(c){return c.value;});
-
-  _researchFilterSettings.mustContain = _researchMustContainList.slice();
-
-  // Persist
-  try { localStorage.setItem('pp_research_filter_settings', JSON.stringify(_researchFilterSettings)); } catch(e){}
-
-  // Re-render
-  _researchPageNum = 0;
-  renderResearchFeed();
-
-  var statusEl = document.getElementById('research-filter-status');
-  if(statusEl){ statusEl.style.display='block'; setTimeout(function(){ statusEl.style.display='none'; }, 3000); }
-
-  showToast('&#x2699;&#xFE0F;','Research Filter Applied','Feed updated — '+countResearchFiltered()+' articles match your settings.',3000);
-}
-
-function applyResearchSettingsFilter(a){
-  var s = _researchFilterSettings;
-  if((a.relevance||0) < s.minRelevance) return false;
-  if(s.databases.length){
-    var dbName = a.database_name||'';
-    if(!s.databases.some(function(d){ return dbName.toLowerCase().includes(d.toLowerCase())||d.toLowerCase().includes(dbName.toLowerCase()); })) return false;
-  }
-  if(s.domains.length){
-    var aDoms = (a.domain||'').split(',').map(function(d){return d.trim();});
-    if(!aDoms.some(function(d){return s.domains.includes(d);})) return false;
-  }
-  if(s.openAccessOnly && !(a.open_access===1||a.open_access===true)) return false;
-  if(s.maxAgeDays > 0){
-    var pub = a.pub_date||'';
-    if(pub){ var age=(Date.now()-new Date(pub))/864e5; if(age>s.maxAgeDays) return false; }
-  }
-  if(s.mustContain.length){
-    var hay = ((a.title||'')+' '+(a.abstract||a.summary||'')).toLowerCase();
-    if(!s.mustContain.some(function(kw){return hay.includes(kw.toLowerCase());})) return false;
-  }
-  return true;
-}
-
-function buildResearchFetchConfig(){
-  // Sent to backend with /scholarly/scrape so only selected databases are queried
-  return {
-    databases:    _researchFilterSettings.databases,
-    min_relevance: _researchFilterSettings.minRelevance,
-  };
-}
-
-function countResearchFiltered(){
-  return (_researchArticles||[]).filter(function(a){return applyResearchSettingsFilter(a);}).length;
-}
-
-function previewResearchFilterCount(){
-  var count = countResearchFiltered();
-  var el = document.getElementById('research-filter-preview-count');
-  if(el) el.textContent = count + ' of ' + (_researchArticles||[]).length + ' articles';
-}
-
-function resetResearchFilters(){
-  _researchFilterSettings = {minRelevance:6,databases:['OpenAlex','Semantic Scholar','PubMed Central','DOAJ','arXiv','Canadian Think Tank'],domains:[],openAccessOnly:false,maxAgeDays:0,mustContain:[]};
-  _researchMustContainList = [];
-  Object.keys(DB_ID_MAP).forEach(function(eid){ var el=document.getElementById(eid); if(el) el.checked=true; });
-  document.querySelectorAll('.research-domain-chk').forEach(function(c){c.checked=true;});
-  var oaAll=document.getElementById('research-access-all'); if(oaAll) oaAll.checked=true;
-  var sl=document.getElementById('research-min-relevance'); if(sl){sl.value=6; document.getElementById('research-min-rel-label').innerHTML='&#x1F4CC; 6/10';}
-  var ag=document.getElementById('research-max-age-days'); if(ag) ag.value=0;
-  updateResearchDbCount();
-  renderResearchMustContainTags();
-  try { localStorage.removeItem('pp_research_filter_settings'); } catch(e){}
-  renderResearchFeed();
-  showToast('&#x21BA;','Research Filters Reset','All research filter settings cleared.',2500);
-}
-
-function addResearchMustContain(){
-  var inp = document.getElementById('research-must-contain-inp');
-  var kw = (inp&&inp.value||'').trim();
-  if(!kw || _researchMustContainList.includes(kw)) return;
-  _researchMustContainList.push(kw);
-  if(inp) inp.value='';
-  renderResearchMustContainTags();
-  previewResearchFilterCount();
-}
-
-function removeResearchMustContain(kw){
-  _researchMustContainList = _researchMustContainList.filter(function(k){return k!==kw;});
-  renderResearchMustContainTags();
-  previewResearchFilterCount();
-}
-
-function renderResearchMustContainTags(){
-  var wrap = document.getElementById('research-must-contain-tags');
-  if(!wrap) return;
-  if(!_researchMustContainList.length){ wrap.innerHTML='<span style="font-size:11px;color:var(--dim)">No keywords set — all articles shown.</span>'; return; }
-    wrap.innerHTML = _researchMustContainList.map(function(kw, i){
-    return '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);border-radius:5px;padding:3px 10px;font-size:11px;font-weight:600;color:#a5b4fc">'
-      +escHtml(kw)+'<span data-rmc="'+i+'" style="cursor:pointer;opacity:.6;font-size:13px">&#xD7;</span></span>';
-  }).join('');
-  wrap.querySelectorAll('[data-rmc]').forEach(function(el){
-    el.addEventListener('click',function(){ removeResearchMustContain(_researchMustContainList[parseInt(this.getAttribute('data-rmc'))]); });
-  });
-}
-
-// Restore saved research settings on startup
-(function loadSavedResearchSettings(){
-  try {
-    var saved = localStorage.getItem('pp_research_filter_settings');
-    if(saved) _researchFilterSettings = Object.assign(_researchFilterSettings, JSON.parse(saved));
-    _researchMustContainList = _researchFilterSettings.mustContain||[];
-  } catch(e){}
-})();
+/* Research filter settings live at the top of the JS (lines ~2530+). */
+/* _researchFilterSettings, initResearchFilterSettings, etc. are defined there. */
 
 const storedKey=sessionStorage.getItem('pp_groq_key');
 if(storedKey){apiKey=storedKey;document.getElementById('api-modal').classList.remove('show');init();}
