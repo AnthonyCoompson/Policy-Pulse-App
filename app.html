@@ -1230,6 +1230,400 @@ function skipApiKey(){
     </div>
   </div>
 
+
+  <!-- RESEARCH -->
+  <div id="page-research" style="display:none" class="fade-in">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div class="page-title">&#x1F4DA; Research &amp; Scholarly Literature</div>
+        <div class="page-subtitle" id="research-subtitle">Peer-reviewed articles, working papers, and policy research from open-access databases</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-ghost btn-sm" onclick="exportResearchCSV()">&#x2B07; Export CSV</button>
+        <button class="btn btn-cyan" id="research-scrape-btn" onclick="triggerScholarlyScrape()">
+          &#x1F50D; Fetch New Research
+        </button>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="scrape-progress" id="research-progress">
+      <span class="spin" style="display:inline-block;margin-right:8px">&#8635;</span>
+      <strong style="color:var(--text)">Fetching research</strong> <span style="color:var(--muted)">— querying OpenAlex, Semantic Scholar, Canadian think-tanks, PubMed, DOAJ, arXiv&hellip; This takes 60&ndash;90 seconds. The feed will refresh automatically.</span>
+    </div>
+
+    <!-- Sub-tabs — directly under title row, matching News & Articles layout -->
+    <div class="sub-tabs">
+      <button class="sub-tab active" id="rst-feed"     onclick="researchTab('feed')">Article Feed</button>
+      <button class="sub-tab"        id="rst-archive"  onclick="researchTab('archive')">Search &amp; Archive</button>
+      <button class="sub-tab"        id="rst-sources"  onclick="researchTab('sources')">Sources</button>
+      <button class="sub-tab"        id="rst-settings" onclick="researchTab('settings')">&#x2699; Filter Settings</button>
+    </div>
+
+    <!-- FEED PANEL -->
+    <div id="research-feed-panel">
+
+      <!-- Stats row — inside feed panel, below sub-tabs -->
+      <div class="research-stats-grid" id="research-stats-grid" style="margin-top:12px">
+        <div class="research-stat"><div class="research-stat-val" id="rs-total">—</div><div class="research-stat-label">Total Articles</div></div>
+        <div class="research-stat"><div class="research-stat-val" id="rs-unread" style="color:#a5b4fc">—</div><div class="research-stat-label">Unread</div></div>
+        <div class="research-stat"><div class="research-stat-val" id="rs-week" style="color:var(--gold)">—</div><div class="research-stat-label">Added This Week</div></div>
+        <div class="research-stat"><div class="research-stat-val" id="rs-dbs">6</div><div class="research-stat-label">Databases</div></div>
+        <div class="research-stat"><div class="research-stat-val" id="rs-oa" style="color:#10b981">100%</div><div class="research-stat-label">Open Access</div></div>
+      </div>
+
+      <!-- Database legend -->
+      <div style="padding:10px 14px;background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
+        <div style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Data Sources</div>
+        <div class="source-breakdown" id="research-source-breakdown">
+          <span class="research-db-badge db-openalex">&#x1F30D; OpenAlex</span>
+          <span class="research-db-badge db-semantic">&#x1F9E0; Semantic Scholar</span>
+          <span class="research-db-badge db-pubmed">&#x1F9EA; PubMed Central</span>
+          <span class="research-db-badge db-doaj">&#x1F4D6; DOAJ</span>
+          <span class="research-db-badge db-arxiv">&#x1F4CA; arXiv</span>
+          <span class="research-db-badge db-canadian">&#x1F341; Canadian Think-Tanks</span>
+          <div style="width:100%;height:0"></div>
+          <span style="font-size:10px;color:var(--dim);align-self:center">All sources are freely accessible, open access, and scraping-permitted.</span>
+        </div>
+      </div>
+
+      <!-- Bulk action bar -->
+      <div id="research-bulk-bar" style="display:none;align-items:center;gap:8px;padding:8px 12px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:8px;margin-bottom:10px;flex-wrap:wrap">
+        <span id="research-bulk-count" style="font-size:12px;font-weight:600;color:#a5b4fc">0 selected</span>
+        <button class="btn btn-ghost btn-sm" onclick="researchBulkMarkRead()">&#x2713; Read</button>
+        <button class="btn btn-ghost btn-sm" onclick="researchBulkMarkUnread()">&#x21A9; Unread</button>
+        <select class="sentiment-picker" onchange="researchBulkTag(this.value);this.value=''" style="height:26px">
+          <option value="">+ Tag...</option>
+          <option>Urgent</option><option>Briefing Note Worthy</option><option>DRIPA</option><option>TRC</option><option>Budget</option><option>Indigenous</option><option>Health</option><option>Research</option><option>Reconciliation</option>
+        </select>
+        <button class="btn btn-red btn-sm" onclick="clearResearchSelection()">&#x2715; Clear</button>
+        <label style="font-size:11px;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="research-select-all-chk" onchange="toggleResearchSelectAll(this.checked)"> All</label>
+      </div>
+      <!-- Tag filter bar -->
+      <div class="tag-filter-bar" id="research-tag-filter-bar">
+        <span class="tag-filter-bar-label">&#x1F3F7; Tags:</span>
+        <span class="tag-chip active" onclick="filterResearchTag('',this)">All</span>
+        <span class="tag-chip" onclick="filterResearchTag('Urgent',this)">&#x26A0; Urgent</span>
+        <span class="tag-chip" onclick="filterResearchTag('Briefing Note Worthy',this)">&#x1F4CB; Briefing Note</span>
+        <span class="tag-chip" onclick="filterResearchTag('DRIPA',this)">DRIPA</span>
+        <span class="tag-chip" onclick="filterResearchTag('UNDRIP',this)">UNDRIP</span>
+        <span class="tag-chip" onclick="filterResearchTag('TRC',this)">TRC</span>
+        <span class="tag-chip" onclick="filterResearchTag('OCAP',this)">OCAP</span>
+        <span class="tag-chip" onclick="filterResearchTag('Budget',this)">Budget</span>
+        <span class="tag-chip" onclick="filterResearchTag('Funding',this)">Funding</span>
+        <span class="tag-chip" onclick="filterResearchTag('Research',this)">Research</span>
+        <span class="tag-chip" onclick="filterResearchTag('Legislation',this)">Legislation</span>
+        <span class="tag-chip" onclick="filterResearchTag('Reconciliation',this)">Reconciliation</span>
+        <span class="tag-chip" onclick="filterResearchTag('Indigenous',this)">Indigenous</span>
+        <span class="tag-chip" onclick="filterResearchTag('Health',this)">Health</span>
+        <span class="tag-chip" onclick="filterResearchTag('Pharmacare',this)">Pharmacare</span>
+      </div>
+      <!-- Filters -->
+      <div class="filters">
+        <input class="filter-input" id="research-search-inp" placeholder="&#x1F50D; Search titles, abstracts, authors…" oninput="debounceResearchSearch()">
+        <select class="filter-select" id="research-filter-domain" onchange="renderResearchFeed()">
+          <option value="">All Domains</option>
+          <option>Higher Education</option><option>Research Funding</option><option>Indigenous</option>
+          <option>Reconciliation</option><option>Health</option><option>Budget</option>
+          <option>Legislation</option><option>Infrastructure</option><option>Pharmacare</option>
+          <option>Workforce</option><option>Consultation</option><option>Political</option><option>Environment</option><option>Housing</option><option>International</option><option>Other</option>
+        </select>
+        <select class="filter-select" id="research-filter-juris" onchange="renderResearchFeed()">
+          <option value="">All Jurisdictions</option>
+          <option>Federal</option><option>BC</option><option>Municipal</option><option>Pan-Canadian</option><option>International</option>
+        </select>
+        <select class="filter-select" id="research-filter-sentiment" onchange="renderResearchFeed()">
+          <option value="">All Sentiments</option>
+          <option>Critical</option><option>Supportive</option><option>Neutral</option>
+        </select>
+        <select class="filter-select" id="research-filter-db" onchange="renderResearchFeed()">
+          <option value="">All Databases</option>
+          <option>OpenAlex</option><option>Semantic Scholar</option><option>PubMed Central</option>
+          <option>DOAJ</option><option>arXiv</option><option>Canadian Think Tank</option>
+        </select>
+        <button class="pill active" id="research-pill-unread" onclick="toggleResearchUnread()">Unread Only</button>
+        <button class="pill" id="research-pill-flagged" onclick="toggleResearchFlagFilter()">&#x1F6A9; Flagged</button>
+        <select class="filter-select" id="research-sort" onchange="renderResearchFeed()" style="min-width:155px">
+          <option value="date_desc">&#x1F4C5; Newest First</option>
+          <option value="date_asc">&#x1F4C5; Oldest First</option>
+          <option value="rel_desc">&#x1F525; Highest Relevance</option>
+          <option value="rel_asc">&#x1F525; Lowest Relevance</option>
+        </select>
+      </div>
+      <div id="research-feed-list">
+        <div class="empty" style="padding:60px 20px">
+          <div class="empty-icon">&#x1F4DA;</div>
+          <div class="empty-text">No research articles yet.<br>Click <strong>Fetch New Research</strong> to pull from OpenAlex, PubMed, Semantic Scholar, and Canadian think-tanks.</div>
+        </div>
+      </div>
+      <div id="research-pagination-bar" class="pagination-bar" style="display:none"></div>
+    </div>
+
+    <!-- SEARCH PANEL -->
+    <!-- ══ SEARCH & ARCHIVE PANEL (mirrors scraper-archive-panel) ══ -->
+    <div id="research-archive-panel" style="display:none">
+
+      <!-- Scholarly keywords watchlist -->
+      <div style="margin-bottom:14px">
+        <div class="section-title" style="margin-top:0">&#x1F4D6; Scholarly Search Keywords</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">These keywords are sent to OpenAlex, Semantic Scholar, PubMed, DOAJ, and arXiv on every research scrape run.</div>
+        <div id="scholarly-keywords-list" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px">
+          <input class="filter-input" id="skw-input" placeholder="Add keyword (e.g. 'OCAP Indigenous data')" style="max-width:300px" onkeydown="if(event.key==='Enter')submitAddScholarlyKeyword()">
+          <button class="btn btn-cyan" onclick="submitAddScholarlyKeyword()">+ Add</button>
+        </div>
+      </div>
+
+      <!-- Scholarly exclusion keywords -->
+      <div style="margin-top:20px;margin-bottom:14px">
+        <div class="section-title" style="margin-top:0">&#x1F6AB; Exclusion Keywords</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Research articles whose titles contain these words are silently dropped before AI processing. Saves immediately to backend.</div>
+        <div id="scholarly-exclusion-tags" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px">
+          <input class="filter-input" id="scholarly-excl-input" placeholder="e.g. predatory journal, retracted, erratum&hellip;" style="max-width:300px" onkeydown="if(event.key==='Enter')addScholarlyExclusionKeyword()">
+          <button class="btn btn-red btn-sm" onclick="addScholarlyExclusionKeyword()">+ Block</button>
+        </div>
+      </div>
+
+      <!-- Archive sub-tabs -->
+      <div class="sub-tabs" style="margin-top:16px">
+        <button class="sub-tab active" onclick="researchArchiveTab('search')" id="rat-search">Full Search</button>
+        <button class="sub-tab"        onclick="researchArchiveTab('month')"  id="rat-month">By Month</button>
+        <button class="sub-tab"        onclick="researchArchiveTab('year')"   id="rat-year">By Year</button>
+        <button class="sub-tab"        onclick="researchArchiveTab('domain')" id="rat-domain">By Domain</button>
+        <button class="sub-tab"        onclick="researchArchiveTab('db')"     id="rat-db">By Database</button>
+      </div>
+
+      <!-- Full search -->
+      <div id="research-archive-search-panel">
+        <div class="filters">
+          <input class="filter-input" id="research-archive-search" placeholder="Full-text search research archives&hellip;" oninput="renderResearchArchive()">
+          <select class="filter-select" id="research-archive-domain" onchange="renderResearchArchive()">
+            <option value="">All Domains</option>
+            <option>Higher Education</option><option>Research Funding</option><option>Indigenous</option>
+            <option>Reconciliation</option><option>Health</option><option>Budget</option><option>Legislation</option>
+          </select>
+          <select class="filter-select" id="research-archive-db" onchange="renderResearchArchive()">
+            <option value="">All Databases</option>
+            <option>OpenAlex</option><option>Semantic Scholar</option><option>PubMed Central</option>
+            <option>DOAJ</option><option>arXiv</option><option>Canadian Think Tank</option>
+          </select>
+        </div>
+        <div id="research-archive-results"></div>
+      </div>
+
+      <div id="research-archive-month-panel"  style="display:none"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="research-month-btns"></div><div id="research-month-results"></div></div>
+      <div id="research-archive-year-panel"   style="display:none"><div style="display:flex;gap:6px;margin-bottom:12px" id="research-year-btns"></div><div id="research-year-results"></div></div>
+      <div id="research-archive-domain-panel" style="display:none"><div id="research-domain-results"></div></div>
+      <div id="research-archive-db-panel"     style="display:none"><div id="research-db-results"></div></div>
+
+    </div><!-- /research-archive-panel -->
+
+    <!-- ══ SOURCES PANEL (mirrors scraper-sources-panel) ══ -->
+    <div id="research-sources-panel" style="display:none">
+
+      <!-- Think-tank / custom sources -->
+      <div style="margin-bottom:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <div style="font-size:12px;color:var(--muted)" id="research-sources-count">Loading sources&hellip;</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="detectResearchDuplicates()">&#x1F50D; Find Dupes</button>
+            <button class="btn btn-primary"      onclick="showAddResearchSourceModal()">+ Add Source</button>
+          </div>
+        </div>
+
+        <!-- Duplicate alert -->
+        <div id="research-duplicate-alert" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(244,63,94,0.08);border:1px solid rgba(244,63,94,0.25);border-radius:8px">
+          <div style="font-size:11px;font-weight:700;color:#fb7185;margin-bottom:6px">&#x26A0; Potential Duplicate Articles Detected</div>
+          <div id="research-duplicate-list" style="font-size:11px;color:var(--muted);line-height:1.8"></div>
+        </div>
+
+        <!-- Inline add-source form -->
+        <div id="add-research-source-form" style="display:none;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:16px 18px;margin-bottom:14px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:12px">+ Add Research Source</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <input class="filter-input" id="nrs-name" placeholder="Organisation name *"    style="grid-column:1/-1">
+            <input class="filter-input" id="nrs-url"  placeholder="Publications page URL *" style="grid-column:1/-1">
+            <select class="filter-select" id="nrs-type">
+              <option value="think_tank">Think Tank</option>
+              <option value="government">Government</option>
+              <option value="university">University</option>
+              <option value="ngo">NGO / Non-profit</option>
+              <option value="other">Other</option>
+            </select>
+            <select class="filter-select" id="nrs-boost" title="Relevance boost adds points to the AI score for articles from this source">
+              <option value="0">No boost (neutral)</option>
+              <option value="1">+1 boost (relevant)</option>
+              <option value="2">+2 boost (highly relevant)</option>
+            </select>
+            <input class="filter-input" id="nrs-notes" placeholder="Notes (optional)" style="grid-column:1/-1">
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:7px 10px;background:rgba(0,0,0,.2);border-radius:6px">
+            &#x1F4A1; The scraper crawls this URL for publication links using generic heading selectors (h2/h3).
+            Works best on sites that list publications with linked headings.
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" style="background:linear-gradient(135deg,#4f46e5,#6366f1)" onclick="submitAddResearchSource()">+ Add Source</button>
+            <button class="btn btn-ghost"   onclick="hideAddResearchSourceModal()">Cancel</button>
+          </div>
+          <div id="add-research-source-status" style="font-size:11px;margin-top:8px;display:none"></div>
+        </div>
+
+        <!-- Sources table -->
+        <div class="table-wrap" style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Organisation</th><th>URL</th><th>Type</th><th>Boost</th><th>Status</th><th>Last Scraped</th><th>Articles</th><th>Actions</th></tr></thead>
+            <tbody id="research-sources-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Open-access API sources info (read-only) -->
+      <div>
+        <div class="section-title">&#x1F310; Open-Access API Sources</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:14px">These databases are queried automatically using your keywords (set in Search &amp; Archive). No credentials required — always active.</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;max-width:900px">
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-openalex">OpenAlex</span><span class="oa-badge">&#x1F513; Free</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">250M+ scholarly works. No API key. Best coverage for policy and social science.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-semantic">Semantic Scholar</span><span class="oa-badge">&#x1F513; Free</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">220M papers with AI-powered abstracts. Allen Institute. Strong on interdisciplinary work.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-pubmed">PubMed Central</span><span class="oa-badge">&#x1F513; Free</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">Full-text biomedical research. Best for Indigenous health, pharmacare, and FNHA-related papers.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-doaj">DOAJ</span><span class="oa-badge">&#x1F513; Free</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">20,000+ peer-reviewed open access journals. Strong on law, policy, and social sciences.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-arxiv">arXiv</span><span class="oa-badge">&#x1F513; Free</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">Preprints in economics, social science, AI policy. Often 6&ndash;12 months ahead of journals.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-canadian">Canadian Think-Tanks</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">Yellowhead Institute, CCPA, NCCIH, CD Howe, Macdonald-Laurier, Broadbent. Managed via the Sources table above.</div></div>
+        </div>
+        <div style="margin-top:14px;padding:12px 16px;background:rgba(244,63,94,0.05);border:1px solid rgba(244,63,94,0.15);border-radius:8px;font-size:12px;color:var(--muted);line-height:1.8;max-width:900px">
+          <strong style="color:#fb7185">&#x1F512; What we cannot access:</strong> JSTOR, Scopus, Web of Science, Elsevier, Springer, Wiley, and paywalled journals. PolicyPulse only fetches open-access content.
+        </div>
+      </div>
+
+    </div><!-- /research-sources-panel -->
+
+
+
+    <!-- ═══ RESEARCH SCRAPER FILTER SETTINGS PANEL ═══ -->
+    <div id="research-settings-panel" style="display:none">
+      <div style="max-width:780px">
+
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:4px">&#x2699;&#xFE0F; Research Scraper Filter Settings</div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.65">
+              These rules filter the <strong style="color:var(--text)">displayed</strong> research articles client-side.
+              The fetch config (databases, keywords) is sent to the backend when you click
+              <strong style="color:var(--text)">Fetch New Research</strong>. Changes take effect immediately on the current feed.
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="resetResearchFilters()">&#x21BA; Reset Defaults</button>
+            <button class="btn btn-primary" onclick="applyResearchFilterSettings()">&#x2713; Apply &amp; Save</button>
+          </div>
+        </div>
+
+        <div id="research-filter-status" style="display:none;padding:9px 14px;border-radius:7px;font-size:11px;font-weight:600;margin-bottom:16px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc">
+          &#x2713; Research filter settings applied — feed updated
+        </div>
+
+        <!-- Relevance threshold -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:14px">&#x1F4CA; Relevance Threshold</div>
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:220px;font-size:11px;color:var(--muted)">Hide research articles below this AI relevance score.</div>
+            <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+              <input type="range" id="research-min-relevance" min="6" max="10" step="1" value="6"
+                style="width:140px;accent-color:#6366f1"
+                oninput="document.getElementById('research-min-rel-label').innerHTML=rEmoji(parseInt(this.value))+' '+this.value+'/10'">
+              <span id="research-min-rel-label" style="font-size:16px;font-weight:700;color:var(--gold);font-family:'IBM Plex Mono',monospace;min-width:55px">&#x1F4CC; 6/10</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Database source filter -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:12px">&#x1F4DA; Database Sources <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(untick to exclude from display and from next fetch)</span></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.18);border-radius:7px;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="rdb-openalex" checked style="accent-color:#6366f1"> <span class="research-db-badge db-openalex">OpenAlex</span> <span style="color:var(--muted);font-size:10px">250M works</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.18);border-radius:7px;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="rdb-semantic" checked style="accent-color:#10b981"> <span class="research-db-badge db-semantic">Semantic Scholar</span> <span style="color:var(--muted);font-size:10px">220M papers</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);border-radius:7px;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="rdb-pubmed" checked style="accent-color:#ef4444"> <span class="research-db-badge db-pubmed">PubMed Central</span> <span style="color:var(--muted);font-size:10px">biomedical</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.18);border-radius:7px;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="rdb-doaj" checked style="accent-color:#f59e0b"> <span class="research-db-badge db-doaj">DOAJ</span> <span style="color:var(--muted);font-size:10px">open journals</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.18);border-radius:7px;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="rdb-arxiv" checked style="accent-color:#00c2ff"> <span class="research-db-badge db-arxiv">arXiv</span> <span style="color:var(--muted);font-size:10px">preprints</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.18);border-radius:7px;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="rdb-canadian" checked style="accent-color:#dc2626"> <span class="research-db-badge db-canadian">Canadian Think-Tanks</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Domain filter -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:12px">&#x1F3F7; Domain Filter</div>
+          <div id="research-domain-checkboxes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"></div>
+        </div>
+
+        <!-- Open access only -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:12px">&#x1F513; Access Type</div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
+              <input type="radio" name="research-access" id="research-access-all" value="all" checked style="accent-color:#6366f1"> Show all articles
+            </label>
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
+              <input type="radio" name="research-access" id="research-access-oa" value="oa" style="accent-color:#6366f1"> Open access only &#x1F513;
+            </label>
+          </div>
+        </div>
+
+        <!-- Age cutoff -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:14px">&#x1F4C5; Publication Age Cutoff</div>
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px;font-size:11px;color:var(--muted)">Only show articles published within this many days. Set 0 for no limit.</div>
+            <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+              <input type="number" id="research-max-age-days" value="0" min="0" max="3650"
+                style="width:70px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--text);text-align:center">
+              <span style="font-size:12px;color:var(--muted)">days (0 = no limit)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Must-contain keywords -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:10px">&#x1F50D; Must-Contain Keywords <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(leave empty to show all)</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Only show research articles whose title or abstract contains at least one of these words.</div>
+          <div id="research-must-contain-tags" style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px"></div>
+          <div style="display:flex;gap:8px">
+            <input class="filter-input" id="research-must-contain-inp" placeholder="e.g. OCAP, reconciliation, pharmacare…" style="max-width:300px" onkeydown="if(event.key==='Enter')addResearchMustContain()">
+            <button class="btn btn-sm" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc" onclick="addResearchMustContain()">+ Add</button>
+          </div>
+        </div>
+
+        <!-- Fetch config info box -->
+        <div style="padding:14px 16px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:8px;margin-bottom:14px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:8px">&#x1F4E4; Next Fetch Config</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.75">
+            When you click <strong style="color:var(--text)">Fetch New Research</strong>, the selected databases above are sent
+            to the backend so only those sources are queried. Unticked databases are skipped entirely — saving API time and reducing noise.
+            <br><span style="color:#a5b4fc">Enabled databases: <strong id="research-enabled-db-count" style="color:var(--white)">6</strong> of 6</span>
+          </div>
+        </div>
+
+        <!-- Preview count -->
+        <div style="padding:12px 16px;background:rgba(0,0,0,.2);border-radius:8px;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <span>&#x1F4CB; Research articles matching current settings: <strong id="research-filter-preview-count" style="color:#a5b4fc">—</strong></span>
+          <button class="btn btn-ghost btn-sm" onclick="previewResearchFilterCount()">&#x1F50D; Preview Count</button>
+        </div>
+
+      </div>
+    </div><!-- /research-settings-panel -->
+
+
   <!-- DIGEST -->
   <div id="page-digest" style="display:none" class="fade-in">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
@@ -1822,401 +2216,6 @@ function skipApiKey(){
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════
-       RESEARCH / SCHOLARLY TAB
-  ═══════════════════════════════════════════════════ -->
-  <div id="page-research" style="display:none" class="fade-in">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-      <div>
-        <div class="page-title">&#x1F4DA; Research &amp; Scholarly Literature</div>
-        <div class="page-subtitle" id="research-subtitle">Peer-reviewed articles, working papers, and policy research from open-access databases</div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <button class="btn btn-ghost btn-sm" onclick="exportResearchCSV()">&#x2B07; Export CSV</button>
-        <button class="btn btn-cyan" id="research-scrape-btn" onclick="triggerScholarlyScrape()">
-          &#x1F50D; Fetch New Research
-        </button>
-      </div>
-    </div>
-
-    <!-- Progress bar -->
-    <div class="scrape-progress" id="research-progress">
-      <span class="spin" style="display:inline-block;margin-right:8px">&#8635;</span>
-      <strong style="color:var(--text)">Fetching research</strong> <span style="color:var(--muted)">— querying OpenAlex, Semantic Scholar, Canadian think-tanks, PubMed, DOAJ, arXiv&hellip; This takes 60&ndash;90 seconds. The feed will refresh automatically.</span>
-    </div>
-
-    <!-- Sub-tabs — directly under title row, matching News & Articles layout -->
-    <div class="sub-tabs">
-      <button class="sub-tab active" id="rst-feed"     onclick="researchTab('feed')">Article Feed</button>
-      <button class="sub-tab"        id="rst-archive"  onclick="researchTab('archive')">Search &amp; Archive</button>
-      <button class="sub-tab"        id="rst-sources"  onclick="researchTab('sources')">Sources</button>
-      <button class="sub-tab"        id="rst-settings" onclick="researchTab('settings')">&#x2699; Filter Settings</button>
-    </div>
-
-    <!-- FEED PANEL -->
-    <div id="research-feed-panel">
-
-      <!-- Stats row — inside feed panel, below sub-tabs -->
-      <div class="research-stats-grid" id="research-stats-grid" style="margin-top:12px">
-        <div class="research-stat"><div class="research-stat-val" id="rs-total">—</div><div class="research-stat-label">Total Articles</div></div>
-        <div class="research-stat"><div class="research-stat-val" id="rs-unread" style="color:#a5b4fc">—</div><div class="research-stat-label">Unread</div></div>
-        <div class="research-stat"><div class="research-stat-val" id="rs-week" style="color:var(--gold)">—</div><div class="research-stat-label">Added This Week</div></div>
-        <div class="research-stat"><div class="research-stat-val" id="rs-dbs">6</div><div class="research-stat-label">Databases</div></div>
-        <div class="research-stat"><div class="research-stat-val" id="rs-oa" style="color:#10b981">100%</div><div class="research-stat-label">Open Access</div></div>
-      </div>
-
-      <!-- Database legend -->
-      <div style="padding:10px 14px;background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
-        <div style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Data Sources</div>
-        <div class="source-breakdown" id="research-source-breakdown">
-          <span class="research-db-badge db-openalex">&#x1F30D; OpenAlex</span>
-          <span class="research-db-badge db-semantic">&#x1F9E0; Semantic Scholar</span>
-          <span class="research-db-badge db-pubmed">&#x1F9EA; PubMed Central</span>
-          <span class="research-db-badge db-doaj">&#x1F4D6; DOAJ</span>
-          <span class="research-db-badge db-arxiv">&#x1F4CA; arXiv</span>
-          <span class="research-db-badge db-canadian">&#x1F341; Canadian Think-Tanks</span>
-          <div style="width:100%;height:0"></div>
-          <span style="font-size:10px;color:var(--dim);align-self:center">All sources are freely accessible, open access, and scraping-permitted.</span>
-        </div>
-      </div>
-
-      <!-- Bulk action bar -->
-      <div id="research-bulk-bar" style="display:none;align-items:center;gap:8px;padding:8px 12px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:8px;margin-bottom:10px;flex-wrap:wrap">
-        <span id="research-bulk-count" style="font-size:12px;font-weight:600;color:#a5b4fc">0 selected</span>
-        <button class="btn btn-ghost btn-sm" onclick="researchBulkMarkRead()">&#x2713; Read</button>
-        <button class="btn btn-ghost btn-sm" onclick="researchBulkMarkUnread()">&#x21A9; Unread</button>
-        <select class="sentiment-picker" onchange="researchBulkTag(this.value);this.value=''" style="height:26px">
-          <option value="">+ Tag...</option>
-          <option>Urgent</option><option>Briefing Note Worthy</option><option>DRIPA</option><option>TRC</option><option>Budget</option><option>Indigenous</option><option>Health</option><option>Research</option><option>Reconciliation</option>
-        </select>
-        <button class="btn btn-red btn-sm" onclick="clearResearchSelection()">&#x2715; Clear</button>
-        <label style="font-size:11px;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="research-select-all-chk" onchange="toggleResearchSelectAll(this.checked)"> All</label>
-      </div>
-      <!-- Tag filter bar -->
-      <div class="tag-filter-bar" id="research-tag-filter-bar">
-        <span class="tag-filter-bar-label">&#x1F3F7; Tags:</span>
-        <span class="tag-chip active" onclick="filterResearchTag('',this)">All</span>
-        <span class="tag-chip" onclick="filterResearchTag('Urgent',this)">&#x26A0; Urgent</span>
-        <span class="tag-chip" onclick="filterResearchTag('Briefing Note Worthy',this)">&#x1F4CB; Briefing Note</span>
-        <span class="tag-chip" onclick="filterResearchTag('DRIPA',this)">DRIPA</span>
-        <span class="tag-chip" onclick="filterResearchTag('UNDRIP',this)">UNDRIP</span>
-        <span class="tag-chip" onclick="filterResearchTag('TRC',this)">TRC</span>
-        <span class="tag-chip" onclick="filterResearchTag('OCAP',this)">OCAP</span>
-        <span class="tag-chip" onclick="filterResearchTag('Budget',this)">Budget</span>
-        <span class="tag-chip" onclick="filterResearchTag('Funding',this)">Funding</span>
-        <span class="tag-chip" onclick="filterResearchTag('Research',this)">Research</span>
-        <span class="tag-chip" onclick="filterResearchTag('Legislation',this)">Legislation</span>
-        <span class="tag-chip" onclick="filterResearchTag('Reconciliation',this)">Reconciliation</span>
-        <span class="tag-chip" onclick="filterResearchTag('Indigenous',this)">Indigenous</span>
-        <span class="tag-chip" onclick="filterResearchTag('Health',this)">Health</span>
-        <span class="tag-chip" onclick="filterResearchTag('Pharmacare',this)">Pharmacare</span>
-      </div>
-      <!-- Filters -->
-      <div class="filters">
-        <input class="filter-input" id="research-search-inp" placeholder="&#x1F50D; Search titles, abstracts, authors…" oninput="debounceResearchSearch()">
-        <select class="filter-select" id="research-filter-domain" onchange="renderResearchFeed()">
-          <option value="">All Domains</option>
-          <option>Higher Education</option><option>Research Funding</option><option>Indigenous</option>
-          <option>Reconciliation</option><option>Health</option><option>Budget</option>
-          <option>Legislation</option><option>Infrastructure</option><option>Pharmacare</option>
-          <option>Workforce</option><option>Consultation</option><option>Political</option><option>Environment</option><option>Housing</option><option>International</option><option>Other</option>
-        </select>
-        <select class="filter-select" id="research-filter-juris" onchange="renderResearchFeed()">
-          <option value="">All Jurisdictions</option>
-          <option>Federal</option><option>BC</option><option>Municipal</option><option>Pan-Canadian</option><option>International</option>
-        </select>
-        <select class="filter-select" id="research-filter-sentiment" onchange="renderResearchFeed()">
-          <option value="">All Sentiments</option>
-          <option>Critical</option><option>Supportive</option><option>Neutral</option>
-        </select>
-        <select class="filter-select" id="research-filter-db" onchange="renderResearchFeed()">
-          <option value="">All Databases</option>
-          <option>OpenAlex</option><option>Semantic Scholar</option><option>PubMed Central</option>
-          <option>DOAJ</option><option>arXiv</option><option>Canadian Think Tank</option>
-        </select>
-        <button class="pill active" id="research-pill-unread" onclick="toggleResearchUnread()">Unread Only</button>
-        <button class="pill" id="research-pill-flagged" onclick="toggleResearchFlagFilter()">&#x1F6A9; Flagged</button>
-        <select class="filter-select" id="research-sort" onchange="renderResearchFeed()" style="min-width:155px">
-          <option value="date_desc">&#x1F4C5; Newest First</option>
-          <option value="date_asc">&#x1F4C5; Oldest First</option>
-          <option value="rel_desc">&#x1F525; Highest Relevance</option>
-          <option value="rel_asc">&#x1F525; Lowest Relevance</option>
-        </select>
-      </div>
-      <div id="research-feed-list">
-        <div class="empty" style="padding:60px 20px">
-          <div class="empty-icon">&#x1F4DA;</div>
-          <div class="empty-text">No research articles yet.<br>Click <strong>Fetch New Research</strong> to pull from OpenAlex, PubMed, Semantic Scholar, and Canadian think-tanks.</div>
-        </div>
-      </div>
-      <div id="research-pagination-bar" class="pagination-bar" style="display:none"></div>
-    </div>
-
-    <!-- SEARCH PANEL -->
-    <!-- ══ SEARCH & ARCHIVE PANEL (mirrors scraper-archive-panel) ══ -->
-    <div id="research-archive-panel" style="display:none">
-
-      <!-- Scholarly keywords watchlist -->
-      <div style="margin-bottom:14px">
-        <div class="section-title" style="margin-top:0">&#x1F4D6; Scholarly Search Keywords</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">These keywords are sent to OpenAlex, Semantic Scholar, PubMed, DOAJ, and arXiv on every research scrape run.</div>
-        <div id="scholarly-keywords-list" style="margin-bottom:8px"></div>
-        <div style="display:flex;gap:8px">
-          <input class="filter-input" id="skw-input" placeholder="Add keyword (e.g. 'OCAP Indigenous data')" style="max-width:300px" onkeydown="if(event.key==='Enter')submitAddScholarlyKeyword()">
-          <button class="btn btn-cyan" onclick="submitAddScholarlyKeyword()">+ Add</button>
-        </div>
-      </div>
-
-      <!-- Scholarly exclusion keywords -->
-      <div style="margin-top:20px;margin-bottom:14px">
-        <div class="section-title" style="margin-top:0">&#x1F6AB; Exclusion Keywords</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Research articles whose titles contain these words are silently dropped before AI processing. Saves immediately to backend.</div>
-        <div id="scholarly-exclusion-tags" style="margin-bottom:8px"></div>
-        <div style="display:flex;gap:8px">
-          <input class="filter-input" id="scholarly-excl-input" placeholder="e.g. predatory journal, retracted, erratum&hellip;" style="max-width:300px" onkeydown="if(event.key==='Enter')addScholarlyExclusionKeyword()">
-          <button class="btn btn-red btn-sm" onclick="addScholarlyExclusionKeyword()">+ Block</button>
-        </div>
-      </div>
-
-      <!-- Archive sub-tabs -->
-      <div class="sub-tabs" style="margin-top:16px">
-        <button class="sub-tab active" onclick="researchArchiveTab('search')" id="rat-search">Full Search</button>
-        <button class="sub-tab"        onclick="researchArchiveTab('month')"  id="rat-month">By Month</button>
-        <button class="sub-tab"        onclick="researchArchiveTab('year')"   id="rat-year">By Year</button>
-        <button class="sub-tab"        onclick="researchArchiveTab('domain')" id="rat-domain">By Domain</button>
-        <button class="sub-tab"        onclick="researchArchiveTab('db')"     id="rat-db">By Database</button>
-      </div>
-
-      <!-- Full search -->
-      <div id="research-archive-search-panel">
-        <div class="filters">
-          <input class="filter-input" id="research-archive-search" placeholder="Full-text search research archives&hellip;" oninput="renderResearchArchive()">
-          <select class="filter-select" id="research-archive-domain" onchange="renderResearchArchive()">
-            <option value="">All Domains</option>
-            <option>Higher Education</option><option>Research Funding</option><option>Indigenous</option>
-            <option>Reconciliation</option><option>Health</option><option>Budget</option><option>Legislation</option>
-          </select>
-          <select class="filter-select" id="research-archive-db" onchange="renderResearchArchive()">
-            <option value="">All Databases</option>
-            <option>OpenAlex</option><option>Semantic Scholar</option><option>PubMed Central</option>
-            <option>DOAJ</option><option>arXiv</option><option>Canadian Think Tank</option>
-          </select>
-        </div>
-        <div id="research-archive-results"></div>
-      </div>
-
-      <div id="research-archive-month-panel"  style="display:none"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="research-month-btns"></div><div id="research-month-results"></div></div>
-      <div id="research-archive-year-panel"   style="display:none"><div style="display:flex;gap:6px;margin-bottom:12px" id="research-year-btns"></div><div id="research-year-results"></div></div>
-      <div id="research-archive-domain-panel" style="display:none"><div id="research-domain-results"></div></div>
-      <div id="research-archive-db-panel"     style="display:none"><div id="research-db-results"></div></div>
-
-    </div><!-- /research-archive-panel -->
-
-    <!-- ══ SOURCES PANEL (mirrors scraper-sources-panel) ══ -->
-    <div id="research-sources-panel" style="display:none">
-
-      <!-- Think-tank / custom sources -->
-      <div style="margin-bottom:24px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-          <div style="font-size:12px;color:var(--muted)" id="research-sources-count">Loading sources&hellip;</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-ghost btn-sm" onclick="detectResearchDuplicates()">&#x1F50D; Find Dupes</button>
-            <button class="btn btn-primary"      onclick="showAddResearchSourceModal()">+ Add Source</button>
-          </div>
-        </div>
-
-        <!-- Duplicate alert -->
-        <div id="research-duplicate-alert" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(244,63,94,0.08);border:1px solid rgba(244,63,94,0.25);border-radius:8px">
-          <div style="font-size:11px;font-weight:700;color:#fb7185;margin-bottom:6px">&#x26A0; Potential Duplicate Articles Detected</div>
-          <div id="research-duplicate-list" style="font-size:11px;color:var(--muted);line-height:1.8"></div>
-        </div>
-
-        <!-- Inline add-source form -->
-        <div id="add-research-source-form" style="display:none;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:16px 18px;margin-bottom:14px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:12px">+ Add Research Source</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-            <input class="filter-input" id="nrs-name" placeholder="Organisation name *"    style="grid-column:1/-1">
-            <input class="filter-input" id="nrs-url"  placeholder="Publications page URL *" style="grid-column:1/-1">
-            <select class="filter-select" id="nrs-type">
-              <option value="think_tank">Think Tank</option>
-              <option value="government">Government</option>
-              <option value="university">University</option>
-              <option value="ngo">NGO / Non-profit</option>
-              <option value="other">Other</option>
-            </select>
-            <select class="filter-select" id="nrs-boost" title="Relevance boost adds points to the AI score for articles from this source">
-              <option value="0">No boost (neutral)</option>
-              <option value="1">+1 boost (relevant)</option>
-              <option value="2">+2 boost (highly relevant)</option>
-            </select>
-            <input class="filter-input" id="nrs-notes" placeholder="Notes (optional)" style="grid-column:1/-1">
-          </div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:7px 10px;background:rgba(0,0,0,.2);border-radius:6px">
-            &#x1F4A1; The scraper crawls this URL for publication links using generic heading selectors (h2/h3).
-            Works best on sites that list publications with linked headings.
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-primary" style="background:linear-gradient(135deg,#4f46e5,#6366f1)" onclick="submitAddResearchSource()">+ Add Source</button>
-            <button class="btn btn-ghost"   onclick="hideAddResearchSourceModal()">Cancel</button>
-          </div>
-          <div id="add-research-source-status" style="font-size:11px;margin-top:8px;display:none"></div>
-        </div>
-
-        <!-- Sources table -->
-        <div class="table-wrap" style="overflow-x:auto">
-          <table>
-            <thead><tr><th>Organisation</th><th>URL</th><th>Type</th><th>Boost</th><th>Status</th><th>Last Scraped</th><th>Articles</th><th>Actions</th></tr></thead>
-            <tbody id="research-sources-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Open-access API sources info (read-only) -->
-      <div>
-        <div class="section-title">&#x1F310; Open-Access API Sources</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:14px">These databases are queried automatically using your keywords (set in Search &amp; Archive). No credentials required — always active.</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;max-width:900px">
-          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-openalex">OpenAlex</span><span class="oa-badge">&#x1F513; Free</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">250M+ scholarly works. No API key. Best coverage for policy and social science.</div></div>
-          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-semantic">Semantic Scholar</span><span class="oa-badge">&#x1F513; Free</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">220M papers with AI-powered abstracts. Allen Institute. Strong on interdisciplinary work.</div></div>
-          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-pubmed">PubMed Central</span><span class="oa-badge">&#x1F513; Free</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">Full-text biomedical research. Best for Indigenous health, pharmacare, and FNHA-related papers.</div></div>
-          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-doaj">DOAJ</span><span class="oa-badge">&#x1F513; Free</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">20,000+ peer-reviewed open access journals. Strong on law, policy, and social sciences.</div></div>
-          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-arxiv">arXiv</span><span class="oa-badge">&#x1F513; Free</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">Preprints in economics, social science, AI policy. Often 6&ndash;12 months ahead of journals.</div></div>
-          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="research-db-badge db-canadian">Canadian Think-Tanks</span></div><div style="font-size:12px;color:var(--muted);line-height:1.65">Yellowhead Institute, CCPA, NCCIH, CD Howe, Macdonald-Laurier, Broadbent. Managed via the Sources table above.</div></div>
-        </div>
-        <div style="margin-top:14px;padding:12px 16px;background:rgba(244,63,94,0.05);border:1px solid rgba(244,63,94,0.15);border-radius:8px;font-size:12px;color:var(--muted);line-height:1.8;max-width:900px">
-          <strong style="color:#fb7185">&#x1F512; What we cannot access:</strong> JSTOR, Scopus, Web of Science, Elsevier, Springer, Wiley, and paywalled journals. PolicyPulse only fetches open-access content.
-        </div>
-      </div>
-
-    </div><!-- /research-sources-panel -->
-
-
-
-    <!-- ═══ RESEARCH SCRAPER FILTER SETTINGS PANEL ═══ -->
-    <div id="research-settings-panel" style="display:none">
-      <div style="max-width:780px">
-
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
-          <div>
-            <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:4px">&#x2699;&#xFE0F; Research Scraper Filter Settings</div>
-            <div style="font-size:11px;color:var(--muted);line-height:1.65">
-              These rules filter the <strong style="color:var(--text)">displayed</strong> research articles client-side.
-              The fetch config (databases, keywords) is sent to the backend when you click
-              <strong style="color:var(--text)">Fetch New Research</strong>. Changes take effect immediately on the current feed.
-            </div>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-ghost btn-sm" onclick="resetResearchFilters()">&#x21BA; Reset Defaults</button>
-            <button class="btn btn-primary" onclick="applyResearchFilterSettings()">&#x2713; Apply &amp; Save</button>
-          </div>
-        </div>
-
-        <div id="research-filter-status" style="display:none;padding:9px 14px;border-radius:7px;font-size:11px;font-weight:600;margin-bottom:16px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc">
-          &#x2713; Research filter settings applied — feed updated
-        </div>
-
-        <!-- Relevance threshold -->
-        <div class="card" style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:14px">&#x1F4CA; Relevance Threshold</div>
-          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-            <div style="flex:1;min-width:220px;font-size:11px;color:var(--muted)">Hide research articles below this AI relevance score.</div>
-            <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
-              <input type="range" id="research-min-relevance" min="6" max="10" step="1" value="6"
-                style="width:140px;accent-color:#6366f1"
-                oninput="document.getElementById('research-min-rel-label').innerHTML=rEmoji(parseInt(this.value))+' '+this.value+'/10'">
-              <span id="research-min-rel-label" style="font-size:16px;font-weight:700;color:var(--gold);font-family:'IBM Plex Mono',monospace;min-width:55px">&#x1F4CC; 6/10</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Database source filter -->
-        <div class="card" style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:12px">&#x1F4DA; Database Sources <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(untick to exclude from display and from next fetch)</span></div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.18);border-radius:7px;font-size:12px;color:var(--text)">
-              <input type="checkbox" id="rdb-openalex" checked style="accent-color:#6366f1"> <span class="research-db-badge db-openalex">OpenAlex</span> <span style="color:var(--muted);font-size:10px">250M works</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.18);border-radius:7px;font-size:12px;color:var(--text)">
-              <input type="checkbox" id="rdb-semantic" checked style="accent-color:#10b981"> <span class="research-db-badge db-semantic">Semantic Scholar</span> <span style="color:var(--muted);font-size:10px">220M papers</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);border-radius:7px;font-size:12px;color:var(--text)">
-              <input type="checkbox" id="rdb-pubmed" checked style="accent-color:#ef4444"> <span class="research-db-badge db-pubmed">PubMed Central</span> <span style="color:var(--muted);font-size:10px">biomedical</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.18);border-radius:7px;font-size:12px;color:var(--text)">
-              <input type="checkbox" id="rdb-doaj" checked style="accent-color:#f59e0b"> <span class="research-db-badge db-doaj">DOAJ</span> <span style="color:var(--muted);font-size:10px">open journals</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.18);border-radius:7px;font-size:12px;color:var(--text)">
-              <input type="checkbox" id="rdb-arxiv" checked style="accent-color:#00c2ff"> <span class="research-db-badge db-arxiv">arXiv</span> <span style="color:var(--muted);font-size:10px">preprints</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.18);border-radius:7px;font-size:12px;color:var(--text)">
-              <input type="checkbox" id="rdb-canadian" checked style="accent-color:#dc2626"> <span class="research-db-badge db-canadian">Canadian Think-Tanks</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Domain filter -->
-        <div class="card" style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:12px">&#x1F3F7; Domain Filter</div>
-          <div id="research-domain-checkboxes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"></div>
-        </div>
-
-        <!-- Open access only -->
-        <div class="card" style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:12px">&#x1F513; Access Type</div>
-          <div style="display:flex;gap:16px;flex-wrap:wrap">
-            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
-              <input type="radio" name="research-access" id="research-access-all" value="all" checked style="accent-color:#6366f1"> Show all articles
-            </label>
-            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
-              <input type="radio" name="research-access" id="research-access-oa" value="oa" style="accent-color:#6366f1"> Open access only &#x1F513;
-            </label>
-          </div>
-        </div>
-
-        <!-- Age cutoff -->
-        <div class="card" style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:14px">&#x1F4C5; Publication Age Cutoff</div>
-          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-            <div style="flex:1;min-width:200px;font-size:11px;color:var(--muted)">Only show articles published within this many days. Set 0 for no limit.</div>
-            <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
-              <input type="number" id="research-max-age-days" value="0" min="0" max="3650"
-                style="width:70px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--text);text-align:center">
-              <span style="font-size:12px;color:var(--muted)">days (0 = no limit)</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Must-contain keywords -->
-        <div class="card" style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:10px">&#x1F50D; Must-Contain Keywords <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(leave empty to show all)</span></div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Only show research articles whose title or abstract contains at least one of these words.</div>
-          <div id="research-must-contain-tags" style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px"></div>
-          <div style="display:flex;gap:8px">
-            <input class="filter-input" id="research-must-contain-inp" placeholder="e.g. OCAP, reconciliation, pharmacare…" style="max-width:300px" onkeydown="if(event.key==='Enter')addResearchMustContain()">
-            <button class="btn btn-sm" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc" onclick="addResearchMustContain()">+ Add</button>
-          </div>
-        </div>
-
-        <!-- Fetch config info box -->
-        <div style="padding:14px 16px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:8px;margin-bottom:14px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:8px">&#x1F4E4; Next Fetch Config</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.75">
-            When you click <strong style="color:var(--text)">Fetch New Research</strong>, the selected databases above are sent
-            to the backend so only those sources are queried. Unticked databases are skipped entirely — saving API time and reducing noise.
-            <br><span style="color:#a5b4fc">Enabled databases: <strong id="research-enabled-db-count" style="color:var(--white)">6</strong> of 6</span>
-          </div>
-        </div>
-
-        <!-- Preview count -->
-        <div style="padding:12px 16px;background:rgba(0,0,0,.2);border-radius:8px;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-          <span>&#x1F4CB; Research articles matching current settings: <strong id="research-filter-preview-count" style="color:#a5b4fc">—</strong></span>
-          <button class="btn btn-ghost btn-sm" onclick="previewResearchFilterCount()">&#x1F50D; Preview Count</button>
-        </div>
-
-      </div>
-    </div><!-- /research-settings-panel -->
-
-</div><!-- /page-research -->
 
 <script>
 /* ═══════════════════════════════════════════════════
