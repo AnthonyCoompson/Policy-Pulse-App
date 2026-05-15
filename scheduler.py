@@ -2,6 +2,7 @@
 PolicyPulse Scheduler
 ─────────────────────
 • Daily news scrape      — 7:00 AM Monday–Friday (Vancouver time)
+• Saturday news scrape   — 9:00 AM Saturday (Vancouver time, lighter run)
 • Weekly scholarly scrape — 8:00 AM every Monday (Vancouver time)
 """
 
@@ -30,6 +31,16 @@ def start_scheduler():
         name="Daily Policy News Scrape",
     )
 
+    # Saturday catch-up scrape at 9:00 AM — catches weekend government releases
+    # BC Government, federal departments, and press releases continue on weekends
+    _scheduler.add_job(
+        _scrape_job,
+        CronTrigger(hour=9, minute=0, day_of_week="sat"),
+        id="saturday_scrape",
+        replace_existing=True,
+        name="Saturday Catch-Up Scrape",
+    )
+
     # Weekly scholarly/research scrape every Monday at 8:00 AM
     _scheduler.add_job(
         _scholarly_scrape_job,
@@ -42,7 +53,7 @@ def start_scheduler():
     _scheduler.start()
     log.info(
         "Scheduler started — "
-        "news scrape at 07:00 Mon–Fri, "
+        "news scrape at 07:00 Mon–Fri + 09:00 Saturday, "
         "scholarly scrape at 08:00 Monday (America/Vancouver)"
     )
 

@@ -220,7 +220,9 @@ body::before{content:'';position:fixed;inset:0;background:
 #alert-bell:hover{background:rgba(240,165,0,0.18);box-shadow:0 0 12px var(--gold-glow)}
 #alert-count{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;background:var(--red);border-radius:8px;font-size:9px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;padding:0 3px;border:1px solid var(--bg)}
 @keyframes pdot{0%,100%{opacity:1}50%{opacity:.3}}
-#nav{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0;padding:0 24px;z-index:50}
+#nav{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0;padding:0 24px;z-index:50;position:relative;scrollbar-width:none}
+#nav::-webkit-scrollbar{display:none}
+#nav::after{content:'';position:absolute;right:0;top:0;bottom:0;width:48px;background:linear-gradient(90deg,transparent,var(--bg2));pointer-events:none;z-index:1}
 .nav-btn{padding:13px 16px;font-size:11.5px;font-weight:500;color:var(--muted);background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .2s;white-space:nowrap;position:relative}
 .nav-btn:hover{color:var(--text)}
 .nav-btn.active{color:var(--cyan);border-bottom-color:var(--cyan);font-weight:600}
@@ -328,8 +330,11 @@ tr:hover td{background:rgba(0,194,255,0.03)}
 .empty{text-align:center;padding:50px 20px;color:var(--dim)}
 .empty-icon{font-size:38px;margin-bottom:10px;opacity:.5}
 .empty-text{font-size:13px;line-height:1.6}
-#scrape-btn{background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s;box-shadow:0 2px 12px rgba(37,99,235,0.3)}
+#scrape-btn{background:rgba(0,194,255,0.1);color:var(--cyan);border:1px solid rgba(0,194,255,0.3);border-radius:8px;padding:9px 18px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s;font-family:'IBM Plex Sans',sans-serif}
+#scrape-btn:hover{background:rgba(0,194,255,0.18);border-color:rgba(0,194,255,0.5)}
 #scrape-btn:disabled{opacity:.5;cursor:not-allowed}
+/* News scrape progress bar — matches research-progress style */
+#scrape-progress{display:none;padding:12px 16px;background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.2);border-radius:8px;margin-bottom:12px;font-size:12px;color:var(--text)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{animation:spin .8s linear infinite;display:inline-block}
 #api-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:999;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
@@ -728,6 +733,25 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
   </div>
 </div>
 
+<div id="boot-loader" style="display:none;position:fixed;inset:0;z-index:3000;background:var(--bg);flex-direction:column;align-items:center;justify-content:center;gap:18px">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+    <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--cyan),var(--blue));display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 0 20px var(--cyan-glow)">&#x1F4E1;</div>
+    <div style="font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--white)">PolicyPulse</div>
+  </div>
+  <!-- Animated spinner bar -->
+  <div style="width:220px;height:3px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden">
+    <div style="height:100%;background:linear-gradient(90deg,var(--cyan),var(--blue));border-radius:3px;animation:boot-bar 1.8s ease-in-out infinite"></div>
+  </div>
+  <div id="boot-status" style="font-size:11px;color:var(--muted);letter-spacing:0.04em">Loading PolicyPulse…</div>
+  <style>
+    @keyframes boot-bar {
+      0%   { width:0%;   margin-left:0 }
+      50%  { width:70%;  margin-left:0 }
+      100% { width:0%;   margin-left:100% }
+    }
+  </style>
+</div>
+
 <div id="api-modal" class="show">
   <div id="api-modal-box">
     <h2>Welcome to PolicyPulse</h2>
@@ -913,10 +937,7 @@ function skipApiKey(){
   <button class="nav-btn" onclick="showTab('instructions')" id="tab-instructions">📚 Reference Guide</button>
   <button class="nav-btn" onclick="showTab('subscribers')" id="tab-subscribers">👥 Subscribers</button>
   <button class="nav-btn" onclick="showTab('privacy')" id="tab-privacy">&#x1F512; Privacy</button>
-  </div>
- 
-  
-
+</div>
 <div id="main">
 
   <!-- DASHBOARD -->
@@ -924,7 +945,7 @@ function skipApiKey(){
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
       <div><div class="page-title">Dashboard</div><div class="page-subtitle" id="dash-subtitle">Policy intelligence overview</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-ghost" onclick="scrapeNow()">⟳ Scrape Now</button>
+        <button class="btn btn-ghost" onclick="scrapeNow()">🔍 Scrape Now</button>
         <button class="btn btn-red" onclick="clearDashboard()">✕ Clear Read</button>
       </div>
     </div>
@@ -981,12 +1002,18 @@ function skipApiKey(){
   <div id="page-scraper" style="display:none" class="fade-in">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
       <div><div class="page-title">News &amp; Articles</div><div class="page-subtitle" id="scraper-count">Loading news &amp; articles…</div></div>
-      <button id="scrape-btn" onclick="scrapeNow()">⟳ Scrape Now</button>
+      <button id="scrape-btn" onclick="scrapeNow()">&#x1F50D; Scrape Now</button>
+    </div>
+    <!-- News scrape progress bar -->
+    <div id="scrape-progress">
+      <span class="spin" style="display:inline-block;margin-right:8px">&#8635;</span>
+      <strong style="color:var(--text)">Scraping sources</strong> <span style="color:var(--muted)">— fetching articles from all active sources and running AI analysis&hellip; This takes 30&ndash;60 seconds. The feed will refresh automatically.</span>
     </div>
     <div class="sub-tabs">
       <button class="sub-tab active" onclick="scraperTab('feed')" id="st-feed">Article Feed</button>
       <button class="sub-tab" onclick="scraperTab('archive')" id="st-archive">Search &amp; Archive</button>
       <button class="sub-tab" onclick="scraperTab('sources')" id="st-sources">Sources</button>
+      <button class="sub-tab" onclick="scraperTab('log')" id="st-log">&#x1F4CB; Scrape Log</button>
       <button class="sub-tab" onclick="scraperTab('settings')" id="st-settings">&#x2699; Filter Settings</button>
     </div>
     <div id="scraper-feed-panel">
@@ -999,7 +1026,8 @@ function skipApiKey(){
           <option value="">+ Tag...</option>
           <option>Urgent</option><option>Briefing Note Worthy</option><option>DRIPA</option><option>TRC</option><option>Budget</option><option>Indigenous</option><option>Health</option>
         </select>
-        <button class="btn btn-red btn-sm" onclick="clearSelection()">&#x2715; Clear</button>
+        <button class="btn btn-red btn-sm" onclick="bulkDelete()">&#x1F5D1; Delete</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearSelection()">&#x2715; Clear</button>
         <label style="font-size:11px;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="select-all-chk" onchange="toggleSelectAll(this.checked)"> All</label>
       </div>
       <div class="tag-filter-bar" id="tag-filter-bar">
@@ -1072,6 +1100,20 @@ function skipApiKey(){
         <thead><tr><th>Source</th><th>URL</th><th>Jurisdiction</th><th>Status</th><th>Last Scraped</th><th>Articles</th><th></th></tr></thead>
         <tbody id="sources-tbody"></tbody>
       </table></div>
+    </div>
+
+    <!-- ═══ SCRAPE LOG PANEL ═══ -->
+    <div id="scraper-log-panel" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:4px">&#x1F4CB; Scrape History</div>
+          <div style="font-size:11px;color:var(--muted)">Every automated and manual scrape run — articles added, errors, and timestamps.</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="loadScrapeLog()">&#x21BA; Refresh</button>
+      </div>
+      <div id="scrape-log-content">
+        <div class="empty"><div class="empty-icon">&#x1F4CB;</div><div class="empty-text">Click Refresh to load scrape history.</div></div>
+      </div>
     </div>
 
     <!-- ═══ NEWS SCRAPER FILTER SETTINGS PANEL ═══ -->
@@ -1622,7 +1664,7 @@ function skipApiKey(){
 
       </div>
     </div><!-- /research-settings-panel -->
-  </div><!-- /page-research -->  
+
 
   <!-- DIGEST -->
   <div id="page-digest" style="display:none" class="fade-in">
@@ -1701,6 +1743,7 @@ function skipApiKey(){
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-cyan btn-sm" onclick="showApiKeyPanel()" id="api-key-load-btn" title="Load or update your Groq API key">&#x1F511; Load API Key</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearChat()" title="Clear conversation history">&#x1F9F9; Clear Chat</button>
       </div>
     </div>
     <!-- API Key Panel (collapsible) -->
@@ -2781,6 +2824,18 @@ async function loadResearchStats(){
   if(te) te.textContent = d.total || 0;
   if(ue) ue.textContent = d.unread || 0;
   if(de) de.textContent = d.databases ? d.databases.length : 0;
+
+  // Update last-fetched timestamp stored in localStorage
+  var now = new Date().toISOString();
+  try { localStorage.setItem('pp_research_last_fetched', now); } catch(e){}
+
+  // Update subtitle with last-fetched time
+  var rsub = document.getElementById('research-subtitle');
+  if(rsub){
+    var ts = now.replace('T',' ').slice(0,16);
+    rsub.textContent = 'Peer-reviewed articles, working papers, and policy research — last fetched: ' + ts + ' UTC';
+  }
+
   // Update source breakdown with counts
   var bd = document.getElementById('research-source-breakdown');
   if(bd && d.databases && d.databases.length){
@@ -2791,6 +2846,10 @@ async function loadResearchStats(){
     bd.innerHTML = extras + '<div style="width:100%;height:0"></div>'
       + '<span style="font-size:10px;color:var(--dim);align-self:center">All sources are freely accessible, open access, and scraping-permitted.</span>';
   }
+
+  // Also update the week stat
+  var we = document.getElementById('rs-week');
+  if(we && d.this_week !== undefined) we.textContent = d.this_week || 0;
 }
 
 function dbBadgeClass(name){
@@ -3480,11 +3539,27 @@ var _totalArticles = 0;
 
 function isCacheValid(){ return _articleCache.length > 0 && (Date.now() - _cacheTime) < _cacheMaxAge; }
 
+// PP_API_KEY — stored in localStorage so it persists across sessions.
+// Set this once by running in the browser console:
+//   localStorage.setItem('pp_api_key', 'your-key-here')
+// It is sent as: Authorization: Bearer <key> on every backend request.
+var _PP_API_KEY = localStorage.getItem('pp_api_key') || '';
+
 async function apiFetch(path, opts) {
   if (!API_BASE) return null;
   try {
-    var r = await fetch(API_BASE + path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts || {}));
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var headers = { 'Content-Type': 'application/json' };
+    if (_PP_API_KEY) headers['Authorization'] = 'Bearer ' + _PP_API_KEY;
+    var r = await fetch(API_BASE + path, Object.assign({ headers: headers }, opts || {}));
+    if (!r.ok) {
+      // For Notion routes, return error body so caller gets real detail
+      if(path.startsWith('/notion')){
+        var errBody = null;
+        try { errBody = await r.json(); } catch(e2){}
+        return { error: true, detail: (errBody && errBody.detail) || 'HTTP ' + r.status };
+      }
+      throw new Error('HTTP ' + r.status);
+    }
     return await r.json();
   } catch(e) { console.warn('API', path, e.message); return null; }
 }
@@ -3593,11 +3668,11 @@ function saveBackendUrl() {
 /* === END API HELPERS === */
 
 const ARTICLES_SEED=[
-  {id:1,title:"BC Announces $340M Indigenous Post-Secondary Investment Framework",url:"https://www2.gov.bc.ca/gov/content/education-training/post-secondary-education",source:"BC Ministry of Post-Secondary Education",jurisdiction:"BC",domain:"Indigenous",relevance:9,sentiment:"Supportive",summary:"Province commits $340M over five years to Indigenous-led institutions, emphasizing governance sovereignty and culturally grounded programming.",whyItMatters:"Directly affects funding allocation for Indigenous education partnerships and DRIPA alignment requirements.",pubDate:"2026-04-17",read:false,staged:false,tags:["Indigenous","Reconciliation","Briefing Note Worthy"]},
+  {id:1,title:"BC Announces $340M Indigenous Post-Secondary Investment Framework",url:"https://www2.gov.bc.ca/gov/content/education-training/post-secondary-education",source:"BC Ministry of Post-Secondary Education",jurisdiction:"BC",domain:"Indigenous",relevance:9,sentiment:"Supportive",summary:"Province commits $340M over five years to Indigenous-led institutions, emphasizing governance sovereignty and culturally grounded programming.",whyItMatters:"Directly affects funding allocation for Indigenous education partnerships and DRIPA alignment requirements.",pubDate:"2026-04-17",read:false,staged:true,tags:["Indigenous","Reconciliation","Briefing Note Worthy"]},
   {id:2,title:"DRIPA Action Plan Year 3 Progress Report Released",url:"https://www2.gov.bc.ca/gov/content/governments/indigenous-people/dripa",source:"Indigenous Relations & Reconciliation",jurisdiction:"BC",domain:"Reconciliation",relevance:9,sentiment:"Supportive",summary:"Third annual implementation report highlights gains in land rights, child welfare, and education with calls for accelerated federal alignment.",whyItMatters:"Sets benchmarks post-secondary institutions must align with for DRIPA compliance reporting.",pubDate:"2026-04-16",read:false,staged:false,tags:["Reconciliation","Indigenous","Urgent"]},
   {id:3,title:"BC Draft Post-Secondary Accountability Framework Open for Consultation",url:"https://www2.gov.bc.ca/gov/content/education-training/post-secondary-education/institution-resources-administration",source:"BC Ministry of Post-Secondary Education",jurisdiction:"BC",domain:"Higher Education",relevance:9,sentiment:"Neutral",summary:"Ministry releases draft framework proposing new performance metrics tied to reconciliation outcomes and community benefit agreements.",whyItMatters:"Institutions will need to demonstrate measurable reconciliation outcomes to receive full funding allocations.",pubDate:"2026-04-15",read:false,staged:false,tags:["Legislation","Consultation","Higher Education"]},
-  {id:4,title:"SSHRC Partnership Development Grants — Spring 2026 Results",url:"https://www.sshrc-crsh.gc.ca/funding-financement/programs-programmes/partnership_development_grants-subventions_partenariat_developpement-eng.aspx",source:"Government of Canada Post-Secondary",jurisdiction:"Federal",domain:"Research Funding",relevance:8,sentiment:"Supportive",summary:"47 awards totalling $18.2M released with strong BC institutional representation; partnership models strongly favoured.",whyItMatters:"Signals SSHRC appetite for community-embedded research partnerships — key for upcoming proposal cycles.",pubDate:"2026-04-14",read:false,staged:false,tags:["Research Funding","Budget"]},
-  {id:5,title:"Federal Budget 2026: Post-Secondary Research Infrastructure Cuts Raise Alarm",url:"https://www.universityaffairs.ca/news",source:"University Affairs Canada",jurisdiction:"Federal",domain:"Budget",relevance:10,sentiment:"Critical",summary:"Federal budget reduces tri-council research infrastructure allocations by 12%, drawing sharp criticism from university associations across Canada.",whyItMatters:"Immediate threat to capital equipment renewal and graduate research capacity — advocacy response required urgently.",pubDate:"2026-04-13",read:true,staged:false,tags:["Fiscal Policy","Budget","Urgent","Briefing Note Worthy"]},
+  {id:4,title:"SSHRC Partnership Development Grants — Spring 2026 Results",url:"https://www.sshrc-crsh.gc.ca/funding-financement/programs-programmes/partnership_development_grants-subventions_partenariat_developpement-eng.aspx",source:"Government of Canada Post-Secondary",jurisdiction:"Federal",domain:"Research Funding",relevance:8,sentiment:"Supportive",summary:"47 awards totalling $18.2M released with strong BC institutional representation; partnership models strongly favoured.",whyItMatters:"Signals SSHRC appetite for community-embedded research partnerships — key for upcoming proposal cycles.",pubDate:"2026-04-14",read:false,staged:true,tags:["Research Funding","Budget"]},
+  {id:5,title:"Federal Budget 2026: Post-Secondary Research Infrastructure Cuts Raise Alarm",url:"https://www.universityaffairs.ca/news",source:"University Affairs Canada",jurisdiction:"Federal",domain:"Budget",relevance:10,sentiment:"Critical",summary:"Federal budget reduces tri-council research infrastructure allocations by 12%, drawing sharp criticism from university associations across Canada.",whyItMatters:"Immediate threat to capital equipment renewal and graduate research capacity — advocacy response required urgently.",pubDate:"2026-04-13",read:true,staged:true,tags:["Fiscal Policy","Budget","Urgent","Briefing Note Worthy"]},
   {id:6,title:"TRC Call to Action 62 Curriculum Resources Launched in BC",url:"https://www2.gov.bc.ca/gov/content/education-training/post-secondary-education/indigenous-education",source:"BC Ministry of Post-Secondary Education",jurisdiction:"BC",domain:"Reconciliation",relevance:8,sentiment:"Supportive",summary:"BC launches TRC-aligned curriculum resources for post-secondary institutions, developed in partnership with First Nations educators.",whyItMatters:"Provides a ready framework for fulfilling TRC obligations 62–65 in academic programming reviews.",pubDate:"2026-04-11",read:true,staged:false,tags:["Reconciliation","Indigenous","Higher Education"]},
   {id:7,title:"Bill 22 — Post-Secondary Institutions Amendment Act Introduced",url:"https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings/42nd-parliament/4th-session/bills/progress-of-bills",source:"BC Legislature",jurisdiction:"BC",domain:"Legislation",relevance:9,sentiment:"Neutral",summary:"New bill proposes governance amendments affecting board composition requirements and financial reporting standards for BC public universities.",whyItMatters:"May require bylaw amendments and board recruitment strategy revisions if passed in current form.",pubDate:"2026-04-10",read:false,staged:false,tags:["Legislation","Regulation","Higher Education"]},
   {id:8,title:"CIHR Institute of Indigenous Peoples' Health — Strategic Plan 2026–2031",url:"https://cihr-irsc.gc.ca/e/193.html",source:"Government of Canada Post-Secondary",jurisdiction:"Federal",domain:"Health",relevance:8,sentiment:"Supportive",summary:"Five-year plan centres on Indigenous data sovereignty, OCAP principles, and elimination of health disparities in research design.",whyItMatters:"Shapes eligibility criteria for CIHR grants involving Indigenous health research — OCAP compliance now explicitly required.",pubDate:"2026-04-09",read:false,staged:false,tags:["Health","Indigenous","Research Funding"]},
@@ -3637,6 +3712,8 @@ const DS_DEF=[
 
 let articles=ARTICLES_SEED.map(a=>({...a}));
 let sources=SOURCES_SEED.map(s=>({...s}));
+// subscribers starts as empty array — populated by loadSubscribers() inside init()
+let subscribers = [];
 // Load subscribers from localStorage, fall back to seed data on first run
 async function loadSubscribers(){
   if(API_BASE){
@@ -3656,7 +3733,6 @@ function saveSubscribers(){
     if(API_BASE) return;
   try { localStorage.setItem('pp_subscribers', JSON.stringify(subscribers)); } catch(e){}
 }
-let subscribers = loadSubscribers();
 function loadDigestHistory(){
   try {
     var stored = localStorage.getItem('pp_digest_history');
@@ -4162,22 +4238,37 @@ var _appInitialized = false;
 async function init(){
   if(_appInitialized) return;
   _appInitialized = true;
+
+  // Show boot loader
+  var bootLoader = document.getElementById('boot-loader');
+  if(bootLoader) bootLoader.style.display = 'flex';
+
   applyTheme();
   populateSavedSearches();
   loadScheduleUI();
+
   if (API_BASE) {
+    _setBootStatus('Connecting to backend…');
     await apiLoadArticles({ limit: 100 });
+    _setBootStatus('Loading stats…');
     await apiLoadStats();
+    _setBootStatus('Loading subscribers…');
     await loadSubscribers();
+    _setBootStatus('Loading sources…');
     await apiLoadSources();
+    _setBootStatus('Loading digest history…');
     await apiLoadDigests();
+    _setBootStatus('Syncing keyword watchlist…');
     await apiSyncWatchlist();
   }
-  applyStoredAnalyses(); // Restore any AI-generated summaries from localStorage
+
+  applyStoredAnalyses();
   updateFlagCount();
+
   // Pre-load research for dashboard widget
   if(API_BASE && !_researchInitialized){
     _researchInitialized = true;
+    _setBootStatus('Loading research feed…');
     loadResearchArticles().then(function(){
       loadResearchStats().then(function(){
         renderDashboardResearchFeed();
@@ -4185,12 +4276,27 @@ async function init(){
       });
     });
   }
+
   renderDashboard(); updateBadges();
+
+  // Hide boot loader
+  if(bootLoader){
+    bootLoader.style.opacity = '0';
+    bootLoader.style.transition = 'opacity 0.4s ease';
+    setTimeout(function(){ bootLoader.style.display = 'none'; bootLoader.style.opacity = '1'; }, 420);
+  }
+
   setTimeout(function(){
     if (!API_BASE) { showToast('&#128268;', 'Connect Your Backend', 'Enter your Railway URL in any feed panel to load real articles.', 7000); }
     else { var ac = articles.filter(function(a){ return a.relevance >= 8 && !a.read; }).length; showToast('&#128225;', 'PolicyPulse Live', ac > 0 ? ac + ' high-relevance articles waiting.' : 'Feed loaded and up to date.', 4000); }
   }, 900);
-  appendMsg('Hello! I\'m your PolicyPulse AI assistant. I can help you find key articles, summarize policy trends, suggest digest content, or answer strategic questions. What would you like to know?','msg-ai');}
+  appendMsg('Hello! I\'m your PolicyPulse AI assistant. I can help you find key articles, summarize policy trends, suggest digest content, or answer strategic questions. What would you like to know?','msg-ai');
+}
+
+function _setBootStatus(msg){
+  var el = document.getElementById('boot-status');
+  if(el) el.textContent = msg;
+}
 
 async function showTab(n){
   // Remove active from home tab too
@@ -4287,6 +4393,7 @@ function buildCard(a,expanded){
         <button class="hbtn" onclick="event.stopPropagation();toggleStage(${a.id})">${a.staged?'&#x2715; Unstage':'+&#x1F4C4; Stage'}</button>
         <button class="hbtn ${a.flagged?'hbtn-flagged':''}" onclick="event.stopPropagation();toggleFlag(${a.id})" title="${a.flagged?'Remove flag':'Flag article'}">${a.flagged?'&#x1F6A9;':'&#x2691;'} ${a.flagged?'Flagged':'Flag'}</button>
         <button class="hbtn" onclick="event.stopPropagation();shareArticle(${a.id})">&#x1F517; Share</button>
+        <button class="hbtn" onclick="event.stopPropagation();deleteArticle(${a.id})" title="Delete article permanently" style="color:#f87171">&#x1F5D1; Delete</button>
         ${notionToken&&notionArticleDbId?'<button class="hbtn hbtn-notion" onclick="event.stopPropagation();saveArticleToNotion('+a.id+')" title="Save to Notion">&#x1F5D2; Notion</button>':''}
       </div>
       <div class="article-title-link" onclick="openPreview(${a.id},event)" style="cursor:pointer" title="Click to preview">${a.title}</div
@@ -4422,6 +4529,15 @@ function buildAlertItems(alerts){
 
 function renderDashboard(){
   if(!API_BASE){ renderEmptyDashboard(); return; }
+  // Always refresh stats so numbers are never stale on tab re-entry
+  apiLoadStats().then(function(){
+    var twEl=document.getElementById('stat-this-week');
+    if(twEl&&lastStats){
+      twEl.textContent=lastStats.this_week||0;
+      var twDelta=document.getElementById('stat-this-week-delta');
+      if(twDelta)twDelta.textContent='↑ policy news articles';
+    }
+  });
   // Alerts
   const alerts=articles.filter(a=>a.relevance>=8&&!a.read).slice(0,3);
   document.getElementById('alert-items').innerHTML=buildAlertItems(alerts);
@@ -4436,13 +4552,7 @@ function renderDashboard(){
   renderDashboardResearchFeed();
   // Stat cards
   updateBadges();
-  // This week count
-  var twEl=document.getElementById('stat-this-week');
-  if(twEl&&lastStats){
-    twEl.textContent=lastStats.this_week||0;
-    var twDelta=document.getElementById('stat-this-week-delta');
-    if(twDelta)twDelta.textContent='↑ policy news articles';
-  }
+  // Subscriber + digest counts
   var subEl=document.getElementById('stat-subscribers');
   if(subEl)subEl.textContent=subscribers.filter(function(s){return s.active;}).length;
   var dEl=document.getElementById('stat-digests-sent');
@@ -4563,7 +4673,7 @@ function renderWatchlist(){document.getElementById('watchlist-tags').innerHTML=w
 /* addKeyword/removeKeyword: see async versions above */
 
 function scraperTab(t){
-  ['feed','sources','archive','settings'].forEach(function(x){
+  ['feed','sources','archive','log','settings'].forEach(function(x){
     var panel = document.getElementById('scraper-'+x+'-panel');
     var btn   = document.getElementById('st-'+x);
     if(panel) panel.style.display = x===t ? 'block' : 'none';
@@ -4572,6 +4682,41 @@ function scraperTab(t){
   if(t==='sources')  { renderSources(); }
   if(t==='archive')  { renderWatchlist(); renderArchive(); loadExclusionKeywords(); }
   if(t==='settings') { initNewsFilterSettings(); }
+  if(t==='log')      { loadScrapeLog(); }
+}
+
+async function loadScrapeLog(){
+  var container = document.getElementById('scrape-log-content');
+  if(!container) return;
+  if(!API_BASE){
+    container.innerHTML = '<div class="empty"><div class="empty-icon">&#128268;</div><div class="empty-text">Connect your Railway backend to view scrape history.</div></div>';
+    return;
+  }
+  container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)"><span class="spin" style="display:inline-block;margin-right:6px">&#8635;</span> Loading…</div>';
+  var data = await apiFetch('/scrape/log?limit=30');
+  if(!data || !data.log || !data.log.length){
+    container.innerHTML = '<div class="empty"><div class="empty-icon">&#x1F4CB;</div><div class="empty-text">No scrape history yet. Run a scrape to see results here.</div></div>';
+    return;
+  }
+  var rows = data.log.map(function(entry){
+    var added    = entry.articles_added || 0;
+    var hasError = entry.errors && entry.errors.trim() && entry.errors !== 'None' && entry.errors !== '';
+    var ts       = (entry.scraped_at || '').replace('T',' ').slice(0,16);
+    var addedColor = added > 0 ? 'var(--green)' : 'var(--muted)';
+    var statusIcon = hasError ? '&#x26A0;' : '&#x2713;';
+    var statusColor = hasError ? '#f59e0b' : 'var(--green)';
+    return '<tr>'
+      + '<td style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--muted);white-space:nowrap">'+ts+'</td>'
+      + '<td><span style="font-size:13px;font-weight:700;color:'+addedColor+'">'+added+'</span> <span style="font-size:10px;color:var(--dim)">articles</span></td>'
+      + '<td><span style="color:'+statusColor+';font-size:12px">'+statusIcon+' '+(hasError?'Completed with errors':'Success')+'</span></td>'
+      + '<td style="font-size:11px;color:#fb7185;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(hasError?escHtml(entry.errors):'')+'">'+(hasError?escHtml((entry.errors||'').slice(0,80)):'—')+'</td>'
+      + '</tr>';
+  }).join('');
+  container.innerHTML = '<div class="table-wrap"><table>'
+    + '<thead><tr><th>Timestamp</th><th>Articles Added</th><th>Status</th><th>Errors</th></tr></thead>'
+    + '<tbody>'+rows+'</tbody>'
+    + '</table></div>'
+    + '<div style="font-size:11px;color:var(--dim);padding:8px 0">Showing last '+data.log.length+' scrape runs.</div>';
 }
 function archiveTab(t){
   ['search','month','year','domain'].forEach(x=>{document.getElementById('archive-'+x+'-panel').style.display=x===t?'block':'none';document.getElementById('at-'+x).classList.toggle('active',x===t);});
@@ -4650,30 +4795,38 @@ function renderByDomain(){const domains=[...new Set(articles.map(a=>a.domain))];
 async function scrapeNow(){
   if(typeof gtag!=='undefined') gtag('event','scrape_triggered',{event_category:'Scraper'});
   var btn=document.getElementById('scrape-btn');
+  var progress=document.getElementById('scrape-progress');
   if(!API_BASE){ showBackendPrompt('feed-list'); showToast('&#128268;','No Backend','Enter your Railway URL to enable scraping.',5000); return; }
   if(btn){btn.disabled=true;btn.innerHTML='<span class="spin">&#8635;</span> Scraping&hellip;';}
-  showToast('&#8635;','Scraping Sources','Fetching articles from all active sources&hellip;',4000);
+  if(progress) progress.style.display='block';
+  showToast('&#x1F50D;','Scraping Sources','Fetching articles from all active sources&hellip;',4000);
   var data = await apiFetch('/scrape',{method:'POST'});
   if(data){
-    showToast('&#10003;','Scrape Started','Articles are being AI-processed. Feed refreshes in ~60s.',7000);
+    showToast('&#10003;','Scrape Started','Articles are being AI-processed. Feed refreshes in ~120s.',7000);
     setTimeout(async function(){
       await apiLoadArticles({limit:100, force:true}); await apiLoadStats();
       _articleCache=[]; _cacheTime=0; // invalidate cache
       renderFeed(); renderDashboard(); updateBadges();
+      if(progress) progress.style.display='none';
       showToast('&#128240;','Feed Updated','New articles added to your feed.',4000);
-    }, 60000);
-  } else { showToast('&#9888;','Scrape Error','Could not reach backend. Check your Railway URL.',5000); }
-  if(btn){btn.disabled=false;btn.innerHTML='&#8635; Scrape Now';}
+    }, 120000); // 120s — allows for Railway cold-start delays
+  } else {
+    if(progress) progress.style.display='none';
+    showToast('&#9888;','Scrape Error','Could not reach backend. Check your Railway URL.',5000);
+  }
+  if(btn){btn.disabled=false;btn.innerHTML='&#x1F50D; Scrape Now';}
 }
 async function clearDashboard(){
-  if(confirm('Mark all articles as read?')){
+  var unread = articles.filter(function(a){ return !a.read; }).length;
+  var msg = 'Mark all '+articles.length+' articles as read? ('+unread+' currently unread)\n\nThis cannot be undone.';
+  if(confirm(msg)){
     articles.forEach(a=>a.read=true);
-    // Persist to backend if connected
     if(API_BASE){
       articles.forEach(a=>{ apiFetch('/articles/'+a.id+'/read',{method:'PATCH',body:JSON.stringify({read:true})}); });
     }
-    _cacheTime=0; // invalidate cache
+    _cacheTime=0;
     renderDashboard();updateBadges();
+    showToast('&#x2713;','All Read',''+articles.length+' articles marked as read.',3000);
   }
 }
 
@@ -4767,6 +4920,12 @@ async function sendDigest(){
 }
 
 function buildDigestEmailHTML(staged, subject){
+  // Use SMTP sender address for unsubscribe mailto link — falls back to generic address
+  var smtp_from_safe = 'policypulse@example.com';
+  try {
+    var storedFrom = localStorage.getItem('pp_smtp_from');
+    if(storedFrom) smtp_from_safe = storedFrom.replace(/<[^>]+>/g,'').trim();
+  } catch(e){}
   const sections = [
     {id:'headline', label:'&#x1F5DE; Headline of the Week'},
     {id:'federal',  label:'&#x1F341; Federal Policy Watch'},
@@ -4819,7 +4978,9 @@ function buildDigestEmailHTML(staged, subject){
     +'</div>'
     +'<div style="background:#f8faff;padding:20px 32px;border-top:1px solid #e8eef4;font-size:11px;color:#6b8aaa;text-align:center">'
     +'PolicyPulse Intelligence Platform &bull; Built by Anthony Coompson &bull; Vancouver, BC<br>'
-    +'<a href="#unsubscribe" style="color:#6b8aaa">Unsubscribe</a>'
+    +'<span style="font-size:10px;color:#94a3b8">You received this digest because you are subscribed to PolicyPulse. '
+    +'To unsubscribe, reply to this email with the subject line <strong>Unsubscribe</strong> or contact '
+    +'<a href="mailto:'+smtp_from_safe+'?subject=Unsubscribe%20from%20PolicyPulse&body=Please%20remove%20me%20from%20the%20PolicyPulse%20digest." style="color:#6b8aaa">'+smtp_from_safe+'</a>.</span>'
     +'</div>'
     +'</div>'
     +'</body></html>';
@@ -4829,7 +4990,40 @@ function copyDigest(){
   const text='POLICYPULSE WEEKLY — '+new Date().toDateString()+'\n'+'═'.repeat(50)+'\n\n'+staged.map(a=>`${a.title}\n${a.source} | ${a.jurisdiction} | ${a.pubDate}\n${a.summary}\n💡 ${a.whyItMatters}\n🔗 ${a.url}\n`).join('\n');
   navigator.clipboard.writeText(text).then(()=>alert('✓ Digest copied to clipboard.'));
 }
-function generatePublicUrl(){const token='pp-'+Math.random().toString(36).slice(2,8);alert('🔗 Public URL:\npolicypulse.netlify.app/digest/'+token+'\n\nShare with anyone — no account required.');}
+async function generatePublicUrl(){
+  var staged = articles.filter(function(a){ return a.staged; });
+  if(!staged.length){ showToast('&#x26A0;','Nothing Staged','Add articles to your digest first.',3000); return; }
+
+  if(!API_BASE){
+    // No backend — copy digest as plain text with instructions
+    showToast('&#x26A0;','No Backend','Connect your Railway backend to generate shareable URLs. Without a backend, use Export PDF or Copy Digest instead.',5000);
+    return;
+  }
+
+  showToast('&#x1F517;','Generating URL','Creating shareable digest link…',2500);
+  try {
+    var subject = 'PolicyPulse Weekly — '+new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+    var html = buildDigestEmailHTML(staged, subject);
+    var resp = await apiFetch('/digests', {
+      method: 'POST',
+      body: JSON.stringify({ subject: subject, html_content: html, recipients: 0 })
+    });
+    if(resp && resp.token){
+      var publicUrl = API_BASE + '/digest/' + resp.token;
+      await navigator.clipboard.writeText(publicUrl);
+      showToast('&#x1F517;','Public URL Copied',
+        'Link copied to clipboard. Share it with anyone — no login required.\n' + publicUrl, 7000);
+      // Also show it in a prompt so they can copy it manually if clipboard fails
+      setTimeout(function(){
+        prompt('Your shareable digest URL (also copied to clipboard):', publicUrl);
+      }, 500);
+    } else {
+      showToast('&#x26A0;','URL Generation Failed','Could not create digest token. Check your Railway connection.',4000);
+    }
+  } catch(e) {
+    showToast('&#x26A0;','Error', e.message, 4000);
+  }
+}
 
 function renderSubscribers(){
   document.getElementById('subscribers-tbody').innerHTML=subscribers.map(s=>`<tr>
@@ -4892,17 +5086,32 @@ async function addSubscriber(){
 
 function appendMsg(text,type){const el=document.getElementById('chat-messages');const div=document.createElement('div');div.className=type;div.textContent=text;el.appendChild(div);el.scrollTop=el.scrollHeight;return div;}
 function askSuggestion(btn){document.getElementById('chat-input').value=btn.textContent;sendChat();}
+function clearChat(){
+  chatHistory=[];
+  var el=document.getElementById('chat-messages');
+  if(el) el.innerHTML='';
+  showToast('&#x1F9F9;','Chat Cleared','Conversation history cleared.',2000);
+}
 async function sendChat(){
   const key=apiKey||sessionStorage.getItem('pp_groq_key');
-  if(!key){alert('No API key. Reload the page and enter your free Gemini key.');return;}
+  if(!key){alert('No API key. Reload the page and enter your free Groq key.');return;}
   const inp=document.getElementById('chat-input');const msg=inp.value.trim();if(!msg)return;
-  inp.value='';appendMsg(msg,'msg-user');chatHistory.push({role:'user',content:msg});
+  inp.value='';appendMsg(msg,'msg-user');
+  // Cap history at last 10 exchanges (20 messages) to stay within token limits
+  if(chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+  chatHistory.push({role:'user',content:msg});
   const typing=appendMsg('Thinking…','msg-ai-typing');
-  const context=articles.map(a=>`[${a.pubDate}] ${a.title} (${a.domain}, ${a.jurisdiction}, relevance ${a.relevance}/10, ${a.sentiment}): ${a.summary}`).join('\n');
-  const sysPr=`You are PolicyPulse AI — a senior policy analyst for a government relations professional in BC/Canada. You have a database of tracked policy articles. Answer concisely and strategically. Cite article titles when recommending. Be direct and action-oriented.\n\nARTICLE DATABASE:\n${context}`;
-  const contents=chatHistory.map((m,i)=>({role:m.role==='assistant'?'model':'user',parts:[{text:i===0&&m.role==='user'?sysPr+'\n\nUser: '+m.content:m.content}]}));
+  // Cap context: 25 most recent articles sorted by relevance then date
+  // This keeps the prompt under ~8,000 tokens even with 300+ articles in the DB
+  const contextArticles = [...articles]
+    .sort(function(a,b){ return (b.relevance||0)-(a.relevance||0) || new Date(b.pubDate||0)-new Date(a.pubDate||0); })
+    .slice(0,25);
+  const context=contextArticles.map(a=>`[${a.pubDate}] ${a.title} (${a.domain}, ${a.jurisdiction}, relevance ${a.relevance}/10, ${a.sentiment}): ${a.summary}`).join('\n');
+  const contextNote = articles.length > 25
+    ? `\n\n[Showing top 25 of ${articles.length} articles by relevance. Ask about a specific domain or date range to narrow results.]`
+    : '';
+  const sysPr=`You are PolicyPulse AI — a senior policy analyst for a government relations professional in BC/Canada. You have a database of tracked policy articles. Answer concisely and strategically. Cite article titles when recommending. Be direct and action-oriented.\n\nARTICLE DATABASE (top ${contextArticles.length} by relevance):\n${context}${contextNote}`;
   try{
-    // Groq API (free, fast - get key at console.groq.com)
     const groqMessages=[{role:'system',content:sysPr},...chatHistory.slice(0,-1).map(m=>({role:m.role==='assistant'?'assistant':'user',content:m.content})),{role:'user',content:msg}];
     const resp=await fetch('https://api.groq.com/openai/v1/chat/completions',{
       method:'POST',
@@ -4918,45 +5127,75 @@ async function sendChat(){
 
 
 
-/* FIX LINKS */
-function fixLinks(){
-  var resultEl=document.getElementById('fix-links-result');
-  resultEl.style.display='block';
-  resultEl.style.color='var(--muted)';
-  resultEl.innerHTML='⟳ Checking all source URLs…';
-  var checked=0;var fixed=0;var broken=[];
-  var total=sources.length;
-  sources.forEach(function(s,i){
-    setTimeout(function(){
-      checked++;
-      // Simulate: flag inactive or never-scraped sources as broken
-      var isBroken=!s.active||s.lastScraped==='Never'||(Math.random()<0.15&&s.active);
-      if(isBroken){broken.push(s.name);}
-      else{fixed++;}
-      if(checked===total){
-        if(broken.length===0){
-          resultEl.style.color='var(--green)';
-          resultEl.innerHTML='✓ All '+total+' source links verified — no broken URLs detected.';
-          showToast('✅','Links OK','All '+total+' sources are reachable.',4000);
-        } else {
-          resultEl.style.color='#fb7185';
-          resultEl.innerHTML='⚠ '+broken.length+' source(s) returned errors: <strong>'+broken.join(', ')+'</strong>. Consider updating these URLs or checking your network connection.';
-          showToast('⚠️','Broken Links Found',broken.length+' source(s) could not be reached.',5000);
-        }
-        setTimeout(function(){resultEl.style.display='none';},8000);
+/* FIX LINKS — real check via backend proxy */
+async function fixLinks(){
+  var resultEl = document.getElementById('fix-links-result');
+  if(!resultEl) return;
+  resultEl.style.display = 'block';
+  resultEl.style.color   = 'var(--muted)';
+  resultEl.innerHTML     = '<span class="spin" style="display:inline-block;margin-right:6px">&#8635;</span> Checking ' + sources.length + ' source URLs…';
+
+  if(!API_BASE){
+    resultEl.style.color = '#fb7185';
+    resultEl.innerHTML   = '⚠ Connect your Railway backend to enable real link checking.';
+    setTimeout(function(){ resultEl.style.display='none'; }, 6000);
+    return;
+  }
+
+  var broken = [], ok = [], errors = [];
+
+  for(var i = 0; i < sources.length; i++){
+    var s = sources[i];
+    try {
+      var resp = await apiFetch('/sources/' + s.id + '/check', { method: 'GET' });
+      if(resp && resp.reachable){
+        ok.push(s.name);
+      } else {
+        broken.push({ name: s.name, status: (resp && resp.status) || 'unreachable' });
       }
-    }, i*200);
-  });
+    } catch(e) {
+      errors.push(s.name);
+    }
+    // Update progress as each check completes
+    resultEl.innerHTML = '<span class="spin" style="display:inline-block;margin-right:6px">&#8635;</span> Checked ' + (i+1) + ' of ' + sources.length + '…';
+  }
+
+  if(broken.length === 0 && errors.length === 0){
+    resultEl.style.color = 'var(--green)';
+    resultEl.innerHTML   = '✓ All ' + ok.length + ' source links are reachable.';
+    showToast('✅', 'Links OK', 'All ' + ok.length + ' sources responded successfully.', 4000);
+  } else {
+    var brokenNames = broken.map(function(b){ return b.name + ' (' + b.status + ')'; });
+    resultEl.style.color = '#fb7185';
+    resultEl.innerHTML   = '⚠ ' + broken.length + ' unreachable: <strong>' + brokenNames.join(', ') + '</strong>'
+      + (errors.length ? ' · ' + errors.length + ' check error(s)' : '');
+    showToast('⚠️', 'Broken Links Found', broken.length + ' source(s) could not be reached.', 5000);
+  }
+  setTimeout(function(){ resultEl.style.display = 'none'; }, 10000);
 }
 
 /* TRAY */
 function toggleTray(e){
   e.stopPropagation();
   var tray=document.getElementById('alert-tray');
-  if(tray.classList.contains('open')){closeTray();}
-  else{renderTray();tray.classList.add('open');}
+  if(tray.classList.contains('open')){
+    closeTray();
+  } else {
+    renderTray();
+    tray.classList.add('open');
+    // Reset bell count to zero — user has now seen the alerts
+    var countEl = document.getElementById('alert-count');
+    if(countEl){ countEl.textContent = '0'; countEl.style.background = 'rgba(255,255,255,0.15)'; }
+    var bell = document.getElementById('alert-bell');
+    if(bell) bell.style.borderColor = 'rgba(255,255,255,0.15)';
+  }
 }
-function closeTray(){document.getElementById('alert-tray').classList.remove('open');}
+function closeTray(){
+  document.getElementById('alert-tray').classList.remove('open');
+  // Restore bell colour when tray closes
+  var bell = document.getElementById('alert-bell');
+  if(bell) bell.style.borderColor = '';
+}
 document.addEventListener('click',function(e){
   var tray=document.getElementById('alert-tray');
   var bell=document.getElementById('alert-bell');
@@ -5195,6 +5434,16 @@ function exportArticlePDF(){
     + '</body></html>';
   var win = window.open('','_blank','width=800,height=900');
   if(win){ win.document.write(html); win.document.close(); setTimeout(function(){win.print();},500); }
+  else {
+    // Fallback: download as HTML file if popup was blocked
+    var blob = new Blob([html], {type:'text/html'});
+    var blobUrl = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = 'PolicyPulse-Article-'+new Date().toISOString().slice(0,10)+'.html';
+    link.click();
+    setTimeout(function(){ URL.revokeObjectURL(blobUrl); }, 5000);
+  }
   showToast('&#x1F4C4;','Article PDF','Print dialog opened. Choose \'Save as PDF\'.',4000);
 }
 
@@ -5268,6 +5517,45 @@ async function bulkTag(tag){
     if(inp){ inp.value=tag; await addManualTag(ids[i]); }
   }
   showToast('&#x1F3F7;','Tags Added','"'+tag+'" added to '+ids.length+' articles.',2500);
+}
+
+/* ── ARTICLE DELETION ── */
+async function deleteArticle(id){
+  var a = articles.find(function(x){ return x.id===id; });
+  if(!a) return;
+  if(!confirm('Permanently delete "'+a.title.slice(0,60)+'…"?\n\nThis cannot be undone.')) return;
+  // Remove from local array immediately
+  articles = articles.filter(function(x){ return x.id!==id; });
+  // Remove card from DOM without full re-render
+  var card = document.getElementById('ac-'+id);
+  if(card) card.remove();
+  // Remove from digest sections
+  digestSections.forEach(function(s){ s.items = s.items.filter(function(i){ return i!==id; }); });
+  // Persist to backend
+  if(API_BASE){
+    await apiFetch('/articles/'+id, { method: 'DELETE' });
+  }
+  _cacheTime = 0; // invalidate cache
+  updateBadges();
+  showToast('&#x1F5D1;','Article Deleted','Article removed permanently.',2500);
+}
+
+async function bulkDelete(){
+  var ids = Array.from(_selectedIds);
+  if(!ids.length) return;
+  if(!confirm('Permanently delete ' + ids.length + ' selected article' + (ids.length!==1?'s':'') + '?\n\nThis cannot be undone.')) return;
+  for(var i=0; i<ids.length; i++){
+    var id = ids[i];
+    articles = articles.filter(function(x){ return x.id!==id; });
+    var card = document.getElementById('ac-'+id);
+    if(card) card.remove();
+    digestSections.forEach(function(s){ s.items = s.items.filter(function(j){ return j!==id; }); });
+    if(API_BASE) await apiFetch('/articles/'+id, { method: 'DELETE' });
+  }
+  _cacheTime = 0;
+  clearSelection();
+  updateBadges();
+  showToast('&#x1F5D1;','Deleted', ids.length + ' article' + (ids.length!==1?'s':'')+' deleted.',2500);
 }
 
 /* === DUPLICATE DETECTION === */
@@ -5377,6 +5665,15 @@ function exportDigestPDF(){
   html += '<div class="footer">PolicyPulse Intelligence Platform &bull; Generated '+new Date().toLocaleString()+'</div></body></html>';
   var win = window.open('','_blank','width=800,height=900');
   if(win){ win.document.write(html); win.document.close(); setTimeout(function(){win.print();},500); }
+  else {
+    var blob = new Blob([html], {type:'text/html'});
+    var blobUrl = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = 'PolicyPulse-Digest-'+new Date().toISOString().slice(0,10)+'.html';
+    link.click();
+    setTimeout(function(){ URL.revokeObjectURL(blobUrl); }, 5000);
+  }
   showToast('&#x1F4C4;','PDF Export','Print dialog opened. Choose "Save as PDF".',4000);
 }
 
@@ -5790,6 +6087,15 @@ function exportCitationsPDF(){
   html += '<div class="footer">PolicyPulse Intelligence Platform</div></body></html>';
   var win = window.open('','_blank','width=800,height=900');
   if(win){ win.document.write(html); win.document.close(); setTimeout(function(){win.print();},500); }
+  else {
+    var blob = new Blob([html], {type:'text/html'});
+    var blobUrl = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = 'PolicyPulse-Bibliography-'+new Date().toISOString().slice(0,10)+'.html';
+    link.click();
+    setTimeout(function(){ URL.revokeObjectURL(blobUrl); }, 5000);
+  }
   showToast('&#x1F4C4;','PDF Export','Print dialog opened. Choose "Save as PDF".',4000);
 }
 
@@ -6511,8 +6817,9 @@ async function saveArticleToNotion(articleId){
       'Jurisdiction': { select:    { name: a.jurisdiction||'Unknown' } },
       'Relevance':    { number:    a.relevance||0 },
       'Sentiment':    { select:    { name: a.sentiment||'Neutral' } },
-      'URL':          { url:       a.url||null },
     };
+    // Only add URL if it exists — Notion rejects null for URL type fields
+    if(a.url) props['URL'] = { url: a.url };
     if(pubDate) props['Published'] = { date: { start: pubDate } };
     if(tagList.length) props['Tags'] = { multi_select: tagList };
 

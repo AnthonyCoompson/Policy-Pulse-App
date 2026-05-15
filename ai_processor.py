@@ -27,8 +27,8 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent"
 
 # Cap concurrent AI calls to avoid Gemini rate-limit errors.
-# Initialised lazily inside the running event loop to avoid the
-# RuntimeError that Python 3.10+ raises when asyncio primitives are
+# Initialised lazily inside a running event loop to avoid the
+# RuntimeError Python 3.10+ raises when asyncio primitives are
 # created at module-import time (before any event loop exists).
 _AI_SEMAPHORE: asyncio.Semaphore | None = None
 
@@ -160,7 +160,7 @@ ANALYSIS_PROMPT_FULL = """Analyze this article and return a JSON object with the
   "relevance": <integer 1-10, where 10 = critical for BC/Canada post-secondary/Indigenous policy>,
   "sentiment": "<Critical|Supportive|Neutral toward government policy>",
   "summary": "<2-3 sentences summarizing what the article actually says — drawn from the article text, not just the title>",
-  "why_it_matters": "<2-3 sentences on the concrete implications for a BC university government relations team — be specific, not generic>",
+  "why_it_matters": "<2-3 sentences — see guidance below>",
   "tags": ["<tag1>", "<tag2>"]
 }}
 
@@ -177,6 +177,20 @@ Relevance scoring guide:
 6: Moderate — tangentially relevant, include if space allows
 1-5: Low relevance — return null
 
+WHY IT MATTERS — guidance for writing a strong entry:
+Write 2-3 sentences that answer: "So what does this mean for a BC university or college government relations team RIGHT NOW?"
+Be concrete and action-oriented. Name the specific mechanism of impact (funding formula, legislative deadline, consultation window, board obligation).
+
+GOOD examples:
+- "This bill's proposed board composition changes would require SFU and UBC to amend bylaws before the fall semester — Legal and Board Relations should review the draft text before second reading."
+- "The 12% tri-council infrastructure cut directly reduces eligible renewal funding for lab equipment — government relations teams should coordinate a joint sector response with Universities Canada before the April budget reply deadline."
+- "The DRIPA Year 3 report sets new benchmarks for Indigenous partnership reporting that post-secondary institutions must align with by March 2027 — this should be flagged for the VP Indigenous portfolio and included in the next board briefing."
+
+BAD examples (too generic — never write these):
+- "This article may be relevant to policy professionals monitoring government activity."
+- "Review this article for potential relevance to your policy priorities."
+- "This could have implications for higher education stakeholders."
+
 If relevance would be 5 or below, return exactly: null"""
 
 # Fallback when we only have title (no article body fetched)
@@ -188,7 +202,7 @@ ANALYSIS_PROMPT_TITLE_ONLY = """Analyze this article and return a JSON object wi
   "relevance": <integer 1-10, where 10 = critical for BC/Canada post-secondary/Indigenous policy>,
   "sentiment": "<Critical|Supportive|Neutral toward government policy>",
   "summary": "<2-3 sentences summarizing the likely policy significance based on the title and source>",
-  "why_it_matters": "<2-3 sentences on the concrete implications for a BC university government relations team>",
+  "why_it_matters": "<2-3 sentences — see guidance below>",
   "tags": ["<tag1>", "<tag2>"]
 }}
 
@@ -202,26 +216,52 @@ Relevance scoring guide:
 6: Moderate — tangentially relevant, include if space allows
 1-5: Low relevance — return null
 
+WHY IT MATTERS — guidance for writing a strong entry:
+Write 2-3 sentences that answer: "So what does this mean for a BC university or college government relations team RIGHT NOW?"
+Be concrete and action-oriented. Name the specific mechanism of impact (funding formula, legislative deadline, consultation window, board obligation).
+
+GOOD examples:
+- "This bill's proposed board composition changes would require SFU and UBC to amend bylaws before the fall semester — Legal and Board Relations should review the draft text before second reading."
+- "The 12% tri-council infrastructure cut directly reduces eligible renewal funding for lab equipment — government relations teams should coordinate a joint sector response before the budget reply deadline."
+- "The DRIPA Year 3 report sets benchmarks for Indigenous partnership reporting that institutions must align with by March 2027 — flag for the VP Indigenous portfolio."
+
+BAD examples (too generic — never write these):
+- "This article may be relevant to policy professionals monitoring government activity."
+- "Review this article for potential relevance to your policy priorities."
+- "This could have implications for higher education stakeholders."
+
 If relevance would be 5 or below, return exactly: null"""
 
 
 def _build_payload(title: str, url: str, source_name: str, article_text: str) -> dict:
-    """Build the Gemini API request payload. Shared by sync and async paths."""
+    """Build the Gemini API request payload. Shared by sync and async paths.
+
+    Uses manual str.replace() instead of str.format() so that curly braces
+    in article_text (common in JSON snippets, code, or government press
+    releases) never raise KeyError / IndexError inside .format().
+    The {{ / }} in the prompt templates were only needed for .format()
+    escaping — after switching to .replace() we convert them back to
+    single braces so the JSON example in the prompt is valid.
+    """
     has_text = bool(article_text and len(article_text.strip()) > 150)
     if has_text:
         trimmed = article_text.strip()[:4000]
-        prompt = ANALYSIS_PROMPT_FULL.format(
-            title=title,
-            source=source_name,
-            url=url,
-            article_text=trimmed,
-        )
+        prompt = (ANALYSIS_PROMPT_FULL
+                  .replace("{title}", title)
+                  .replace("{source}", source_name)
+                  .replace("{url}", url)
+                  .replace("{article_text}", trimmed))
     else:
-        prompt = ANALYSIS_PROMPT_TITLE_ONLY.format(
-            title=title,
-            source=source_name,
-            url=url,
-        )
+        prompt = (ANALYSIS_PROMPT_TITLE_ONLY
+                  .replace("{title}", title)
+                  .replace("{source}", source_name)
+                  .replace("{url}", url))
+
+    # The prompt templates used {{ and }} to escape braces for .format().
+    # Now that we use .replace() we restore them to single braces so the
+    # JSON example block in the prompt is syntactically correct.
+    prompt = prompt.replace("{{", "{").replace("}}", "}")
+
     return {
         "contents": [{"parts": [{"text": SYSTEM_PROMPT + "\n\n" + prompt}]}],
         "generationConfig": {"temperature": 0.1, "maxOutputTokens": 500},

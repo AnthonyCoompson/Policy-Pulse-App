@@ -155,11 +155,10 @@ def init_db():
             keyword      TEXT UNIQUE NOT NULL,
             created_date TEXT
         );
-                      
+
         CREATE TABLE IF NOT EXISTS scraper_config (
-            key    TEXT PRIMARY KEY NOT NULL,
-            value  TEXT NOT NULL,
-            updated_at TEXT
+            key   TEXT PRIMARY KEY NOT NULL,
+            value TEXT NOT NULL
         );
     """)
 
@@ -848,43 +847,42 @@ def update_scholarly_relevance(article_id: int, score: int):
     finally:
         conn.close()
 
-# ── SCRAPER CONFIG (key-value store for filter settings) ──────────────────────
 
-def get_scraper_config(key: str, default=None):
-    """Read a single config value by key. Returns default if not set."""
+# ── SCRAPER CONFIG ────────────────────────────────────────────────────────────
+
+def get_scraper_config(key: str) -> str | None:
+    """Retrieve a single scraper config value by key."""
     conn = get_conn()
     try:
         row = conn.execute(
             "SELECT value FROM scraper_config WHERE key = ?", (key,)
         ).fetchone()
-        return row["value"] if row else default
+        return row["value"] if row else None
     except Exception:
-        return default
+        return None
     finally:
         conn.close()
 
 
 def set_scraper_config(key: str, value: str):
-    """Write or update a config key. Creates the row if it doesn't exist."""
+    """Insert or replace a scraper config key-value pair."""
     conn = get_conn()
     try:
         conn.execute(
-            """INSERT INTO scraper_config (key, value, updated_at)
-               VALUES (?, ?, ?)
-               ON CONFLICT(key) DO UPDATE SET
-                   value      = excluded.value,
-                   updated_at = excluded.updated_at""",
-            (key, value, datetime.utcnow().isoformat())
+            "INSERT INTO scraper_config (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value)
         )
         conn.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"set_scraper_config error: {e}")
     finally:
         conn.close()
 
 
 def get_all_scraper_config() -> dict:
-    """Return all config rows as a plain dict {key: value}."""
+    """Return all scraper config key-value pairs as a dict."""
     conn = get_conn()
     try:
         rows = conn.execute("SELECT key, value FROM scraper_config").fetchall()

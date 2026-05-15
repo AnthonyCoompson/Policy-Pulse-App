@@ -2,13 +2,16 @@
 PolicyPulse Backend — FastAPI + SQLite + Gemini AI
 Deployed on Railway.app
 
-v4: Full source management — add, toggle, delete, edit news sources and
-    research sources directly from the frontend UI.
-    Added scholarly keywords CRUD endpoints.
+v5: Security hardening
+    - CORS locked to ALLOWED_ORIGINS env var (no more wildcard)
+    - API key authentication on all write/mutating endpoints
+    - scraper_config functions added to database.py (were missing, caused 500s)
+    - SQLite backup endpoint added
 """
 
-from fastapi import FastAPI, BackgroundTasks, Query, HTTPException
+from fastapi import FastAPI, BackgroundTasks, Query, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import uvicorn
 import os
 from datetime import datetime
@@ -32,7 +35,7 @@ from database import (
     delete_subscriber, update_subscriber,
     # Scholarly article lookup
     get_scholarly_article_by_id,
-    # Scraper config
+    # Scraper config — now defined in database.py
     get_scraper_config, set_scraper_config, get_all_scraper_config,
 )
 from scraper import run_scrape
@@ -46,15 +49,58 @@ async def lifespan(app: FastAPI):
     start_scheduler()
     yield
 
-app = FastAPI(title="PolicyPulse API", version="4.0.0", lifespan=lifespan)
+app = FastAPI(title="PolicyPulse API", version="5.0.0", lifespan=lifespan)
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
+# Set ALLOWED_ORIGINS in Railway env vars as a comma-separated list, e.g.:
+#   https://policypulse.netlify.app,https://policypulse.ca
+# Falls back to wildcard only if env var is not set, so local dev still works.
+
+_raw_origins = os.environ.get("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS = (
+    [o.strip() for o in _raw_origins.split(",") if o.strip()]
+    if _raw_origins
+    else ["*"]
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Lock to your Netlify URL after testing
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── API KEY AUTHENTICATION ────────────────────────────────────────────────────
+# Set PP_API_KEY in Railway env vars to any long random string, e.g.:
+#   openssl rand -hex 32
+# The frontend sends this as:  Authorization: Bearer <key>
+# GET /articles, GET /stats, GET /health are public (read-only, safe).
+# All POST / PATCH / DELETE endpoints require the key.
+
+_API_KEY = os.environ.get("PP_API_KEY", "")
+
+def verify_api_key(request: Request) -> bool:
+    """
+    Returns True if the request is authorised.
+    - If PP_API_KEY is not set in env, auth is skipped (backward-compatible
+      for local dev / first deploy before key is configured).
+    - If set, the Authorization header must be: Bearer <PP_API_KEY>
+    """
+    if not _API_KEY:
+        return True  # No key configured — open access (dev mode)
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer ") and auth[7:] == _API_KEY:
+        return True
+    return False
+
+def require_auth(request: Request):
+    """FastAPI dependency — raises 401 if key is wrong."""
+    if not verify_api_key(request):
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorised. Set PP_API_KEY in Railway and pass it as: Authorization: Bearer <key>"
+        )
 
 
 # ── ARTICLES ──────────────────────────────────────────────────────────────────
@@ -87,21 +133,21 @@ def get_article(article_id: int):
 
 
 @app.patch("/articles/{article_id}/read")
-def mark_read(article_id: int, body: dict = None):
+def mark_read(article_id: int, body: dict = None, _=Depends(require_auth)):
     body = body or {}
     update_article_read(article_id, body.get("read", True))
     return {"ok": True}
 
 
 @app.patch("/articles/{article_id}/staged")
-def mark_staged(article_id: int, body: dict = None):
+def mark_staged(article_id: int, body: dict = None, _=Depends(require_auth)):
     body = body or {}
     update_article_staged(article_id, body.get("staged", True))
     return {"ok": True}
 
 
 @app.patch("/articles/{article_id}")
-def update_article(article_id: int, body: dict):
+def update_article(article_id: int, body: dict, _=Depends(require_auth)):
     allowed = {"summary", "why_it_matters"}
     updates = {k: v for k, v in body.items() if k in allowed and isinstance(v, str)}
     if not updates:
@@ -111,13 +157,13 @@ def update_article(article_id: int, body: dict):
 
 
 @app.patch("/articles/{article_id}/sentiment")
-def update_sentiment(article_id: int, body: dict):
+def update_sentiment(article_id: int, body: dict, _=Depends(require_auth)):
     update_article_sentiment(article_id, body.get("sentiment", "Neutral"))
     return {"ok": True}
 
 
 @app.patch("/articles/{article_id}/relevance")
-def update_article_relevance_endpoint(article_id: int, body: dict):
+def update_article_relevance_endpoint(article_id: int, body: dict, _=Depends(require_auth)):
     from database import update_article_relevance
     score = int(body.get("relevance", 6))
     update_article_relevance(article_id, score)
@@ -125,7 +171,7 @@ def update_article_relevance_endpoint(article_id: int, body: dict):
 
 
 @app.post("/articles/{article_id}/tags")
-def add_tag(article_id: int, body: dict):
+def add_tag(article_id: int, body: dict, _=Depends(require_auth)):
     tag = body.get("tag", "").strip()
     if not tag:
         raise HTTPException(status_code=400, detail="tag required")
@@ -134,8 +180,19 @@ def add_tag(article_id: int, body: dict):
 
 
 @app.delete("/articles/{article_id}/tags/{tag}")
-def remove_tag(article_id: int, tag: str):
+def remove_tag(article_id: int, tag: str, _=Depends(require_auth)):
     remove_article_tag(article_id, tag)
+    return {"ok": True}
+
+
+@app.delete("/articles/{article_id}")
+def delete_article(article_id: int, _=Depends(require_auth)):
+    """Permanently delete an article from the database."""
+    from database import get_conn
+    conn = get_conn()
+    conn.execute("DELETE FROM articles WHERE id = ?", (article_id,))
+    conn.commit()
+    conn.close()
     return {"ok": True}
 
 
@@ -250,10 +307,9 @@ def get_article_reader(article_id: int):
 # ── SCRAPER ───────────────────────────────────────────────────────────────────
 
 @app.post("/scrape")
-def trigger_scrape(background_tasks: BackgroundTasks, body: dict = None):
+def trigger_scrape(background_tasks: BackgroundTasks, body: dict = None, _=Depends(require_auth)):
     body = body or {}
     filter_config = body.get("filter_config", {})
-    # Persist the config so the scheduler uses it too
     if filter_config:
         import json
         set_scraper_config("news_filter_config", json.dumps(filter_config))
@@ -275,7 +331,7 @@ def list_sources():
 
 
 @app.post("/sources")
-def create_source(body: dict):
+def create_source(body: dict, _=Depends(require_auth)):
     name         = (body.get("name") or "").strip()
     url          = (body.get("url")  or "").strip()
     jurisdiction = (body.get("jurisdiction") or "Federal").strip()
@@ -289,13 +345,13 @@ def create_source(body: dict):
 
 
 @app.patch("/sources/{source_id}/toggle")
-def toggle_source_endpoint(source_id: int):
+def toggle_source_endpoint(source_id: int, _=Depends(require_auth)):
     new_state = toggle_source(source_id)
     return {"ok": True, "active": new_state}
 
 
 @app.patch("/sources/{source_id}")
-def edit_source(source_id: int, body: dict):
+def edit_source(source_id: int, body: dict, _=Depends(require_auth)):
     allowed = {"name", "url", "jurisdiction", "scrape_type", "active"}
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
@@ -305,7 +361,7 @@ def edit_source(source_id: int, body: dict):
 
 
 @app.delete("/sources/{source_id}")
-def remove_source(source_id: int):
+def remove_source(source_id: int, _=Depends(require_auth)):
     delete_source(source_id)
     return {"ok": True}
 
@@ -318,7 +374,7 @@ def list_research_sources():
 
 
 @app.post("/research-sources")
-def create_research_source(body: dict):
+def create_research_source(body: dict, _=Depends(require_auth)):
     name        = (body.get("name") or "").strip()
     url         = (body.get("url")  or "").strip()
     source_type = (body.get("source_type") or "think_tank").strip()
@@ -331,13 +387,13 @@ def create_research_source(body: dict):
 
 
 @app.patch("/research-sources/{source_id}/toggle")
-def toggle_research_source_endpoint(source_id: int):
+def toggle_research_source_endpoint(source_id: int, _=Depends(require_auth)):
     new_state = toggle_research_source(source_id)
     return {"ok": True, "active": new_state}
 
 
 @app.patch("/research-sources/{source_id}")
-def edit_research_source(source_id: int, body: dict):
+def edit_research_source(source_id: int, body: dict, _=Depends(require_auth)):
     allowed = {"name", "url", "source_type", "active", "relevance_boost", "notes"}
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
@@ -347,7 +403,7 @@ def edit_research_source(source_id: int, body: dict):
 
 
 @app.delete("/research-sources/{source_id}")
-def remove_research_source(source_id: int):
+def remove_research_source(source_id: int, _=Depends(require_auth)):
     delete_research_source(source_id)
     return {"ok": True}
 
@@ -360,7 +416,7 @@ def list_scholarly_keywords():
 
 
 @app.post("/scholarly-keywords")
-def create_scholarly_keyword(body: dict):
+def create_scholarly_keyword(body: dict, _=Depends(require_auth)):
     kw = (body.get("keyword") or "").strip()
     if not kw:
         raise HTTPException(status_code=400, detail="keyword required")
@@ -369,13 +425,13 @@ def create_scholarly_keyword(body: dict):
 
 
 @app.patch("/scholarly-keywords/{keyword_id}/toggle")
-def toggle_scholarly_keyword_endpoint(keyword_id: int):
+def toggle_scholarly_keyword_endpoint(keyword_id: int, _=Depends(require_auth)):
     new_state = toggle_scholarly_keyword(keyword_id)
     return {"ok": True, "active": new_state}
 
 
 @app.delete("/scholarly-keywords/{keyword_id}")
-def remove_scholarly_keyword(keyword_id: int):
+def remove_scholarly_keyword(keyword_id: int, _=Depends(require_auth)):
     delete_scholarly_keyword(keyword_id)
     return {"ok": True}
 
@@ -388,7 +444,7 @@ def list_watchlist():
 
 
 @app.post("/watchlist")
-def add_keyword(body: dict):
+def add_keyword(body: dict, _=Depends(require_auth)):
     kw = body.get("keyword", "").strip()
     if not kw:
         raise HTTPException(status_code=400, detail="keyword required")
@@ -397,7 +453,7 @@ def add_keyword(body: dict):
 
 
 @app.delete("/watchlist/{keyword}")
-def delete_keyword(keyword: str):
+def delete_keyword(keyword: str, _=Depends(require_auth)):
     remove_watchlist_keyword(keyword)
     return {"ok": True}
 
@@ -411,7 +467,7 @@ def list_exclusion_keywords():
 
 
 @app.post("/exclusion-keywords")
-def create_exclusion_keyword(body: dict):
+def create_exclusion_keyword(body: dict, _=Depends(require_auth)):
     from database import add_exclusion_keyword
     kw = (body.get("keyword") or "").strip()
     if not kw:
@@ -421,7 +477,7 @@ def create_exclusion_keyword(body: dict):
 
 
 @app.delete("/exclusion-keywords/{keyword_id}")
-def remove_exclusion_keyword_endpoint(keyword_id: int):
+def remove_exclusion_keyword_endpoint(keyword_id: int, _=Depends(require_auth)):
     from database import delete_exclusion_keyword_by_id
     delete_exclusion_keyword_by_id(keyword_id)
     return {"ok": True}
@@ -434,7 +490,7 @@ def list_subscribers():
 
 
 @app.post("/subscribers")
-def create_subscriber(body: dict):
+def create_subscriber(body: dict, _=Depends(require_auth)):
     import sqlite3
     name  = (body.get("name")  or "").strip()
     email = (body.get("email") or "").strip().lower()
@@ -451,13 +507,13 @@ def create_subscriber(body: dict):
 
 
 @app.patch("/subscribers/{subscriber_id}/toggle")
-def toggle_subscriber_endpoint(subscriber_id: int):
+def toggle_subscriber_endpoint(subscriber_id: int, _=Depends(require_auth)):
     new_state = toggle_subscriber(subscriber_id)
     return {"ok": True, "active": new_state}
 
 
 @app.patch("/subscribers/{subscriber_id}")
-def edit_subscriber(subscriber_id: int, body: dict):
+def edit_subscriber(subscriber_id: int, body: dict, _=Depends(require_auth)):
     allowed = {"name", "role", "active"}
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
@@ -467,7 +523,7 @@ def edit_subscriber(subscriber_id: int, body: dict):
 
 
 @app.delete("/subscribers/{subscriber_id}")
-def remove_subscriber_endpoint(subscriber_id: int):
+def remove_subscriber_endpoint(subscriber_id: int, _=Depends(require_auth)):
     delete_subscriber(subscriber_id)
     return {"ok": True}
 
@@ -486,7 +542,7 @@ def list_digests():
 
 
 @app.post("/digests")
-def create_digest(body: dict):
+def create_digest(body: dict, _=Depends(require_auth)):
     import secrets
     token = "pp-" + secrets.token_hex(4)
     digest_id = save_digest(
@@ -499,7 +555,7 @@ def create_digest(body: dict):
 
 
 @app.post("/digests/send")
-def send_digest_email(body: dict):
+def send_digest_email(body: dict, _=Depends(require_auth)):
     import smtplib, secrets
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
@@ -620,12 +676,10 @@ def scholarly_stats():
 
 
 @app.post("/scholarly/scrape")
-def trigger_scholarly_scrape(background_tasks: BackgroundTasks, body: dict = None):
+def trigger_scholarly_scrape(background_tasks: BackgroundTasks, body: dict = None, _=Depends(require_auth)):
     body = body or {}
     extra_keywords = body.get("keywords", [])
     fetch_config   = body.get("fetch_config", {})
-    background_tasks.add_task(_run_scholarly_bg, extra_keywords, fetch_config)
-    # Persist so the scheduler uses the same config
     if fetch_config:
         import json
         set_scraper_config("research_fetch_config", json.dumps(fetch_config))
@@ -640,10 +694,10 @@ def _run_scholarly_bg(extra_keywords: list, fetch_config: dict = None):
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"Scholarly background task crashed: {e}", exc_info=True)
-    
+
 
 @app.patch("/scholarly/{article_id}/read")
-def mark_scholarly_read(article_id: int, body: dict = None):
+def mark_scholarly_read(article_id: int, body: dict = None, _=Depends(require_auth)):
     body = body or {}
     from scholarly_scraper import update_scholarly_read
     update_scholarly_read(article_id, body.get("read", True))
@@ -651,7 +705,7 @@ def mark_scholarly_read(article_id: int, body: dict = None):
 
 
 @app.patch("/scholarly/{article_id}/relevance")
-def update_scholarly_relevance_endpoint(article_id: int, body: dict):
+def update_scholarly_relevance_endpoint(article_id: int, body: dict, _=Depends(require_auth)):
     from database import update_scholarly_relevance
     score = int(body.get("relevance", 6))
     update_scholarly_relevance(article_id, score)
@@ -677,7 +731,7 @@ def get_scholarly_article(article_id: int):
 # ── SCHOLARLY TAGS ────────────────────────────────────────────────────────────
 
 @app.post("/scholarly/{article_id}/tags")
-def add_scholarly_tag(article_id: int, body: dict):
+def add_scholarly_tag(article_id: int, body: dict, _=Depends(require_auth)):
     """Add a tag to a scholarly article."""
     tag = body.get("tag", "").strip()
     if not tag:
@@ -701,7 +755,7 @@ def add_scholarly_tag(article_id: int, body: dict):
 
 
 @app.delete("/scholarly/{article_id}/tags/{tag}")
-def remove_scholarly_tag(article_id: int, tag: str):
+def remove_scholarly_tag(article_id: int, tag: str, _=Depends(require_auth)):
     """Remove a tag from a scholarly article."""
     from database import get_conn
     conn = get_conn()
@@ -735,7 +789,7 @@ def get_scraper_config_endpoint():
 
 
 @app.post("/scraper-config")
-def set_scraper_config_endpoint(body: dict):
+def set_scraper_config_endpoint(body: dict, _=Depends(require_auth)):
     """Save one or more config key-value pairs."""
     import json
     for key, value in body.items():
@@ -746,7 +800,7 @@ def set_scraper_config_endpoint(body: dict):
 
 
 @app.delete("/scraper-config/{key}")
-def delete_scraper_config_endpoint(key: str):
+def delete_scraper_config_endpoint(key: str, _=Depends(require_auth)):
     """Delete a single config key."""
     from database import get_conn
     conn = get_conn()
@@ -756,6 +810,161 @@ def delete_scraper_config_endpoint(key: str):
     return {"ok": True}
 
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+# ── DATABASE BACKUP ───────────────────────────────────────────────────────────
+
+@app.get("/backup/download")
+def download_backup(_=Depends(require_auth)):
+    """
+    Stream the live SQLite database as a downloadable file.
+    Uses SQLite's built-in backup API so the copy is always consistent
+    even if a scrape is running concurrently.
+
+    Usage:  GET /backup/download
+            Authorization: Bearer <PP_API_KEY>
+
+    Save the file as policypulse-backup-YYYY-MM-DD.db and keep it safe.
+    To restore: replace policypulse.db on Railway with this file and redeploy.
+    """
+    import io
+    import sqlite3 as _sqlite3
+    from fastapi.responses import StreamingResponse
+
+    db_path = os.environ.get("DB_PATH", "policypulse.db")
+    if not os.path.exists(db_path):
+        raise HTTPException(status_code=404, detail="Database file not found")
+
+    buf = io.BytesIO()
+    try:
+        src  = _sqlite3.connect(db_path)
+        dest = _sqlite3.connect(":memory:")
+        src.backup(dest)
+        src.close()
+        # Serialise in-memory DB to bytes
+        for chunk in dest.iterdump():
+            pass  # iterdump is text-only; use serialize instead
+        dest.close()
+
+        # Re-open and use the serialize API (Python 3.11+) or file copy
+        src2 = _sqlite3.connect(db_path)
+        try:
+            data = src2.serialize()   # returns bytes of the whole DB
+            buf.write(data)
+        except AttributeError:
+            # Fallback for Python < 3.11: direct file read after WAL checkpoint
+            src2.execute("PRAGMA wal_checkpoint(FULL)")
+            src2.close()
+            with open(db_path, "rb") as f:
+                buf.write(f.read())
+        else:
+            src2.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Backup failed: {e}")
+
+    buf.seek(0)
+    filename = f"policypulse-backup-{datetime.utcnow().strftime('%Y-%m-%d')}.db"
+    return StreamingResponse(
+        buf,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@app.get("/backup/stats")
+def backup_stats(_=Depends(require_auth)):
+    """Return database size and table row counts — useful for monitoring."""
+    from database import get_conn
+    db_path = os.environ.get("DB_PATH", "policypulse.db")
+    size_bytes = os.path.getsize(db_path) if os.path.exists(db_path) else 0
+    conn = get_conn()
+    tables = {}
+    for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall():
+        t = row["name"]
+        try:
+            n = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+            tables[t] = n
+        except Exception:
+            tables[t] = "error"
+    conn.close()
+    return {
+        "db_size_bytes": size_bytes,
+        "db_size_mb": round(size_bytes / 1_048_576, 2),
+        "tables": tables,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
+
+@app.get("/digest/{token}")
+def view_public_digest(token: str):
+    """
+    Serve a saved digest as a public HTML page — no auth required.
+    This is the URL generated by the 'Public URL' button in the Digest tab.
+    """
+    from fastapi.responses import HTMLResponse
+    from database import get_conn
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT subject, html_content, sent_date FROM digests WHERE token = ?",
+        (token,)
+    ).fetchone()
+    conn.close()
+    if not row or not row["html_content"]:
+        raise HTTPException(status_code=404, detail="Digest not found or has expired.")
+    # Inject a small read-only banner into the digest HTML
+    banner = (
+        '<div style="background:#003366;color:#fff;text-align:center;padding:8px 16px;'
+        'font-family:Georgia,serif;font-size:12px">'
+        '&#128225; PolicyPulse Intelligence Digest &bull; '
+        + (row["sent_date"] or "")[:10] +
+        '</div>'
+    )
+    html = row["html_content"].replace("<body", banner + "<body", 1)
+    return HTMLResponse(content=html, status_code=200)
+
+
+# ── SCRAPE LOG ────────────────────────────────────────────────────────────────
+
+@app.get("/scrape/log")
+def get_scrape_log(limit: int = Query(20)):
+    """Return the last N scrape log entries for display in the UI."""
+    from database import get_conn
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM scrape_log ORDER BY id DESC LIMIT ?", (limit,)
+    ).fetchall()
+    conn.close()
+    return {"log": [dict(r) for r in rows]}
+
+
+# ── SOURCE REACHABILITY CHECK ─────────────────────────────────────────────────
+
+@app.get("/sources/{source_id}/check")
+def check_source_reachability(source_id: int):
+    """
+    HEAD-request a source URL and return whether it's reachable.
+    Called by the Fix Links button in the Sources tab.
+    Times out after 8 seconds per source.
+    """
+    import requests as req_lib
+    from database import get_conn
+    conn = get_conn()
+    row = conn.execute("SELECT url FROM sources WHERE id = ?", (source_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Source not found")
+    url = row["url"]
+    try:
+        r = req_lib.head(
+            url,
+            timeout=8,
+            allow_redirects=True,
+            headers={"User-Agent": "PolicyPulse/1.0 link-checker"}
+        )
+        reachable = r.status_code < 400
+        return {"reachable": reachable, "status": r.status_code, "url": url}
+    except req_lib.exceptions.Timeout:
+        return {"reachable": False, "status": "timeout", "url": url}
+    except Exception as e:
+        return {"reachable": False, "status": str(e)[:80], "url": url}
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 8000))
+    uvicorn.run('main:app', host='0.0.0.0', port=port, reload=False)

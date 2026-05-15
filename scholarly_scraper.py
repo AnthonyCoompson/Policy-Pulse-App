@@ -640,6 +640,11 @@ def analyze_scholarly(title: str, abstract: str, source: str,
         f"policy, post-secondary education, health policy, reconciliation, research "
         f"funding, or Canadian governance should score at least 6. Do not penalise "
         f"academic language or the absence of direct government quotes.]\n\n"
+        f"For the why_it_matters field: be concrete and action-oriented. "
+        f"Name the specific mechanism of impact for a BC university government relations team "
+        f"(e.g. funding formula implications, DRIPA alignment requirements, board obligations, "
+        f"consultation deadlines). Never write generic statements like "
+        f"'this may be relevant to policy professionals'.\n\n"
     )
 
     if abstract:
@@ -772,12 +777,15 @@ def get_scholarly_stats() -> dict:
     conn = get_conn()
     total  = conn.execute("SELECT COUNT(*) FROM scholarly_articles").fetchone()[0]
     unread = conn.execute("SELECT COUNT(*) FROM scholarly_articles WHERE read=0").fetchone()[0]
+    this_week = conn.execute(
+        "SELECT COUNT(*) FROM scholarly_articles WHERE pub_date >= date('now', '-7 days')"
+    ).fetchone()[0]
     dbs    = conn.execute(
         "SELECT database_name, COUNT(*) as n FROM scholarly_articles "
         "GROUP BY database_name ORDER BY n DESC"
     ).fetchall()
     conn.close()
-    return {"total": total, "unread": unread, "databases": [dict(r) for r in dbs]}
+    return {"total": total, "unread": unread, "this_week": this_week, "databases": [dict(r) for r in dbs]}
 
 
 def update_scholarly_read(article_id: int, read: bool):
