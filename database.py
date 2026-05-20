@@ -130,12 +130,14 @@ def init_db():
         );
 
          CREATE TABLE IF NOT EXISTS subscribers (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            name        TEXT NOT NULL,
-            email       TEXT UNIQUE NOT NULL,
-            role        TEXT DEFAULT 'Reader',
-            active      INTEGER DEFAULT 1,
-            added_date  TEXT
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            name            TEXT NOT NULL,
+            email           TEXT UNIQUE NOT NULL,
+            role            TEXT DEFAULT 'Reader',
+            active          INTEGER DEFAULT 1,
+            added_date      TEXT,
+            urgent_alerts   INTEGER DEFAULT 0,
+            keyword_alerts  INTEGER DEFAULT 0
         );
                       
         CREATE TABLE IF NOT EXISTS watchlist_keywords (
@@ -178,6 +180,18 @@ def init_db():
         _seed_scholarly_keywords(cur)
 
     conn.commit()
+
+    # ── Migration: add alert columns to subscribers if not present ────────────
+    # Safe to run on every startup — ALTER TABLE IF NOT EXISTS column is
+    # not valid SQLite syntax, so we use a try/except per column instead.
+    cur = conn.cursor()
+    for col, default in [("urgent_alerts", "0"), ("keyword_alerts", "0")]:
+        try:
+            cur.execute(f"ALTER TABLE subscribers ADD COLUMN {col} INTEGER DEFAULT {default}")
+            conn.commit()
+        except Exception:
+            pass  # column already exists
+
     conn.close()
 
 
@@ -246,6 +260,41 @@ def _seed_scholarly_keywords(cur):
         "INSERT INTO scholarly_keywords (keyword, active, created_date) VALUES (?,1,?)",
         [(kw, now) for kw in keywords]
     )
+
+
+# ── ALERT SUBSCRIBER HELPERS ──────────────────────────────
+
+def get_alert_subscribers(alert_type: str) -> list:
+    """
+    Return active subscribers opted in to a specific alert type.
+    alert_type: 'urgent' or 'keyword'
+    """
+    col = "urgent_alerts" if alert_type == "urgent" else "keyword_alerts"
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            f"SELECT id, name, email FROM subscribers WHERE active=1 AND {col}=1"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+
+def update_subscriber_alerts(subscriber_id: int, urgent_alerts: int, keyword_alerts: int):
+    """Update alert opt-in flags for a subscriber."""
+    conn = get_conn()
+    try:
+        conn.execute(
+            "UPDATE subscribers SET urgent_alerts=?, keyword_alerts=? WHERE id=?",
+            (urgent_alerts, keyword_alerts, subscriber_id)
+        )
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
 
 
 # ── ARTICLES ──────────────────────────────────────────────
@@ -693,7 +742,7 @@ def delete_subscriber(subscriber_id: int):
 
 
 def update_subscriber(subscriber_id: int, fields: dict):
-    allowed = {"name", "role", "active"}
+    allowed = {"name", "role", "active", "urgent_alerts", "keyword_alerts"}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return

@@ -679,9 +679,83 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
 .research-stat-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:4px}
 .source-breakdown{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .scrape-progress{display:none;padding:12px 16px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:8px;margin-bottom:12px;font-size:12px;color:var(--text)}
+/* ── ANALYTICS ─────────────────────────────────────────────────── */
+.an-bar-wrap{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.an-bar-label{font-size:11px;color:var(--text);width:140px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.an-bar-track{flex:1;height:10px;background:rgba(255,255,255,0.06);border-radius:5px;overflow:hidden}
+.an-bar-fill{height:100%;border-radius:5px;transition:width 0.8s cubic-bezier(.4,0,.2,1)}
+.an-bar-count{font-size:10px;color:var(--muted);min-width:32px;text-align:right;font-family:'IBM Plex Mono',monospace}
+.keyword-cloud-tag{display:inline-flex;align-items:center;border-radius:20px;font-weight:600;cursor:default;transition:all .2s;white-space:nowrap}
+.keyword-cloud-tag:hover{transform:scale(1.08)}
+
+/* ── TRACKER ─────────────────────────────────────────────────── */
+.tracker-topic-item{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;transition:all .15s}
+.tracker-topic-item:hover{border-color:rgba(0,194,255,0.25);background:rgba(0,194,255,0.04)}
+.tracker-topic-item.active{border-color:rgba(0,194,255,0.4);background:rgba(0,194,255,0.08)}
+.tracker-topic-name{font-size:12px;font-weight:600;color:var(--white);margin-bottom:3px}
+.tracker-topic-meta{font-size:10px;color:var(--muted)}
+.tracker-timeline-event{position:relative;padding-left:20px;padding-bottom:18px}
+.tracker-timeline-event::before{content:'';position:absolute;left:0;top:6px;bottom:-6px;width:2px;background:linear-gradient(180deg,rgba(0,194,255,0.4),rgba(0,194,255,0.05))}
+.tracker-timeline-event:last-child::before{display:none}
+.tracker-timeline-dot{position:absolute;left:-5px;top:4px;width:12px;height:12px;border-radius:50%;border:2px solid var(--cyan);background:var(--bg);flex-shrink:0}
+.tracker-event-date{font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-bottom:4px}
+.tracker-event-title{font-size:13px;font-weight:600;color:var(--white);margin-bottom:4px;line-height:1.4}
+.tracker-event-note{font-size:12px;color:var(--muted);line-height:1.6}
+.tracker-link-result{padding:8px 10px;border-radius:6px;border:1px solid var(--border);cursor:pointer;font-size:11px;transition:all .15s;margin-bottom:4px}
+.tracker-link-result:hover{background:rgba(0,194,255,0.08);border-color:rgba(0,194,255,0.25)}
+
+/* ── KEYBOARD SHORTCUT HINT ────────────────────────────────────── */
+#kb-hint{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  background:rgba(11,24,41,0.95);border:1px solid rgba(0,194,255,0.25);
+  border-radius:10px;padding:8px 16px;font-size:11px;color:var(--muted);
+  display:none;z-index:9000;backdrop-filter:blur(8px);pointer-events:none;
+  box-shadow:0 4px 20px rgba(0,0,0,.5);letter-spacing:0.02em;
+}
+#kb-hint kbd{
+  display:inline-block;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
+  border-radius:4px;padding:1px 6px;font-family:'IBM Plex Mono',monospace;font-size:10px;
+  color:var(--cyan);margin:0 2px;
+}
+
+/* ── PRINT STYLES ──────────────────────────────────────────────── */
+@media print {
+  #banner,#nav,#api-modal,#boot-loader,#landing-page,
+  #preview-modal,#toast-container,#tour-overlay,
+  #high-relevance-modal,#kb-hint,
+  .hover-actions,.hbtn,.btn-add-tag,
+  #scrape-btn,#scrape-progress,.tag-filter-bar,
+  .filters,.pagination-bar,.sort-toggle-btn,
+  .digest-section-header button,
+  #editors-note, .why-input,
+  [onclick]:not(.article-title-link):not(.digest-item a)
+  { display:none !important; }
+
+  body { background:#fff !important; color:#000 !important; overflow:visible !important; }
+  html,body { height:auto !important; overflow:visible !important; }
+  #main { overflow:visible !important; height:auto !important; padding:0 !important; background:#fff !important; }
+  .digest-section { border:1px solid #ccc !important; page-break-inside:avoid; margin-bottom:16px !important; }
+  .digest-section-header { background:#f0f4f8 !important; }
+  .digest-section-title { color:#003366 !important; opacity:1 !important; }
+  .digest-item { border-bottom:1px solid #eee !important; }
+  .article-card { background:#fff !important; border:1px solid #ddd !important; box-shadow:none !important; page-break-inside:avoid; }
+  .article-title-link { color:#003366 !important; }
+  .why-matters { background:#f8f9fa !important; border-left:3px solid #003366 !important; color:#334d6b !important; }
+  .tag-domain { background:#e8f0fe !important; color:#1d4ed8 !important; }
+  .tag-juris  { background:#fef9e7 !important; color:#92400e !important; }
+  #page-digest .card { box-shadow:none !important; }
+
+  /* Print digest header */
+  #print-digest-header { display:block !important; text-align:center; padding:20px 0 16px; border-bottom:2px solid #003366; margin-bottom:20px; }
+}
+
+/* Print digest header (hidden on screen) */
+#print-digest-header {
+  display:none;
+  font-family:'Playfair Display',serif;
+}
 
 </style>
-</head>
 <body>
 
 <!-- LANDING PAGE -->
@@ -810,6 +884,13 @@ function skipApiKey(){
   </div>
 </div>
 <div id="toast-container"></div>
+<div id="kb-hint"></div>
+<!-- Print digest header (hidden on screen, shown on print) -->
+<div id="print-digest-header">
+  <div style="font-size:28px;font-weight:700;color:#003366;margin-bottom:4px">PolicyPulse</div>
+  <div style="font-size:14px;color:#6b8aaa;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">Policy Intelligence Digest</div>
+  <div id="print-digest-date" style="font-size:12px;color:#334d6b"></div>
+</div>
 
 <!-- ONBOARDING TOUR -->
 <div id="tour-overlay" style="display:none;position:fixed;inset:0;z-index:1500;pointer-events:none">
@@ -924,13 +1005,17 @@ function skipApiKey(){
 </div>
 
 <div id="nav">
-  <button class="nav-btn" onclick="showLanding()" id="tab-home" title="Return to home / landing page">🏠 Home</button>
+   <button class="nav-btn" onclick="window.location.href='index.html'" id="tab-home" title="Back to landing page">🏠 Home</button>
   <button class="nav-btn active" onclick="showTab('dashboard')" id="tab-dashboard">📊 Dashboard</button>
   <button class="nav-btn" onclick="showTab('scraper')" id="tab-scraper">📰 News &amp; Articles <span class="nav-badge" id="scraper-badge" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showTab('research')" id="tab-research">&#x1F4DA; Research <span class="nav-badge" id="research-badge" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showTab('digest')" id="tab-digest">🗞️ Digest <span class="nav-badge" id="digest-badge" style="display:none">0</span></button>
+  <button class="nav-btn" onclick="showTab('analytics')" id="tab-analytics">&#x1F4CA; Analytics</button>
+  <button class="nav-btn" onclick="showTab('tracker')" id="tab-tracker">&#x1F4CD; Policy Tracker</button>
+  <button class="nav-btn" onclick="showTab('share')" id="tab-share">&#x1F310; Public Feed</button>
   <button class="nav-btn" onclick="showTab('notes')" id="tab-notes">&#x1F4DD; Notes</button>
   <button class="nav-btn" onclick="showTab('notion')" id="tab-notion">📒 Notion</button>
+  <button class="nav-btn" onclick="showTab('briefing')" id="tab-briefing">📋 Briefing Note</button>
   <button class="nav-btn" onclick="showTab('askai')" id="tab-askai">🧠 Ask AI</button>
   <button class="nav-btn" onclick="showTab('citations')" id="tab-citations">🔖 Citations</button>
   <button class="nav-btn" onclick="showTab('quickstart')" id="tab-quickstart">🚀 Quick Start</button>
@@ -1002,7 +1087,10 @@ function skipApiKey(){
   <div id="page-scraper" style="display:none" class="fade-in">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
       <div><div class="page-title">News &amp; Articles</div><div class="page-subtitle" id="scraper-count">Loading news &amp; articles…</div></div>
-      <button id="scrape-btn" onclick="scrapeNow()">&#x1F50D; Scrape Now</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="_showKbHint('<kbd>J</kbd> Next &nbsp; <kbd>K</kbd> Prev &nbsp; <kbd>R</kbd> Read &nbsp; <kbd>S</kbd> Stage &nbsp; <kbd>O</kbd> Open &nbsp; <kbd>F</kbd> Flag &nbsp; <kbd>P</kbd> Preview &nbsp; <kbd>?</kbd> Help',4500)" title="Keyboard shortcuts" style="font-size:10px;padding:4px 10px">&#x2328; Shortcuts</button>
+        <button id="scrape-btn" onclick="scrapeNow()">&#x1F50D; Scrape Now</button>
+      </div>
     </div>
     <!-- News scrape progress bar -->
     <div id="scrape-progress">
@@ -1227,15 +1315,38 @@ function skipApiKey(){
         </div>
 
       </div>
+
+      <!-- DB PRUNING -->
+      <div class="card" style="margin-top:10px;border-color:rgba(244,63,94,0.2)">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#fb7185;margin-bottom:12px">&#x1F5D1; Database Pruning</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:12px">Permanently delete news articles older than a set number of days. <strong style="color:var(--white)">Staged articles are never deleted.</strong> Use the preview first to see how many articles would be removed.</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <label style="font-size:12px;color:var(--text);display:flex;align-items:center;gap:8px">Keep last
+            <input type="number" id="prune-days-inp" value="180" min="30" max="3650" style="width:70px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:13px;color:var(--text);text-align:center">
+            days of articles
+          </label>
+          <button class="btn btn-ghost btn-sm" onclick="prunePreview()">&#x1F50D; Preview</button>
+          <button class="btn btn-red btn-sm" onclick="pruneArticles()">&#x1F5D1; Prune Now</button>
+        </div>
+        <div id="prune-result" style="display:none;margin-top:10px;font-size:12px;padding:8px 12px;border-radius:6px"></div>
+      </div>
+
     </div><!-- /scraper-settings-panel -->
 
     <div id="scraper-archive-panel" style="display:none">
       <div style="margin-bottom:14px">
         <div class="section-title" style="margin-top:0">Keyword Watchlist</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.7">
+          Keywords are saved to the backend and used automatically by the <strong style="color:var(--text)">scheduled daily scrape</strong> (Mon&ndash;Fri 7am, Sat 9am Vancouver time).
+          <span id="watchlist-scheduler-note" style="display:inline-flex;align-items:center;gap:5px;margin-left:6px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:1px 8px;font-size:10px;font-weight:700;color:var(--green)">
+            &#x2713; Will be used on next scheduled scrape
+          </span>
+        </div>
         <div id="watchlist-tags" style="margin-bottom:8px"></div>
         <div style="display:flex;gap:8px">
           <input class="filter-input" id="kw-input" placeholder="Add keyword (e.g. pharmacare, TRC, DRIPA)…" style="max-width:300px" onkeydown="if(event.key==='Enter')addKeyword()">
           <button class="btn btn-cyan" onclick="addKeyword()">+ Add</button>
+          <button class="btn btn-ghost btn-sm" onclick="scrapeNow()" title="Trigger an immediate scrape using current keywords">&#x1F50D; Scrape Now</button>
         </div>
       </div>
       <div style="margin-top:20px;margin-bottom:14px">
@@ -1692,6 +1803,7 @@ function skipApiKey(){
           <span id="schedule-status" style="font-size:11px;color:#6b8aaa"></span>
         </div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost" onclick="printDigest()">&#x1F5A8; Print</button>
         <button class="btn btn-ghost" onclick="copyDigest()">⎘ Copy</button>
         <button class="btn btn-ghost" onclick="exportDigestPDF()">&#x1F4C4; Export PDF</button>
         <button class="btn btn-ghost" id="notion-digest-btn" onclick="pushDigestToNotion()" style="display:none">&#x1F5D2; Push to Notion</button>
@@ -1723,15 +1835,103 @@ function skipApiKey(){
   <!-- SUBSCRIBERS -->
   <div id="page-subscribers" style="display:none" class="fade-in">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-      <div><div class="page-title">Subscribers</div><div class="page-subtitle">Manage your digest distribution list</div></div>
-      <button class="btn btn-primary" onclick="addSubscriber()">+ Add Subscriber</button>
+      <div><div class="page-title">Subscribers</div><div class="page-subtitle">Manage your digest distribution list and per-subscriber alert preferences</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="testUrgentAlert()" title="Send a test urgent alert to opted-in subscribers">&#x1F525; Test Urgent</button>
+        <button class="btn btn-ghost btn-sm" onclick="testKeywordAlert()" title="Send a test keyword alert to opted-in subscribers">&#x1F4E1; Test Keyword</button>
+        <button class="btn btn-primary" onclick="addSubscriber()">+ Add Subscriber</button>
+      </div>
+    </div>
+    <div style="margin-bottom:12px;padding:11px 14px;background:rgba(0,194,255,0.05);border:1px solid rgba(0,194,255,0.15);border-radius:var(--radius);font-size:12px;color:var(--muted);line-height:1.7">
+      <strong style="color:var(--text)">&#x1F514; Per-subscriber alert opt-ins &mdash;</strong>
+      <span style="color:#f87171;font-weight:600">&#x1F525; Urgent Alerts:</span> immediate email when a scraped article scores 9&ndash;10.
+      <span style="color:#60a5fa;font-weight:600">&#x1F4E1; Keyword Alerts:</span> email when a watchlist keyword match is found.
+      Requires SMTP in Railway. Toggle per subscriber using the buttons below.
     </div>
     <div class="table-wrap" style="overflow-x:auto"><table>
-      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Added</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>
+        <th title="Immediate email for articles scoring 9-10">&#x1F525; Urgent</th>
+        <th title="Email when a watchlist keyword article is found">&#x1F4E1; Keyword</th>
+        <th>Added</th><th>Actions</th></tr></thead>
       <tbody id="subscribers-tbody"></tbody>
     </table></div>
     <div style="margin-top:12px;padding:12px 16px;background:rgba(240,165,0,0.05);border:1px solid rgba(240,165,0,0.15);border-radius:var(--radius);font-size:11px;color:var(--muted)">
       ℹ️ An unsubscribe link is automatically included in every digest footer. Inactive subscribers do not receive emails.
+    </div>
+  </div>
+
+  <!-- BRIEFING NOTE GENERATOR -->
+  <div id="page-briefing" style="display:none" class="fade-in">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div class="page-title">&#x1F4CB; Briefing Note Generator</div>
+        <div class="page-subtitle">Select 3&ndash;8 articles, then generate and download a structured policy brief as a Word .docx</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="briefingClearAll()">&#x2715; Clear</button>
+        <button class="btn btn-cyan" id="briefing-generate-btn" onclick="generateBriefingNote()" disabled>&#x1F916; Generate Briefing Note</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
+      <!-- LEFT: article picker -->
+      <div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:10px">
+          Select Articles <span id="briefing-count-label" style="font-weight:400;color:var(--dim);text-transform:none;font-size:11px;letter-spacing:0">(0 of max 8)</span>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+          <input class="filter-input" id="briefing-search" placeholder="&#x1F50D; Filter articles..." oninput="renderBriefingArticleList()" style="flex:1;min-width:120px">
+          <select class="filter-select" id="briefing-filter-domain" onchange="renderBriefingArticleList()">
+            <option value="">All Domains</option>
+            <option>Higher Education</option><option>Indigenous</option><option>Reconciliation</option>
+            <option>Research Funding</option><option>Health</option><option>Budget</option>
+            <option>Legislation</option><option>Pharmacare</option><option>Workforce</option>
+          </select>
+          <select class="filter-select" id="briefing-sort" onchange="renderBriefingArticleList()">
+            <option value="rel">Highest Relevance</option>
+            <option value="date">Newest First</option>
+          </select>
+        </div>
+        <div id="briefing-article-list" style="max-height:560px;overflow-y:auto;display:flex;flex-direction:column;gap:5px"></div>
+      </div>
+      <!-- RIGHT: config + selected list -->
+      <div>
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px">&#x2699;&#xFE0F; Brief Configuration</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Title</div>
+              <input class="filter-input" id="briefing-title" placeholder="e.g. Policy Watch: Reconciliation &amp; Post-Secondary &mdash; May 2026" style="width:100%"></div>
+            <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Prepared for</div>
+              <input class="filter-input" id="briefing-recipient" placeholder="e.g. Vice-President, Government Relations" style="width:100%"></div>
+            <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Prepared by</div>
+              <input class="filter-input" id="briefing-author" placeholder="e.g. Policy &amp; Government Relations Office" style="width:100%"></div>
+            <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Purpose / Context</div>
+              <textarea class="why-input" id="briefing-context" rows="2"
+                placeholder="e.g. Provide senior leadership with a summary of the most significant BC and federal policy developments affecting post-secondary education this week."
+                style="width:100%;font-size:12px;padding:8px 10px"></textarea></div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text)">
+                <input type="checkbox" id="briefing-incl-summary" checked style="accent-color:var(--cyan)"> Summaries</label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text)">
+                <input type="checkbox" id="briefing-incl-why" checked style="accent-color:var(--cyan)"> Why it matters</label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text)">
+                <input type="checkbox" id="briefing-incl-refs" checked style="accent-color:var(--cyan)"> References</label>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:8px">
+            &#x1F4CB; Selected <span id="briefing-sel-count" style="font-weight:400;color:var(--dim);text-transform:none;letter-spacing:0">(0)</span>
+          </div>
+          <div id="briefing-selected-list">
+            <div style="font-size:11px;color:var(--dim);font-style:italic">No articles selected yet.</div>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="briefing-generate-btn2" onclick="generateBriefingNote()" disabled
+          style="width:100%;padding:12px;font-size:13px;font-weight:700;justify-content:center">
+          &#x1F916; Generate &amp; Download Briefing Note (.docx)
+        </button>
+        <div id="briefing-status" style="display:none;margin-top:10px;padding:10px 14px;border-radius:7px;font-size:12px"></div>
+      </div>
     </div>
   </div>
 
@@ -1786,14 +1986,38 @@ function skipApiKey(){
     </div>
     <div class="card">
       <div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:16px;text-transform:uppercase;letter-spacing:.12em">Quick Start Guide</div>
-      <div class="inst-step"><div class="step-num">1</div><div class="step-content"><h4>Get Your Free Groq API Key</h4><p>Visit <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a> → sign up → API Keys → Create Key. Free, no credit card. Sign in with Google, click "Create API Key". Paste it in the prompt when PolicyPulse loads to enable Ask AI.</p></div></div>
-      <div class="inst-step"><div class="step-num">2</div><div class="step-content"><h4>Configure Your Sources</h4><p>Go to <strong style="color:var(--white)">Scraper → Sources</strong> to add or remove government/policy news sources. Click <kbd class="kbd">Scrape Now</kbd> to fetch new articles on demand.</p></div></div>
-      <div class="inst-step"><div class="step-num">3</div><div class="step-content"><h4>Set Up Your Keyword Watchlist</h4><p>In <strong style="color:var(--white)">Scraper → Search &amp; Archive</strong>, add keywords like "pharmacare", "TRC", "DRIPA". Articles matching your keywords are surfaced automatically in the Dashboard Recommended panel.</p></div></div>
-      <div class="inst-step"><div class="step-num">4</div><div class="step-content"><h4>Review the Article Feed</h4><p>Click any article <strong style="color:var(--white)">headline ↗</strong> to open the source article in a new tab. Use <strong style="color:var(--white)">✓ Mark Read</strong> to track what you've reviewed, and <strong style="color:var(--white)">↩ Mark Unread</strong> to undo. Use <strong style="color:var(--white)">+ Add to Digest</strong> to stage an article.</p></div></div>
-      <div class="inst-step"><div class="step-num">5</div><div class="step-content"><h4>Build &amp; Send Your Digest</h4><p>Staged articles auto-organize in <strong style="color:var(--white)">Digest → Staging Area</strong>. Add "Why This Matters" notes, then click <strong style="color:var(--white)">Send Digest</strong>, <strong style="color:var(--white)">Copy</strong> for Teams/Slack, or <strong style="color:var(--white)">Public URL</strong> to share a read-only version.</p></div></div>
-      <div class="inst-step"><div class="step-num">6</div><div class="step-content"><h4>Use Ask AI</h4><p>Query your database in plain language in the <strong style="color:var(--white)">Ask AI</strong> tab. Try: <em style="color:var(--muted)">"What are the top 3 items for my next digest?"</em></p></div></div>
-      <div class="inst-step"><div class="step-num">7</div><div class="step-content"><h4>Assign Digest Sections</h4><p>After clicking <strong style="color:var(--white)">+ Add to Digest</strong> on any article, a section picker appears. Use the <strong style="color:var(--cyan)">&#x21C6; Move to…</strong> dropdown to assign it to: <strong>Headline of the Week</strong>, <strong>Federal Watch</strong>, <strong>Provincial Watch</strong>, <strong>Regulatory &amp; Funding</strong>, or <strong>On Our Radar</strong>.</p></div></div>
-      <div class="inst-step"><div class="step-num">8</div><div class="step-content"><h4>Filter by Category Tags</h4><p>Use the tag chips above the article feed (TRC, DRIPA, Budget, Urgent, etc.) to instantly filter articles by category. Click any tag on an article card to filter to that category. Click <strong>All</strong> to reset.</p></div></div>
+      <!-- AI Setup explanation box — fix 5 -->
+      <div style="margin-bottom:16px;padding:14px 16px;background:rgba(240,165,0,0.07);border:1px solid rgba(240,165,0,0.25);border-radius:10px;position:relative;overflow:hidden">
+        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--gold),transparent)"></div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:10px">&#x26A0; PolicyPulse uses TWO separate AI services — both are free</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;color:var(--muted);line-height:1.7">
+          <div style="background:rgba(0,0,0,.2);border-radius:8px;padding:10px 12px">
+            <div style="font-size:11px;font-weight:700;color:var(--white);margin-bottom:4px">&#x1F916; Groq AI (frontend)</div>
+            Used for: <strong style="color:var(--text)">Ask AI</strong>, article-level <strong style="color:var(--text)">Generate</strong> button, citation refining.<br>
+            Key goes into the <strong style="color:var(--text)">app on your browser</strong> (never sent to Railway).<br>
+            Get it free at <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a>.
+          </div>
+          <div style="background:rgba(0,0,0,.2);border-radius:8px;padding:10px 12px">
+            <div style="font-size:11px;font-weight:700;color:var(--white);margin-bottom:4px">&#x1F4E1; Gemini AI (backend scraper)</div>
+            Used for: <strong style="color:var(--text)">automatic article analysis</strong> during every scrape run — relevance scoring, domain tagging, "Why It Matters" summaries.<br>
+            Key goes into <strong style="color:var(--text)">Railway environment variables</strong> as <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">GEMINI_API_KEY</code>.<br>
+            Get it free at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--cyan)">aistudio.google.com/apikey</a>.
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--dim);margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">
+          &#x2139; If you only set up Groq: Ask AI works, but scraped articles will use keyword-based fallback analysis instead of Gemini.<br>
+          If you only set up Gemini in Railway: scraped articles get full AI analysis, but Ask AI won't work until you enter a Groq key.
+        </div>
+      </div>
+      <div class="inst-step"><div class="step-num">1</div><div class="step-content"><h4>Set Up Gemini AI Key in Railway (for article analysis)</h4><p>Go to your Railway project &rarr; <strong style="color:var(--white)">Variables</strong> &rarr; add <code style="font-size:11px;background:rgba(0,0,0,.3);padding:1px 6px;border-radius:3px">GEMINI_API_KEY</code> with a free key from <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--cyan)">aistudio.google.com/apikey</a>. This powers automatic relevance scoring, tagging, and "Why It Matters" summaries on every article scraped.</p></div></div>
+      <div class="inst-step"><div class="step-num">2</div><div class="step-content"><h4>Get Your Free Groq API Key (for Ask AI)</h4><p>Visit <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a> &rarr; sign up &rarr; API Keys &rarr; Create Key. Free, no credit card. Paste it when PolicyPulse loads to enable the Ask AI tab, the Generate button on articles, and AI citation refining.</p></div></div>
+      <div class="inst-step"><div class="step-num">3</div><div class="step-content"><h4>Configure Your Sources</h4><p>Go to <strong style="color:var(--white)">Scraper → Sources</strong> to add or remove government/policy news sources. Click <kbd class="kbd">Scrape Now</kbd> to fetch new articles on demand.</p></div></div>
+      <div class="inst-step"><div class="step-num">4</div><div class="step-content"><h4>Set Up Your Keyword Watchlist</h4><p>In <strong style="color:var(--white)">Scraper → Search &amp; Archive</strong>, add keywords like "pharmacare", "TRC", "DRIPA". Articles matching your keywords are surfaced automatically in the Dashboard Recommended panel.</p></div></div>
+      <div class="inst-step"><div class="step-num">5</div><div class="step-content"><h4>Review the Article Feed</h4><p>Click any article <strong style="color:var(--white)">headline ↗</strong> to open the source article in a new tab. Use <strong style="color:var(--white)">✓ Mark Read</strong> to track what you've reviewed, and <strong style="color:var(--white)">↩ Mark Unread</strong> to undo. Use <strong style="color:var(--white)">+ Add to Digest</strong> to stage an article.</p></div></div>
+      <div class="inst-step"><div class="step-num">6</div><div class="step-content"><h4>Build &amp; Send Your Digest</h4><p>Staged articles auto-organize in <strong style="color:var(--white)">Digest → Staging Area</strong>. Add "Why This Matters" notes, then click <strong style="color:var(--white)">Send Digest</strong>, <strong style="color:var(--white)">Copy</strong> for Teams/Slack, or <strong style="color:var(--white)">Public URL</strong> to share a read-only version.</p></div></div>
+      <div class="inst-step"><div class="step-num">7</div><div class="step-content"><h4>Use Ask AI</h4><p>Query your database in plain language in the <strong style="color:var(--white)">Ask AI</strong> tab. Try: <em style="color:var(--muted)">"What are the top 3 items for my next digest?"</em></p></div></div>
+      <div class="inst-step"><div class="step-num">8</div><div class="step-content"><h4>Assign Digest Sections</h4><p>After clicking <strong style="color:var(--white)">+ Add to Digest</strong> on any article, a section picker appears. Use the <strong style="color:var(--cyan)">&#x21C6; Move to…</strong> dropdown to assign it to: <strong>Headline of the Week</strong>, <strong>Federal Watch</strong>, <strong>Provincial Watch</strong>, <strong>Regulatory &amp; Funding</strong>, or <strong>On Our Radar</strong>.</p></div></div>
+      <div class="inst-step"><div class="step-num">9</div><div class="step-content"><h4>Filter by Category Tags</h4><p>Use the tag chips above the article feed (TRC, DRIPA, Budget, Urgent, etc.) to instantly filter articles by category. Click any tag on an article card to filter to that category. Click <strong>All</strong> to reset.</p></div></div>
     </div>
   </div>
 
@@ -1893,7 +2117,6 @@ function skipApiKey(){
       </div>
     </div>
   </div>
-</div>
 
   <!-- NOTION INTEGRATION TAB -->
   <div id="page-notion" style="display:none" class="fade-in">
@@ -2258,8 +2481,215 @@ function skipApiKey(){
         </div>
       </div>
     </div>
-  </div>
+  </div><!-- /page-notes -->
 
+  <!-- ═══ ANALYTICS PAGE ═══ -->
+  <div id="page-analytics" style="display:none" class="fade-in">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div class="page-title">&#x1F4CA; Policy Trend Analytics</div>
+        <div class="page-subtitle" id="analytics-subtitle">Strategic intelligence from your article database</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="analytics-days" class="filter-select" style="width:auto" onchange="renderAnalyticsDashboard()">
+          <option value="30">Last 30 days</option>
+          <option value="60">Last 60 days</option>
+          <option value="90" selected>Last 90 days</option>
+          <option value="180">Last 180 days</option>
+          <option value="365">Last 365 days</option>
+        </select>
+        <button class="btn btn-ghost" onclick="exportAnalyticsPDF()">&#x1F4C4; Export Report</button>
+        <button class="btn btn-ghost" onclick="exportToGoogleSheets()">&#x1F4CA; Sheets Export</button>
+      </div>
+    </div>
+
+    <!-- Row 1: stat cards -->
+    <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px" id="analytics-stats-row">
+      <div class="stat-card"><div class="stat-val" id="an-total">—</div><div class="stat-label">Total Articles</div><div class="stat-delta" id="an-period">in period</div></div>
+      <div class="stat-card"><div class="stat-val" id="an-critical" style="color:var(--red)">—</div><div class="stat-label">Critical Sentiment</div><div class="stat-delta" style="color:var(--red)">policy concern</div></div>
+      <div class="stat-card"><div class="stat-val" id="an-supportive" style="color:var(--green)">—</div><div class="stat-label">Supportive</div><div class="stat-delta" style="color:var(--green)">positive signals</div></div>
+      <div class="stat-card"><div class="stat-val" id="an-avg-rel" style="color:var(--gold)">—</div><div class="stat-label">Avg Relevance</div><div class="stat-delta" style="color:var(--gold)">out of 10</div></div>
+    </div>
+
+    <!-- Row 2: Domain + Sentiment -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div class="card">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F3F7; Domain Activity</div>
+        <div id="chart-domain" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+      <div class="card">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F4AC; Sentiment Distribution</div>
+        <div id="chart-sentiment" style="display:flex;flex-direction:column;gap:8px"></div>
+        <div style="margin-top:16px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Sentiment Over Time (weekly)</div>
+          <div id="chart-sentiment-time" style="height:80px;position:relative;display:flex;align-items:flex-end;gap:2px;overflow:hidden"></div>
+          <div id="chart-sentiment-labels" style="display:flex;gap:2px;margin-top:4px;font-size:8px;color:var(--dim);font-family:monospace"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 3: Source Performance + Keyword Cloud -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div class="card">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F4E1; Source Performance</div>
+        <div id="chart-sources" style="display:flex;flex-direction:column;gap:5px"></div>
+      </div>
+      <div class="card">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F4AC; Keyword Frequency</div>
+        <div id="chart-keywords" style="display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;min-height:160px"></div>
+      </div>
+    </div>
+
+    <!-- Row 4: Timeline -->
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)">&#x1F4C5; Article Volume Timeline</div>
+        <span style="font-size:10px;color:var(--muted)">Weekly article count</span>
+      </div>
+      <div id="chart-timeline" style="height:100px;position:relative;display:flex;align-items:flex-end;gap:3px;overflow:hidden;padding-bottom:20px"></div>
+      <div id="chart-timeline-labels" style="display:flex;gap:3px;font-size:8px;color:var(--dim);font-family:monospace;margin-top:4px"></div>
+    </div>
+
+    <!-- Row 5: Monthly Report -->
+    <div class="card" style="border-color:rgba(240,165,0,0.2)">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:12px">&#x1F4CB; Monthly Policy Report Generator</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:14px">Generate a formatted PDF summary: <em>"This month in BC/Canadian policy"</em> — articles by domain, sentiment breakdown, notable developments.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="monthly-report-month" class="filter-select" style="width:auto"></select>
+        <button class="btn btn-gold" onclick="generateMonthlyReport()">&#x1F4CB; Generate Monthly Report</button>
+        <button class="btn btn-ghost btn-sm" onclick="emailMonthlyReport()">&#x2709; Email to Subscribers</button>
+      </div>
+      <div id="monthly-report-status" style="display:none;margin-top:10px;font-size:12px;padding:8px 12px;border-radius:7px"></div>
+    </div>
+  </div><!-- /page-analytics -->
+
+  <!-- ═══ POLICY TRACKER PAGE ═══ -->
+  <div id="page-tracker" style="display:none" class="fade-in">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div class="page-title">&#x1F4CD; Policy Position Tracker</div>
+        <div class="page-subtitle">Track how ongoing policy issues evolve over time — bills, consultations, inquiries</div>
+      </div>
+      <button class="btn btn-primary" onclick="addTrackerTopic()">+ New Topic</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:280px 1fr;gap:14px;min-height:500px">
+      <!-- Topics list -->
+      <div>
+        <input class="filter-input" id="tracker-search" placeholder="&#x1F50D; Filter topics..." oninput="filterTrackerTopics(this.value)" style="margin-bottom:10px">
+        <div id="tracker-topics-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+      <!-- Timeline panel -->
+      <div id="tracker-timeline-panel" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;min-height:400px">
+        <div id="tracker-empty-state" style="display:flex;align-items:center;justify-content:center;height:300px;flex-direction:column;gap:12px;color:var(--dim)">
+          <div style="font-size:40px;opacity:.4">&#x1F4CD;</div>
+          <div style="font-size:13px">Select a topic or create a new one</div>
+          <button class="btn btn-primary" onclick="addTrackerTopic()">+ New Topic</button>
+        </div>
+        <div id="tracker-topic-view" style="display:none">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+            <div>
+              <div id="tracker-topic-title" style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--white);margin-bottom:4px"></div>
+              <div id="tracker-topic-meta" style="font-size:11px;color:var(--muted)"></div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-cyan btn-sm" onclick="aiCompareChanges()">&#x1F916; AI: What Changed?</button>
+              <button class="btn btn-ghost btn-sm" onclick="deleteTrackerTopic()">&#x1F5D1; Delete</button>
+            </div>
+          </div>
+          <div id="tracker-ai-comparison" style="display:none;margin-bottom:14px;padding:12px 16px;background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.2);border-radius:8px;font-size:12px;color:var(--text);line-height:1.7"></div>
+          <div id="tracker-timeline" style="position:relative;padding-left:24px"></div>
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Linked Articles from Feed</div>
+            <div id="tracker-linked-articles" style="display:flex;flex-direction:column;gap:6px"></div>
+            <div style="margin-top:10px">
+              <input class="filter-input" id="tracker-link-search" placeholder="Search articles to link..." oninput="searchArticlesToLink(this.value)" style="max-width:320px">
+              <div id="tracker-link-results" style="max-height:200px;overflow-y:auto;margin-top:6px;display:none"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /page-tracker -->
+
+  <!-- ═══ PUBLIC FEED / SHARE PAGE ═══ -->
+  <div id="page-share" style="display:none" class="fade-in">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div class="page-title">&#x1F310; Public Feed</div>
+        <div class="page-subtitle">Generate a read-only policy news page to share with board members or leadership — no login required</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-cyan" onclick="openPublicFeedPreview()">&#x25BA; Preview</button>
+        <button class="btn btn-primary" onclick="generatePublicFeedUrl()">&#x1F517; Generate Shareable URL</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="card">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x2699; Feed Configuration</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Page Title</div>
+            <input id="share-title" class="filter-input" value="Policy Intelligence Feed" style="width:100%">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Organization / Prepared by</div>
+            <input id="share-org" class="filter-input" placeholder="e.g. SFU Government Relations Office" style="width:100%">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Minimum Relevance Score</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <input type="range" id="share-min-rel" min="6" max="10" step="1" value="8" style="flex:1;accent-color:var(--cyan)" oninput="document.getElementById('share-min-rel-label').textContent=this.value+'/10';updateSharePreview()">
+              <span id="share-min-rel-label" style="font-size:14px;font-weight:700;color:var(--gold);font-family:'IBM Plex Mono',monospace;min-width:40px">8/10</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Policy Domains to Show</div>
+            <div id="share-domain-checkboxes" style="display:grid;grid-template-columns:1fr 1fr;gap:5px"></div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Jurisdictions</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--text)"><input type="checkbox" class="share-juris-chk" value="Federal" checked style="accent-color:var(--cyan)" onchange="updateSharePreview()"> Federal</label>
+              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--text)"><input type="checkbox" class="share-juris-chk" value="BC" checked style="accent-color:var(--cyan)" onchange="updateSharePreview()"> BC</label>
+              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--text)"><input type="checkbox" class="share-juris-chk" value="Municipal" checked style="accent-color:var(--cyan)" onchange="updateSharePreview()"> Municipal</label>
+              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--text)"><input type="checkbox" class="share-juris-chk" value="Pan-Canadian" checked style="accent-color:var(--cyan)" onchange="updateSharePreview()"> Pan-Canadian</label>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Max Articles</div>
+            <input type="number" id="share-max-articles" value="25" min="5" max="100" class="filter-input" style="width:80px" onchange="updateSharePreview()">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text)"><input type="checkbox" id="share-show-why" checked style="accent-color:var(--cyan)" onchange="updateSharePreview()"> Include "Why It Matters" field</label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text)"><input type="checkbox" id="share-show-summary" checked style="accent-color:var(--cyan)" onchange="updateSharePreview()"> Include AI summaries</label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text)"><input type="checkbox" id="share-readonly-notice" checked style="accent-color:var(--cyan)"> Show "Read-Only" notice to recipients</label>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card" style="margin-bottom:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:12px">&#x1F4CA; Feed Preview Stats</div>
+          <div id="share-preview-stats" style="font-size:12px;color:var(--muted)">Configure settings then click Preview to see matching articles.</div>
+        </div>
+        <div class="card">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:12px">&#x2139; How it works</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.8">
+            The public feed opens in a new tab as a clean, print-friendly HTML page — no login, no edit controls, no backend writes possible.<br><br>
+            Recipients see: article headlines, sources, publish dates, AI summaries, and "Why It Matters" notes — filtered to the relevance and domains you set here.<br><br>
+            <strong style="color:var(--text)">No data is sent to any server.</strong> The page is generated entirely in the browser and opened locally.
+          </div>
+          <div style="margin-top:12px">
+            <button class="btn btn-ghost btn-sm" onclick="exportToGoogleSheets()">&#x1F4CA; Also: Export to Google Sheets CSV</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /page-share -->
+
+</div><!-- /#main -->
 
 <script>
 /* ═══════════════════════════════════════════════════
@@ -2802,14 +3232,17 @@ function buildResearchFetchConfig(){
 
 async function loadResearchArticles(){
   if(!API_BASE) return;
-  // Always load ALL articles; client-side filtering handles domain/sort/etc
   var d = await apiFetch('/scholarly?limit=500');
   if(d && d.articles){
     _researchArticles = d.articles.map(function(a){
-      // Normalise read/staged to boolean like news articles
+      var pubDate     = a.pub_date || '';
+      var scrapedDate = a.processed_date || '';
       return Object.assign({}, a, {
-        read:   a.read===1||a.read===true,
-        staged: a.staged===1||a.staged===true,
+        pubDate:      pubDate,
+        scrapedDate:  scrapedDate,
+        whyItMatters: a.why_it_matters || '',
+        read:         a.read   === 1 || a.read   === true,
+        staged:       a.staged === 1 || a.staged === true,
       });
     });
   }
@@ -2879,8 +3312,10 @@ function buildResearchCard(a, forDashboard){
   var tags = (a.tags||'').split(',').filter(function(t){return t.trim();});
   // Support multiple domains stored as comma-separated
   var domains = (a.domain||'').split(',').map(function(d){return d.trim();}).filter(Boolean);
-  var pub = a.pub_date||'';
-  var _age = pub ? (Date.now()-new Date(pub))/864e5 : 999;
+  var pub      = a.pub_date  || a.pubDate     || '';
+  var scraped  = a.scrapedDate || a.processed_date || '';
+  var _ageRef  = scraped || pub;
+  var _age     = _ageRef ? (Date.now()-new Date(_ageRef))/864e5 : 999;
   var ageBadge = _age<1?'<span class="age-badge age-today" title="Added today">&#x1F7E2; Today</span>'
                :_age<7?'<span class="age-badge age-week" title="Added this week">&#x1F7E1; This week</span>':'';
 
@@ -2898,7 +3333,8 @@ function buildResearchCard(a, forDashboard){
       +'<div class="research-card-title" style="font-size:12px;font-weight:600;line-height:1.4;margin-bottom:4px">'+escHtml(a.title)+'</div>'
       +(shortAbs?'<div class="research-abstract" style="font-size:10px;margin-bottom:4px;-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden">'+escHtml(shortAbs)+'</div>':'')
       +'<div class="article-footer" style="padding-top:5px;border-top:1px solid rgba(255,255,255,0.04)">'
-      +(pub?'<span class="article-date" style="font-size:9px">&#x1F4C5; '+pub+'</span>':'')
+      +(pub?'<span class="article-date" style="font-size:9px" title="Published">&#x1F4C5; '+pub+'</span>':'')
+      +(scraped&&scraped.slice(0,10)!==pub?'<span class="article-date" style="font-size:9px;color:var(--dim)" title="Found by scraper"> &middot; found '+scraped.slice(0,10)+'</span>':'')
       +'<button class="btn btn-cyan btn-sm" style="font-size:9px;padding:2px 7px;margin-left:auto" onclick="event.stopPropagation();openResearchPreview('+a.id+')">&#x25BA; Preview</button>'
       +'<a href="'+escHtml(a.url)+'" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="font-size:9px;padding:2px 7px" onclick="event.stopPropagation()">Open &#x2197;</a>'
       +'</div>'
@@ -2970,6 +3406,7 @@ function buildResearchCard(a, forDashboard){
     // footer
     +'<div class="article-footer">'
     +(pub?'<span class="article-date" title="Published">&#x1F4C5; '+pub+'</span>':'')
+    +(scraped&&scraped.slice(0,10)!==pub?'<span class="article-date" style="color:var(--dim);font-size:10px" title="Found by scraper"> &middot; found '+scraped.slice(0,10)+'</span>':'')
     +(a.read
       ?'<button class="btn btn-ghost btn-sm" onclick="markResearchRead('+a.id+',false)">&#x21A9; Unread</button>'
       :'<button class="btn btn-ghost btn-sm" onclick="markResearchRead('+a.id+',true)">&#x2713; Read</button>'
@@ -3209,28 +3646,38 @@ function openResearchPreview(id){
     +((a.domain||'').split(',').map(function(d){d=d.trim();return d?'<span class="tag tag-domain">'+escHtml(d)+'</span>':''}).join(''))
     +(a.jurisdiction?'<span class="tag tag-juris">'+escHtml(a.jurisdiction)+'</span>':'')
     +(a.relevance?'<span class="relevance-badge">'+rEmoji_r(a.relevance)+' '+a.relevance+'/10</span>':'');
+  var _rPub     = a.pub_date  || a.pubDate     || '';
+  var _rScraped = a.scrapedDate || a.processed_date || '';
   if(datesEl) datesEl.innerHTML =
-    (a.pub_date?'<span>&#x1F4C5; <strong style="color:var(--text)">Published:</strong> <span style="color:var(--text)">'+a.pub_date+'</span></span>':'')
+    (_rPub
+      ? '<span title="Published">&#x1F4C5; <strong style="color:var(--text)">Published:</strong> <span style="color:var(--text)">'+_rPub+'</span></span>'
+      : '<span style="color:var(--muted);font-size:11px">&#x1F4C5; Publish date unavailable</span>')
+    +(_rScraped && _rScraped.slice(0,10) !== _rPub
+      ? '<span title="Found by scraper" style="color:var(--muted)"> &nbsp;&#x1F50D; <strong style="color:var(--muted)">Found:</strong> '+_rScraped.slice(0,10)+'</span>'
+      : '')
     +(a.authors?'<span style="color:var(--muted)"> &nbsp;&#x270D; '+escHtml(a.authors)+'</span>':'')
     +(a.database_name?'<span style="color:var(--muted)"> &nbsp;&#x1F4DA; '+escHtml(a.database_name)+'</span>':'');
   titleEl.textContent = a.title;
   summaryEl.textContent = a.summary || a.abstract || 'No summary available.';
-  whyEl.textContent = a.why_it_matters || '';
-  // Source URL — display and link
+  whyEl.textContent = a.why_it_matters || a.whyItMatters || '';
   urlEl.textContent = a.url;
   linkEl.href = a.url;
   linkEl.target = '_blank';
   linkEl.rel = 'noopener noreferrer';
 
-  // Show/hide buttons appropriately for research context
   var stageBtn = document.getElementById('preview-stage-btn');
-  if(stageBtn){ stageBtn.style.display = 'none'; } // no staging for research items
+  if(stageBtn){
+    stageBtn.style.display = 'inline-flex';
+    stageBtn.textContent = a.staged ? '\u2715 Remove from Digest' : '+ Add to Digest';
+    stageBtn.className = 'btn '+(a.staged?'btn-gold':'btn-green')+' btn-sm';
+    stageBtn.onclick = function(){ previewResearchStage(); };
+  }
   var readBtn = document.getElementById('preview-read-btn');
   if(readBtn){ readBtn.textContent = a.read ? '&#x21A9; Mark Unread' : '&#x2713; Mark Read'; }
   var aiReadBtn = document.getElementById('preview-ai-read-btn');
   if(aiReadBtn){ aiReadBtn.style.display = 'inline-flex'; }
   var notionBtn = document.getElementById('preview-notion-btn');
-  if(notionBtn){ notionBtn.style.display = 'none'; }
+  if(notionBtn){ notionBtn.style.display = (notionToken && notionArticleDbId) ? 'inline-flex' : 'none'; }
 
   // Populate preview tags section
   var previewTagsEl = document.getElementById('preview-tags');
@@ -3254,7 +3701,9 @@ function openResearchPreview(id){
 
   document.getElementById('preview-modal').classList.add('open');
   document.body.style.overflow = 'hidden';
+  setTimeout(function(){ loadPreviewNote('r'+id); }, 50);
   markResearchRead(id, true);
+  if(typeof gtag!=='undefined') gtag('event','research_preview',{event_category:'Engagement',event_label:a.title.slice(0,60)});
 }
 
 function previewRemoveResearchTag(el){
@@ -3272,6 +3721,22 @@ function previewRemoveResearchTag(el){
       }).join('')||'<span style="font-size:11px;color:var(--dim)">No tags yet</span>';
     }
   }
+}
+
+function previewResearchStage(){
+  if(!_researchPreviewId) return;
+  var a = _researchArticles.find(function(x){ return x.id===_researchPreviewId; });
+  if(!a) return;
+  a.staged = !a.staged;
+  reResearchCard(_researchPreviewId);
+  updateResearchBadge();
+  var stageBtn = document.getElementById('preview-stage-btn');
+  if(stageBtn){
+    stageBtn.textContent = a.staged ? '\u2715 Remove from Digest' : '+ Add to Digest';
+    stageBtn.className = 'btn '+(a.staged?'btn-gold':'btn-green')+' btn-sm';
+  }
+  if(a.staged) showToast('&#x2705;','Added to Digest','Research paper staged.',2000);
+  else          showToast('&#x2715;','Removed','Research paper removed from digest.',2000);
 }
 
 function addResearchToCitations(id){
@@ -3703,12 +4168,14 @@ const DIGEST_HISTORY_SEED=[
   {id:2,subject:"PolicyPulse Weekly — Apr 7, 2026",created:"2026-04-07",sent:"2026-04-07",recipients:3,token:"pp-def456"},
   {id:3,subject:"PolicyPulse Weekly — Mar 31, 2026",created:"2026-03-31",sent:"2026-03-31",recipients:3,token:"pp-ghi789"},
 ];
+var _sectionLimits=(function(){try{return JSON.parse(localStorage.getItem('pp_section_limits')||'null')||{};}catch(e){return {};}}());
+function getSectionMax(id,def){return _sectionLimits[id]!==undefined?_sectionLimits[id]:def;}
 const DS_DEF=[
-  {id:"headline",label:"🗞 Headline of the Week",max:1,items:[]},
-  {id:"federal",label:"🍁 Federal Policy Watch",max:3,items:[]},
-  {id:"provincial",label:"🏔 Provincial Policy Watch",max:3,items:[]},
-  {id:"regulatory",label:"📋 Regulatory & Funding Updates",max:2,items:[]},
-  {id:"radar",label:"📡 On Our Radar",max:5,items:[]},
+  {id:"headline",  label:"🗞 Headline of the Week",    get max(){return getSectionMax("headline",  3);},items:[]},
+  {id:"federal",   label:"🍁 Federal Policy Watch",    get max(){return getSectionMax("federal",   5);},items:[]},
+  {id:"provincial",label:"🏔 Provincial Policy Watch", get max(){return getSectionMax("provincial",5);},items:[]},
+  {id:"regulatory",label:"📋 Regulatory & Funding Updates",get max(){return getSectionMax("regulatory",4);},items:[]},
+  {id:"radar",     label:"📡 On Our Radar",             get max(){return getSectionMax("radar",    8);},items:[]},
 ];
 
 let articles=ARTICLES_SEED.map(a=>({...a}));
@@ -3814,7 +4281,7 @@ async function addKeyword(){
     watchlist.push(kw);
     if(API_BASE) await apiFetch('/watchlist',{method:'POST',body:JSON.stringify({keyword:kw})});
     renderWatchlist();
-    showToast('&#x1F50D;','Keyword Added','"'+kw+'" added to watchlist. It will be scraped on next run.',3000);
+    showToast('&#x1F50D;','Keyword Added','"'+kw+'" saved. It will drive Google News searches in the next scheduled scrape (weekdays 7 AM, Saturday 9 AM Vancouver time). Click Scrape Now to use it immediately.',5000);
   }
   inp.value='';
 }
@@ -3918,9 +4385,11 @@ function closePreview(){
   document.body.style.overflow = '';
   _previewArticleId = null;
   _researchPreviewId = null;
-  // Restore stage button for next news article preview
   var stageBtn = document.getElementById('preview-stage-btn');
-  if(stageBtn) stageBtn.style.display = 'inline-flex';
+  if(stageBtn){
+    stageBtn.style.display = 'inline-flex';
+    stageBtn.onclick = function(){ previewStage(); };
+  }
 }
 
 function openNoteForResearchPaper(researchId){
@@ -4287,6 +4756,17 @@ async function init(){
     setTimeout(function(){ bootLoader.style.display = 'none'; bootLoader.style.opacity = '1'; }, 420);
   }
 
+  // Wire share preview live updates
+  ['share-min-rel','share-max-articles','share-show-why','share-show-summary','share-readonly-notice'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.addEventListener('change', function(){ if(document.getElementById('page-share') && document.getElementById('page-share').style.display!=='none') updateSharePreview(); });
+  });
+  document.addEventListener('change',function(e){
+    if(e.target.classList.contains('share-domain-chk')||e.target.classList.contains('share-juris-chk')){
+      if(document.getElementById('page-share') && document.getElementById('page-share').style.display!=='none') updateSharePreview();
+    }
+  });
+
   setTimeout(function(){
     if (!API_BASE) { showToast('&#128268;', 'Connect Your Backend', 'Enter your Railway URL in any feed panel to load real articles.', 7000); }
     else { var ac = articles.filter(function(a){ return a.relevance >= 8 && !a.read; }).length; showToast('&#128225;', 'PolicyPulse Live', ac > 0 ? ac + ' high-relevance articles waiting.' : 'Feed loaded and up to date.', 4000); }
@@ -4300,10 +4780,7 @@ function _setBootStatus(msg){
 }
 
 async function showTab(n){
-  // Remove active from home tab too
-  var homeTab = document.getElementById('tab-home');
-  if(homeTab) homeTab.classList.remove('active');
-  ['dashboard','quickstart','scraper','digest','subscribers','askai','instructions','citations','notes','privacy','notion','research'].forEach(t=>{
+  ['dashboard','quickstart','scraper','digest','subscribers','briefing','askai','instructions','citations','notes','privacy','notion','research','analytics','tracker','share'].forEach(t=>{
     var pg=document.getElementById('page-'+t);
     var tb=document.getElementById('tab-'+t);
     if(pg) pg.style.display=t===n?'block':'none';
@@ -4339,6 +4816,7 @@ async function showTab(n){
   if(n==='subscribers') renderSubscribers();
   if(n==='citations'){ populateCiteSelect(); renderCitations(); }
   if(n==='notes'){ renderNotesList(); }
+  if(n==='briefing'){ renderBriefingTab(); }
   if(n==='notion'){ initNotionTab(); }
   if(n==='research'){
     if(API_BASE && !_researchInitialized){
@@ -4351,6 +4829,9 @@ async function showTab(n){
     researchTab('feed');
     updateResearchBadge();
   }
+  if(n==='analytics'){ renderAnalyticsDashboard(); }
+  if(n==='tracker'){   renderPolicyTracker(); }
+  if(n==='share'){     renderPublicFeedConfig(); }
 }
 
 function sIcon(s){return s==='Critical'?'🔴':s==='Supportive'?'🟢':'⚪';}
@@ -4393,6 +4874,7 @@ function buildCard(a,expanded){
         <button class="hbtn" onclick="event.stopPropagation();${a.read?'markUnread('+a.id+')':'markRead('+a.id+')'}">${a.read?'&#x21A9; Unread':'&#x2713; Read'}</button>
         <button class="hbtn" onclick="event.stopPropagation();toggleStage(${a.id})">${a.staged?'&#x2715; Unstage':'+&#x1F4C4; Stage'}</button>
         <button class="hbtn ${a.flagged?'hbtn-flagged':''}" onclick="event.stopPropagation();toggleFlag(${a.id})" title="${a.flagged?'Remove flag':'Flag article'}">${a.flagged?'&#x1F6A9;':'&#x2691;'} ${a.flagged?'Flagged':'Flag'}</button>
+        <button class="hbtn" onclick="event.stopPropagation();reanalyzeArticle(${a.id})" title="Re-run AI analysis">&#x1F504; Re-analyze</button>
         <button class="hbtn" onclick="event.stopPropagation();shareArticle(${a.id})">&#x1F517; Share</button>
         <button class="hbtn" onclick="event.stopPropagation();deleteArticle(${a.id})" title="Delete article permanently" style="color:#f87171">&#x1F5D1; Delete</button>
         ${notionToken&&notionArticleDbId?'<button class="hbtn hbtn-notion" onclick="event.stopPropagation();saveArticleToNotion('+a.id+')" title="Save to Notion">&#x1F5D2; Notion</button>':''}
@@ -4837,41 +5319,113 @@ function digestTab(t){
   document.getElementById('dt-staging').classList.toggle('active',t==='staging');
   document.getElementById('dt-history').classList.toggle('active',t==='history');
 }
+function _digestPlaceItem(key, a){
+  var tags=(a.tags||"").split(",").map(function(t){return t.trim();});
+  if(tags.includes("Briefing Note Worthy")||a.relevance===10){var s=digestSections.find(function(x){return x.id==="headline";});if(s&&s.items.length<s.max&&!s.items.includes(key)){s.items.push(key);return;}}
+  if((a.jurisdiction||"")==="Federal"){var s=digestSections.find(function(x){return x.id==="federal";});if(s&&s.items.length<s.max&&!s.items.includes(key)){s.items.push(key);return;}}
+  if((a.jurisdiction||"")==="BC"||(a.jurisdiction||"")==="Municipal"){var s=digestSections.find(function(x){return x.id==="provincial";});if(s&&s.items.length<s.max&&!s.items.includes(key)){s.items.push(key);return;}}
+  var s=digestSections.find(function(x){return x.id==="regulatory";});if(s&&s.items.length<s.max&&!s.items.includes(key))s.items.push(key);
+}
+function promptSectionLimit(sectionId,currentMax){
+  var n=parseInt(prompt("Max articles in this section (1-20):",currentMax));
+  if(isNaN(n)||n<1||n>20)return;
+  _sectionLimits[sectionId]=n;
+  try{localStorage.setItem("pp_section_limits",JSON.stringify(_sectionLimits));}catch(e){}
+  renderDigest();
+  showToast("⚙️","Section Limit Updated","Max set to "+n+".",2500);
+}
 function renderDigest(){
-  const staged=articles.filter(a=>a.staged);
-  digestSections.forEach(s=>s.items=[]);
-  staged.forEach(a=>{
-    if(a.tags&&(a.tags.includes('Briefing Note Worthy')||a.relevance===10)){const s=digestSections.find(x=>x.id==='headline');if(s&&s.items.length<s.max&&!s.items.includes(a.id)){s.items.push(a.id);return;}}
-    if(a.jurisdiction==='Federal'){const s=digestSections.find(x=>x.id==='federal');if(s&&s.items.length<s.max&&!s.items.includes(a.id)){s.items.push(a.id);return;}}
-    if(a.jurisdiction==='BC'||a.jurisdiction==='Municipal'){const s=digestSections.find(x=>x.id==='provincial');if(s&&s.items.length<s.max&&!s.items.includes(a.id)){s.items.push(a.id);return;}}
-    const s=digestSections.find(x=>x.id==='regulatory');if(s&&s.items.length<s.max&&!s.items.includes(a.id))s.items.push(a.id);
+  // Merge news + research staged items with prefixed keys (news=int, research="r"+id)
+  var sNews=articles.filter(function(a){return a.staged;}).map(function(a){
+    return Object.assign({},a,{_key:a.id,_type:"news"});
   });
-  if(!staged.length){document.getElementById('digest-sections').innerHTML='<div class="empty"><div class="empty-icon">📄</div><div class="empty-text">No articles staged yet.<br>Go to the <strong>Scraper</strong> and click <strong>+ Add to Digest</strong>.</div></div>';return;}
-  document.getElementById('digest-sections').innerHTML=digestSections.map(sec=>{
-    const items=sec.items.map(id=>articles.find(a=>a.id===id)).filter(Boolean);
-    return`<div class="digest-section">
-      <div class="digest-section-header"><span class="digest-section-title">${sec.label}</span><span style="font-size:10px;color:var(--dim)">${items.length}/${sec.max}</span></div>
-      ${items.length?items.map(a=>`<div class="digest-item">
-        <div style="flex:1">
-          <a href="${a.url}" target="_blank" style="font-size:13px;font-weight:600;color:var(--white);display:block;margin-bottom:3px;transition:color .15s" onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--white)'">${a.title} ↗</a>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:5px">${a.source} · ${a.pubDate}</div>
-          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px"><span class="tag tag-domain">${a.domain}</span><span class="tag tag-juris">${a.jurisdiction}</span><span class="relevance-badge">${rEmoji(a.relevance)} ${a.relevance}/10</span><span class="sentiment-badge">${sIcon(a.sentiment)} ${a.sentiment}</span></div>
-          <textarea class="why-input" placeholder="Why this matters…" rows="1">${a.whyItMatters}</textarea>
-        </div>
-        <button class="btn btn-red btn-sm" onclick="toggleStage(${a.id});renderDigest()" style="margin-left:12px;flex-shrink:0">✕</button>
-      </div>`).join(''):`<div style="padding:12px 16px;font-size:12px;color:var(--dim);font-style:italic">No items staged for this section.</div>`}
-    </div>`;
-  }).join('');
+  var sRes=(_researchArticles||[]).filter(function(a){return a.staged;}).map(function(a){
+    return Object.assign({},a,{_key:"r"+a.id,_type:"research",
+      source:a.source||a.database_name||"Research",
+      domain:a.domain||"Research",jurisdiction:a.jurisdiction||"",
+      pubDate:a.pubDate||a.pub_date||"",
+      whyItMatters:a.whyItMatters||a.why_it_matters||""});
+  });
+  var allStaged=sNews.concat(sRes);
+  digestSections.forEach(function(s){s.items=[];});
+  allStaged.forEach(function(a){_digestPlaceItem(a._key,a);});
+  if(!allStaged.length){
+    document.getElementById("digest-sections").innerHTML='<div class="empty"><div class="empty-icon">📄</div><div class="empty-text">No articles staged yet.<br>Go to <strong>News &amp; Articles</strong> or <strong>Research</strong> and click <strong>+ Add to Digest</strong>.</div></div>';
+    return;
+  }
+  var lookup={}; allStaged.forEach(function(a){lookup[a._key]=a;});
+  document.getElementById("digest-sections").innerHTML=digestSections.map(function(sec){
+    var items=sec.items.map(function(k){return lookup[k];}).filter(Boolean);
+    var over=items.length>=sec.max;
+    return '<div class="digest-section">'
+      +'<div class="digest-section-header"><span class="digest-section-title">'+sec.label+'</span>'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<span style="font-size:10px;color:'+(over?"var(--gold)":"var(--dim)")+'">'+items.length+'/'+sec.max+'</span>'
+      +'<button class="btn btn-ghost btn-sm" style="font-size:9px;padding:2px 7px" onclick="promptSectionLimit(\'"'+sec.id+'\'",'+sec.max+')">⚙ Limit</button>'
+      +'</div></div>'
+      +(items.length?items.map(function(a){
+        var isRes=a._type==="research";
+        var rmOnclick=isRes?"researchBulkStageOne("+a.id+");renderDigest()":"toggleStage("+a.id+");renderDigest()";
+        var dbBadge=isRes?'<span class="research-db-badge db-other" style="font-size:8px;margin-left:4px">'+(a.database_name||"Research")+'</span>':''; 
+        return '<div class="digest-item"><div style="flex:1">'
+          +'<a href="'+a.url+'" target="_blank" style="font-size:13px;font-weight:600;color:var(--white);display:block;margin-bottom:3px;transition:color .15s" onmouseover="this.style.color=\'var(--cyan)\'" onmouseout="this.style.color=\'var(--white)\'">'+a.title+' ↗</a>'
+          +'<div style="font-size:11px;color:var(--muted);margin-bottom:5px">'+a.source+' · '+a.pubDate+dbBadge+'</div>'
+          +'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">'
+          +(a.domain?'<span class="tag tag-domain">'+a.domain+'</span>':'')
+          +(a.jurisdiction?'<span class="tag tag-juris">'+a.jurisdiction+'</span>':'')
+          +(a.relevance?'<span class="relevance-badge">'+rEmoji(a.relevance)+' '+a.relevance+'/10</span>':'')
+          +(a.sentiment?'<span class="sentiment-badge">'+sIcon(a.sentiment)+' '+a.sentiment+'</span>':'')
+          +'</div>'
+          +'<textarea class="why-input" placeholder="Why this matters…" rows="1">'+escHtml(a.whyItMatters||'')+'</textarea>'
+          +'</div><button class="btn btn-red btn-sm" onclick="'+rmOnclick+'" style="margin-left:12px;flex-shrink:0">✕</button></div>';
+      }).join(''):'<div style="padding:12px 16px;font-size:12px;color:var(--dim);font-style:italic">No items staged for this section.</div>')
+      +'</div>';
+  }).join("");
 }
 function renderDigestHistory(){
-  document.getElementById('digest-history-tbody').innerHTML=digestHistory.map(d=>`<tr>
-    <td style="font-weight:500;color:var(--white)">${d.subject}</td>
-    <td style="font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace">${d.created}</td>
-    <td style="font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace">${d.sent}</td>
-    <td style="font-family:'IBM Plex Mono',monospace">${d.recipients}</td>
-    <td style="color:var(--cyan);font-size:11px;font-family:'IBM Plex Mono',monospace">${d.token}</td>
-    <td><div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm">View</button><button class="btn btn-ghost btn-sm">Re-send</button></div></td>
-  </tr>`).join('');
+  var search=(document.getElementById('digest-history-search')||{}).value||'';
+  var list=digestHistory.filter(function(d){return !search||(d.subject||'').toLowerCase().includes(search.toLowerCase());});
+  if(!list.length){
+    document.getElementById('digest-history-tbody').innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--dim);padding:24px;font-size:12px">'+(search?'No digests match your search.':'No digests sent yet.')+'</td></tr>';
+    return;
+  }
+  document.getElementById('digest-history-tbody').innerHTML=list.map(function(d){
+    var publicUrl=API_BASE?(API_BASE+'/digest/'+(d.token||'')):'';
+    return '<tr>'
+      +'<td style="font-weight:500;color:var(--white);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escHtml(d.subject||'')+'">'+escHtml(d.subject||'')+'</td>'
+      +'<td style="font-size:11px;color:var(--muted);font-family:IBM Plex Mono,monospace;white-space:nowrap">'+(d.created||'').slice(0,10)+'</td>'
+      +'<td style="font-size:11px;color:var(--muted);font-family:IBM Plex Mono,monospace;white-space:nowrap">'+(d.sent||d.created||'n/a').slice(0,10)+'</td>'
+      +'<td style="font-family:IBM Plex Mono,monospace">'+(d.recipients||0)+'</td>'
+      +'<td style="color:var(--cyan);font-size:11px;font-family:IBM Plex Mono,monospace">'+(d.token||'')+'</td>'
+      +'<td><div style="display:flex;gap:5px;flex-wrap:wrap">'
+      +(publicUrl?'<a href="'+publicUrl+'" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">&#x1F517; View</a>':'<button class="btn btn-ghost btn-sm" disabled title="Backend not connected">View</button>')
+      +'<button class="btn btn-cyan btn-sm" onclick="resendDigestEntry('+(d.id||0)+',\'"'+escHtml(d.token||'')+'\'",\'"'+escHtml(d.subject||'')+'\'")">&#x2709; Re-send</button>'
+      +'<button class="btn btn-ghost btn-sm" onclick="copyDigestToken(\'"'+escHtml(d.token||'')+'\'")">&#x2398; URL</button>'
+      +'</div></td></tr>';
+  }).join('');
+}
+function filterDigestHistory(q){ renderDigestHistory(); }
+function copyDigestToken(token){
+  if(!token||!API_BASE){showToast('&#x26A0;','No URL','Connect your Railway backend to generate shareable URLs.',4000);return;}
+  navigator.clipboard.writeText(API_BASE+'/digest/'+token).then(function(){
+    showToast('&#x1F517;','URL Copied','Public digest link copied.',3000);
+  });
+}
+async function resendDigestEntry(digestId,token,subject){
+  var active=subscribers.filter(function(s){return s.active;});
+  if(!active.length){showToast('&#x26A0;','No Subscribers','Add active subscribers in the Subscribers tab.',3000);return;}
+  if(!confirm('Re-send "'+subject+'" to '+active.length+' active subscriber'+(active.length!==1?'s':'')+'?'))return;
+  var html='';
+  if(token&&API_BASE){
+    try{var r=await fetch(API_BASE+'/digest/'+token);if(r.ok)html=await r.text();}catch(e){}
+  }
+  if(!html){showToast('&#x26A0;','No Content','Digest HTML not available. Try re-building and sending from the Staging Area.',5000);return;}
+  showToast('&#x2709;','Re-sending…','Delivering to '+active.length+' subscriber'+(active.length!==1?'s':'')+'.',3000);
+  try{
+    var resp=await apiFetch('/digests/send',{method:'POST',body:JSON.stringify({subject:subject,html_content:html,recipients:active.map(function(s){return{name:s.name,email:s.email};})})});
+    if(resp&&resp.ok) showToast('&#x2709;','Re-sent','Delivered to '+(resp.sent||active.length)+' subscriber'+(active.length!==1?'s':'')+'.',4000);
+    else showToast('&#x26A0;','Failed','Check SMTP in Railway env vars.',5000);
+  }catch(e){showToast('&#x26A0;','Error',e.message,4000);}
 }
 async function sendDigest(){
   const sc = stageCount();
@@ -4913,7 +5467,7 @@ async function sendDigest(){
     }
   } else {
     // No backend — copy to clipboard as fallback
-    const plain = staged.map(a=>a.title+'\n'+a.source+' | '+(a.pub_date||a.pubDate||'')+'\n'+(a.summary||'')+'\n\u1F4A1 '+(a.whyItMatters||a.why_it_matters||'')+'\n'+a.url+'\n').join('\n---\n\n');
+    const plain = staged.map(a=>a.title+'\n'+a.source+' | '+(a.pub_date||a.pubDate||'')+'\n'+(a.summary||'')+'\n💡 '+(a.whyItMatters||a.why_it_matters||'')+'\n'+a.url+'\n').join('\n---\n\n');
     navigator.clipboard.writeText(subject+'\n'+'='.repeat(subject.length)+'\n\n'+plain).then(function(){
       showToast('&#x2702;','Digest Copied','No backend connected — digest copied to clipboard. Paste into Gmail or Outlook to send manually.',6000);
     });
@@ -4987,9 +5541,15 @@ function buildDigestEmailHTML(staged, subject){
     +'</body></html>';
 }
 function copyDigest(){
-  const staged=articles.filter(a=>a.staged);if(!staged.length){alert('No articles staged yet.');return;}
-  const text='POLICYPULSE WEEKLY — '+new Date().toDateString()+'\n'+'═'.repeat(50)+'\n\n'+staged.map(a=>`${a.title}\n${a.source} | ${a.jurisdiction} | ${a.pubDate}\n${a.summary}\n💡 ${a.whyItMatters}\n🔗 ${a.url}\n`).join('\n');
-  navigator.clipboard.writeText(text).then(()=>alert('✓ Digest copied to clipboard.'));
+  var sNews=articles.filter(function(a){return a.staged;});
+  var sRes=(_researchArticles||[]).filter(function(a){return a.staged;});
+  var allStaged=sNews.concat(sRes);
+  if(!allStaged.length){showToast('&#x26A0;','Nothing Staged','Add articles to digest first.',3000);return;}
+  var lines=allStaged.map(function(a){
+    return (a.title||'')+'\n'+(a.source||'')+' | '+(a.jurisdiction||'')+' | '+(a.pubDate||a.pub_date||'')+'\n'+(a.summary||'')+'\n💡 '+(a.whyItMatters||a.why_it_matters||'')+'\n🔗 '+(a.url||'')+'\n';
+  });
+  var text='POLICYPULSE WEEKLY — '+new Date().toDateString()+'\n'+'='.repeat(50)+'\n\n'+lines.join('\n');
+  navigator.clipboard.writeText(text).then(function(){showToast('⎘','Digest Copied',allStaged.length+' articles copied (news + research).',3000);});
 }
 async function generatePublicUrl(){
   var staged = articles.filter(function(a){ return a.staged; });
@@ -5026,15 +5586,67 @@ async function generatePublicUrl(){
   }
 }
 
+function _alertBtn(subId, type, isOn){
+  var icon  = type==='urgent' ? '&#x1F525;' : '&#x1F4E1;';
+  var col   = type==='urgent' ? 'btn-red'   : 'btn-cyan';
+  return '<button class="btn btn-sm '+(isOn?col:'btn-ghost')+'" style="min-width:54px;font-size:10px" '
+    +'onclick="toggleSubAlert('+subId+',\''+type+'\','+(isOn?1:0)+')">'+icon+' '+(isOn?'On':'Off')+'</button>';
+}
 function renderSubscribers(){
-  document.getElementById('subscribers-tbody').innerHTML=subscribers.map(s=>`<tr>
-    <td style="font-weight:600;color:var(--white)">${s.name}</td>
-    <td style="color:var(--cyan)">${s.email}</td>
-    <td style="color:var(--muted)">${s.role}</td>
-    <td><span class="${s.active?'status-active':'status-inactive'}">${s.active?'● Active':'○ Inactive'}</span></td>
-    <td style="font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace">${s.added}</td>
-    <td><div style="display:flex;gap:6px"><button class="btn ${s.active?'btn-red':'btn-green'} btn-sm" onclick="toggleSub(${s.id})">${s.active?'Deactivate':'Activate'}</button><button class="btn btn-ghost btn-sm" onclick="removeSub(${s.id})">Remove</button></div></td>
-  </tr>`).join('');
+  document.getElementById('subscribers-tbody').innerHTML=subscribers.map(function(s){
+    var ua = s.urgent_alerts===1||s.urgent_alerts===true;
+    var ka = s.keyword_alerts===1||s.keyword_alerts===true;
+    var name  = escHtml(s.name||'');
+    var email = escHtml(s.email||'');
+    var role  = escHtml(s.role||'Reader');
+    var added = (s.added||s.added_date||'').slice(0,10);
+    return '<tr>'
+      +'<td style="font-weight:600;color:var(--white)">'+name+'</td>'
+      +'<td style="color:var(--cyan);font-size:12px">'+email+'</td>'
+      +'<td style="color:var(--muted);font-size:11px">'+role+'</td>'
+      +'<td><span class="'+(s.active?'status-active':'status-inactive')+'">'+(s.active?'&#x25CF; Active':'&#x25CB; Inactive')+'</span></td>'
+      +'<td style="text-align:center">'+_alertBtn(s.id,'urgent',ua)+'</td>'
+      +'<td style="text-align:center">'+_alertBtn(s.id,'keyword',ka)+'</td>'
+      +'<td style="font-size:11px;color:var(--muted);font-family:\'IBM Plex Mono\',monospace">'+added+'</td>'
+      +'<td><div style="display:flex;gap:6px">'
+      +'<button class="btn '+(s.active?'btn-red':'btn-green')+' btn-sm" onclick="toggleSub('+s.id+')">'+(s.active?'Deactivate':'Activate')+'</button>'
+      +'<button class="btn btn-ghost btn-sm" onclick="removeSub('+s.id+')">Remove</button>'
+      +'</div></td>'
+      +'</tr>';
+  }).join('');
+}
+async function toggleSubAlert(id, type, currentVal){
+  var s = subscribers.find(function(x){ return x.id===id; });
+  if(!s) return;
+  var newVal = currentVal ? 0 : 1;
+  if(type==='urgent')  s.urgent_alerts  = newVal;
+  else                  s.keyword_alerts = newVal;
+  renderSubscribers();
+  saveSubscribers();
+  if(API_BASE){
+    await apiFetch('/subscribers/'+id+'/alerts',{
+      method:'PATCH',
+      body:JSON.stringify({urgent_alerts:s.urgent_alerts?1:0, keyword_alerts:s.keyword_alerts?1:0})
+    });
+  }
+  var label = type==='urgent' ? 'Urgent Alerts' : 'Keyword Alerts';
+  showToast(newVal?'&#x1F514;':'&#x1F515;', label+' '+(newVal?'Enabled':'Disabled'), s.name+(newVal?' will receive ':' will not receive ')+label.toLowerCase()+'.',2500);
+}
+async function testUrgentAlert(){
+  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Railway backend to send alerts.',4000); return; }
+  showToast('&#x1F525;','Sending Test...','Sending urgent alert test to opted-in subscribers.',3000);
+  var d = await apiFetch('/alerts/test-urgent',{method:'POST',body:JSON.stringify({})});
+  if(d&&d.ok) showToast('&#x2705;','Test Sent','Delivered to '+d.sent+' subscriber'+(d.sent!==1?'s':'')+'. Check inboxes.',5000);
+  else showToast('&#x26A0;','Test Failed',(d&&d.detail)||'No opted-in subscribers or SMTP not configured.',5000);
+}
+async function testKeywordAlert(){
+  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Railway backend to send alerts.',4000); return; }
+  var kw = prompt('Test watchlist keyword:','DRIPA');
+  if(!kw) return;
+  showToast('&#x1F4E1;','Sending Test...','Sending keyword alert test for "'+kw+'".',3000);
+  var d = await apiFetch('/alerts/test-keyword',{method:'POST',body:JSON.stringify({keyword:kw})});
+  if(d&&d.ok) showToast('&#x2705;','Test Sent','Delivered to '+d.sent+' subscriber'+(d.sent!==1?'s':'')+'. Check inboxes.',5000);
+  else showToast('&#x26A0;','Test Failed',(d&&d.detail)||'No opted-in subscribers or SMTP not configured.',5000);
 }
 function toggleSub(id){const s=subscribers.find(x=>x.id===id);if(s)s.active=!s.active;saveSubscribers();renderSubscribers();}
 async function removeSub(id){
@@ -5230,6 +5842,66 @@ function dismissToast(t){
   setTimeout(function(){if(t&&t.parentElement)t.parentElement.removeChild(t);},250);
 }
 
+
+/* === RE-ANALYZE === */
+async function reanalyzeArticle(id){
+  if(!API_BASE){showToast('&#x26A0;','No Backend','Connect your Railway backend to use Re-analyze.',4000);return;}
+  var a=articles.find(function(x){return x.id===id;});
+  if(!a)return;
+  showToast('&#x1F504;','Re-analyzing','Fetching article and running AI analysis…',4000);
+  var d=await apiFetch('/articles/'+id+'/reanalyze',{method:'POST'});
+  if(d&&d.ok){
+    Object.assign(a,{domain:d.result.domain,jurisdiction:d.result.jurisdiction,relevance:d.result.relevance,
+      sentiment:d.result.sentiment,summary:d.result.summary,
+      why_it_matters:d.result.why_it_matters,whyItMatters:d.result.why_it_matters,
+      tags:(d.result.tags||[]).join(',')});
+    reCard(id);
+    showToast('&#x2728;','Re-analyzed','AI updated: '+d.result.domain+' · '+d.result.relevance+'/10 · '+d.result.sentiment,4000);
+  } else if(d&&d.detail){
+    showToast('&#x26A0;','Re-analyze',d.detail,5000);
+  } else {
+    showToast('&#x26A0;','Error','Re-analysis failed. Check Railway logs.',4000);
+  }
+}
+
+/* === DB PRUNING === */
+async function prunePreview(){
+  if(!API_BASE){showToast('&#x26A0;','No Backend','Connect your Railway backend to use pruning.',4000);return;}
+  var days=parseInt(document.getElementById('prune-days-inp').value)||180;
+  var d=await apiFetch('/articles/prune/preview?days='+days);
+  var el=document.getElementById('prune-result');
+  if(d&&el){
+    el.style.display='block';
+    el.style.background=d.would_delete>0?'rgba(244,63,94,0.08)':' rgba(16,185,129,0.08)';
+    el.style.border=d.would_delete>0?'1px solid rgba(244,63,94,0.25)':' 1px solid rgba(16,185,129,0.25)';
+    el.style.color=d.would_delete>0?'#fb7185':'var(--green)';
+    el.innerHTML=d.would_delete>0
+      ?'&#x26A0; '+d.would_delete+' articles (published before '+d.cutoff_date+') would be permanently deleted. '+d.total+' total in DB.'
+      :'&#x2713; No articles are older than '+days+' days. Nothing to prune.';
+  }
+}
+async function pruneArticles(){
+  if(!API_BASE){showToast('&#x26A0;','No Backend','Connect your Railway backend to use pruning.',4000);return;}
+  var days=parseInt(document.getElementById('prune-days-inp').value)||180;
+  var preview=await apiFetch('/articles/prune/preview?days='+days);
+  if(!preview)return;
+  if(preview.would_delete===0){showToast('&#x2713;','Nothing to Prune','No articles older than '+days+' days.',3000);return;}
+  if(!confirm('Permanently delete '+preview.would_delete+' articles published before '+preview.cutoff_date+'?\n\nStaged articles will NOT be deleted.\n\nThis cannot be undone.'))return;
+  var d=await apiFetch('/articles/prune?days='+days,{method:'DELETE'});
+  var el=document.getElementById('prune-result');
+  if(d&&d.ok){
+    showToast('&#x1F5D1;','Pruned',d.deleted+' articles deleted. DB cleaned up.',4000);
+    // Remove deleted articles from local array and refresh feed
+    var cutoff=d.cutoff_date;
+    articles=articles.filter(function(a){return a.staged||(a.pub_date||a.pubDate||'9999')>=cutoff;});
+    _articleCache=[];_cacheTime=0;
+    renderFeed();renderDashboard();updateBadges();
+    if(el){el.style.display='block';el.style.background='rgba(16,185,129,0.08)';el.style.border='1px solid rgba(16,185,129,0.25)';el.style.color='var(--green)';
+      el.innerHTML='&#x2713; '+d.deleted+' articles deleted. Database pruned to '+days+' days.';}
+  } else {
+    showToast('&#x26A0;','Prune Failed','Check Railway logs.',4000);
+  }
+}
 
 /* === DARK/LIGHT MODE === */
 var _isDark = localStorage.getItem('pp_theme') !== 'light';
@@ -5451,9 +6123,15 @@ function exportArticlePDF(){
 /* === ARTICLE NOTES === */
 var _notes = {};
 try { _notes = JSON.parse(localStorage.getItem('pp_notes')||'{}'); } catch(e){ _notes={}; }
+function _previewNoteKey(){
+  if(_researchPreviewId) return 'r'+_researchPreviewId;
+  if(_previewArticleId)  return String(_previewArticleId);
+  return null;
+}
 function savePreviewNote(val){
-  if(!_previewArticleId) return;
-  _notes[String(_previewArticleId)] = val;
+  var key = _previewNoteKey();
+  if(!key) return;
+  _notes[key] = val;
   try { localStorage.setItem('pp_notes', JSON.stringify(_notes)); } catch(e){}
 }
 function loadPreviewNote(id){
@@ -6104,16 +6782,8 @@ function exportCitationsPDF(){
 
 /* ═══ LANDING PAGE ═══ */
 function showLanding(){
-  var lp = document.getElementById('landing-page');
-  if(lp){ lp.style.display='block'; lp.style.position='fixed'; lp.style.inset='0'; lp.style.zIndex='2000'; }
-  // Mark home tab as active
-  var homeTab = document.getElementById('tab-home');
-  if(homeTab) homeTab.classList.add('active');
-  ['dashboard','quickstart','scraper','digest','subscribers','askai','instructions','citations','notes','privacy','notion','research'].forEach(function(t){
-    var tb = document.getElementById('tab-'+t);
-    if(tb) tb.classList.remove('active');
-  });
-  if(typeof gtag!=='undefined') gtag('event','landing_view',{event_category:'Navigation'});
+  // Home button now links directly to index.html — this is kept as fallback
+  window.location.href = 'index.html';
 }
 function enterApp(){
   var lp = document.getElementById('landing-page');
@@ -6121,31 +6791,33 @@ function enterApp(){
   document.getElementById('banner').style.display='flex';
   document.getElementById('nav').style.display='flex';
   document.getElementById('main').style.display='block';
-  // Activate dashboard tab
-  var homeTab = document.getElementById('tab-home');
-  if(homeTab) homeTab.classList.remove('active');
-  var dashTab = document.getElementById('tab-dashboard');
-  if(dashTab) dashTab.classList.add('active');
-  document.getElementById('page-dashboard').style.display='block';
+  // Activate dashboard
+  ['dashboard','quickstart','scraper','digest','subscribers','briefing','askai','instructions','citations','notes','privacy','notion','research','analytics','tracker','share'].forEach(function(t){
+    var pg = document.getElementById('page-'+t);
+    var tb = document.getElementById('tab-'+t);
+    if(pg) pg.style.display = t==='dashboard' ? 'block' : 'none';
+    if(tb) tb.classList.toggle('active', t==='dashboard');
+  });
   localStorage.setItem('pp_visited','1');
   if(typeof gtag!=='undefined') gtag('event','enter_app',{event_category:'Navigation'});
-  // Always init (guard prevents double-fire)
   if(!_appInitialized) init();
-  // Show API modal if no key — AFTER init so the app is already running
   var k = sessionStorage.getItem('pp_groq_key');
   if(!k) document.getElementById('api-modal').classList.add('show');
 }
 
 /* ═══ ONBOARDING TOUR ═══ */
 var _tourSteps = [
-  {tab:'dashboard',icon:'&#x1F4CA;',title:'Dashboard',body:'Your command centre. See live stats, high-relevance alerts with a pulsing indicator, and your most recent articles at a glance. Clear read articles with one click.',anchor:null},
-  {tab:'scraper',icon:'&#x1F4E1;',title:'Article Feed & Scraper',body:'Real-time policy articles from 20+ BC and Canadian government sources, AI-tagged by domain, jurisdiction, relevance, and sentiment. Use the tag chips and filters to zero in on what matters.',anchor:null},
-  {tab:'scraper',icon:'&#x1F3F7;',title:'Keyword Watchlist',body:'In Search & Archive, add keywords like "DRIPA", "pharmacare", or "TRC". The scraper uses these to search Google News across the entire internet — not just your 20 fixed sources.',anchor:null},
-  {tab:'digest',icon:'&#x1F4C4;',title:'Digest Builder',body:'Stage articles into structured briefing sections: Headline of the Week, Federal Watch, Provincial Watch, and On Our Radar. Add "Why It Matters" notes then export as PDF or send by email.',anchor:null},
-  {tab:'citations',icon:'&#x1F4DA;',title:'Citations & Bibliography',body:'Auto-generate APA, MLA, and Chicago citations for any article in your feed. Use AI Auto-Generate to have Groq format all citations to academic standards in seconds.',anchor:null},
-  {tab:'askai',icon:'&#x1F916;',title:'Ask AI',body:'Chat with Groq AI about your article database. Ask "What should go in this week\'s digest?", "Summarize reconciliation news this month", or "What are the most urgent items?".',anchor:null},
-  {tab:'instructions',icon:'&#x1F4D6;',title:'Reference Guide',body:'The Reference Guide tab has colour codes, sentiment tags, relevance scores, flag and staging explanations, and digest send notes. The Quick Start tab walks you through setup step by step.',anchor:null},
-  {tab:'dashboard',icon:'&#x2705;',title:'You\'re Ready!',body:'PolicyPulse is ready to use. Connect your Railway backend in any feed panel to enable live scraping and persistent data. Enter your free Groq API key to activate AI features.',anchor:null},
+  {tab:'dashboard',icon:'&#x1F4CA;',title:'Dashboard',body:'Your command centre. Live stats, high-relevance alerts, and your most recent news and research articles side-by-side at a glance.'},
+  {tab:'scraper',icon:'&#x1F4E1;',title:'Article Feed & Scraper',body:'Real-time policy articles from 20+ BC and Canadian government sources, AI-tagged by domain, jurisdiction, relevance, and sentiment. Press <strong>?</strong> in this tab for keyboard shortcuts (J/K to navigate, R to read, S to stage).'},
+  {tab:'research',icon:'&#x1F4DA;',title:'Research & Scholarly',body:'Peer-reviewed articles from OpenAlex, Semantic Scholar, PubMed, DOAJ, arXiv, and Canadian think-tanks — all open access. Click "Fetch New Research" to pull the latest academic policy coverage.'},
+  {tab:'digest',icon:'&#x1F4C4;',title:'Digest Builder',body:'Stage articles into structured briefing sections: Headline of the Week, Federal Watch, Provincial Watch, Regulatory & Funding, and On Our Radar. Print, export PDF, or email to your subscriber list.'},
+  {tab:'analytics',icon:'&#x1F4CA;',title:'Analytics Dashboard',body:'Strategic intelligence from your database — domain activity charts, sentiment trends, source performance rankings by relevance score, keyword frequency cloud, and a one-click Monthly Policy Report PDF.'},
+  {tab:'tracker',icon:'&#x1F4CD;',title:'Policy Position Tracker',body:'Create named topics (e.g. "Bill 22", "DRIPA Year 3 Report") and build a chronological timeline by linking articles. Use "AI: What Changed?" to surface only what is genuinely new vs. previously covered.'},
+  {tab:'share',icon:'&#x1F310;',title:'Public Feed',body:'Generate a clean read-only policy page to share with board members or leadership — no login required, no backend writes. Configure by relevance threshold, domain, and jurisdiction. Also exports the full database to Google Sheets CSV.'},
+  {tab:'askai',icon:'&#x1F916;',title:'Ask AI',body:'Chat with Groq AI about your article database. Ask "What should go in this week\'s digest?", "Summarize reconciliation news", or "Draft a briefing note for the VP Indigenous Relations."'},
+  {tab:'citations',icon:'&#x1F4DA;',title:'Citations & Bibliography',body:'Auto-generate APA, MLA, and Chicago citations for any article. The AI Auto-Generate button refines every entry to academic standards. Export as formatted PDF bibliography.'},
+  {tab:'briefing',icon:'&#x1F4CB;',title:'Briefing Note Generator',body:'Select 3–8 articles, configure audience and context, and Groq AI drafts a full structured policy brief — Executive Summary, Key Developments, Implications, and Recommended Actions — as a downloadable .docx file.'},
+  {tab:'dashboard',icon:'&#x2705;',title:'You\'re Ready!',body:'PolicyPulse is fully set up. Connect your Railway backend for live scraping. Enter a free Groq API key at console.groq.com for AI features. Use the keyboard shortcut <strong>?</strong> anywhere in the feed for navigation help.'},
 ];
 var _tourStep = 0;
 var _tourActive = false;
@@ -6182,7 +6854,7 @@ function renderTourStep(){
   document.getElementById('tour-step-label').textContent = 'Step '+(_tourStep+1)+' of '+_tourSteps.length;
   document.getElementById('tour-icon').innerHTML = s.icon;
   document.getElementById('tour-title').textContent = s.title;
-  document.getElementById('tour-body').textContent = s.body;
+  document.getElementById('tour-body').innerHTML = s.body;
   // Dots
   var dots = document.getElementById('tour-dots');
   dots.innerHTML = _tourSteps.map(function(_,i){
@@ -6275,13 +6947,7 @@ function loadScheduleUI(){
 }
 
 /* ═══ DIGEST HISTORY SEARCH ═══ */
-function filterDigestHistory(q){
-  q = (q||'').toLowerCase();
-  var rows = document.querySelectorAll('#digest-history-tbody tr');
-  rows.forEach(function(row){
-    row.style.display = (!q || row.textContent.toLowerCase().includes(q)) ? '' : 'none';
-  });
-}
+/* filterDigestHistory: see renderDigestHistory() above */
 
 /* ═══ EMPTY STATE IMPROVEMENTS ═══ */
 function renderEmptyDashboard(){
@@ -6299,42 +6965,18 @@ function renderEmptyDashboard(){
 }
 
 /* ═══ INIT BOOT SEQUENCE ═══ */
-// Show landing on first visit, skip if returning user or ?enter=1 param
+// app.html always loads directly — landing page is index.html
 (function(){
-  var visited = localStorage.getItem('pp_visited');
-  var params = new URLSearchParams(window.location.search);
-  var enterDirect = params.get('enter') === '1';
-  
-  if(enterDirect){
-    // Coming from about page — go straight to app, mark as visited
-    localStorage.setItem('pp_visited','1');
-    var lp = document.getElementById('landing-page');
-    if(lp) lp.style.display='none';
-    document.getElementById('banner').style.display='flex';
-    document.getElementById('nav').style.display='flex';
-    document.getElementById('main').style.display='block';
-    var k = sessionStorage.getItem('pp_groq_key');
-    if(!k) document.getElementById('api-modal').classList.add('show');
-    else if(!_appInitialized) init();
-    if(typeof gtag!=='undefined') gtag('event','enter_from_about',{event_category:'Navigation'});
-  } else if(!visited){
-    // First time visitor with no param — show landing page overlay
-    document.getElementById('api-modal').classList.remove('show');
-    document.getElementById('banner').style.display='flex';
-    document.getElementById('nav').style.display='flex';
-    document.getElementById('main').style.display='block';
-    var lp = document.getElementById('landing-page');
-    if(lp){ lp.style.display='block'; lp.style.position='fixed'; lp.style.inset='0'; lp.style.zIndex='2000'; }
-    if(typeof gtag!=='undefined') gtag('event','first_visit',{event_category:'Onboarding'});
-  } else {
-    // Returning user — go straight to app
-    var lp = document.getElementById('landing-page');
-    if(lp) lp.style.display='none';
-    document.getElementById('banner').style.display='flex';
-    document.getElementById('nav').style.display='flex';
-    document.getElementById('main').style.display='block';
-    if(!_appInitialized) init();
-  }
+  var lp = document.getElementById('landing-page');
+  if(lp) lp.style.display = 'none';
+  document.getElementById('banner').style.display = 'flex';
+  document.getElementById('nav').style.display    = 'flex';
+  document.getElementById('main').style.display   = 'block';
+  localStorage.setItem('pp_visited','1');
+  var k = sessionStorage.getItem('pp_groq_key');
+  if(!k) document.getElementById('api-modal').classList.add('show');
+  else if(!_appInitialized) init();
+  if(typeof gtag!=='undefined') gtag('event','app_open',{event_category:'Navigation'});
 })();
 
 
@@ -6538,7 +7180,7 @@ function exportCurrentNotePDF(){
     +'</body></html>';
   var win = window.open('','_blank','width=800,height=900');
   if(win){ win.document.write(html); win.document.close(); setTimeout(function(){win.print();},500); }
-  showToast('\u1F4C4;','PDF Export','Print dialog opened. Choose "Save as PDF".',4000);
+  showToast('📄','PDF Export','Print dialog opened. Choose "Save as PDF".',4000);
 }
 
 function handlePdfUpload(input){
@@ -6552,7 +7194,7 @@ function handlePdfUpload(input){
     note.pdfs.push({ name: file.name, dataUrl: e.target.result, added: new Date().toISOString() });
     saveNotesData();
     renderNotePdfs(note);
-    showToast('\u1F4CE;','PDF Attached','"'+file.name+'" attached to this note.',3000);
+    showToast('📎','PDF Attached','"'+file.name+'" attached to this note.',3000);
   };
   reader.readAsDataURL(file);
   input.value = '';
@@ -6917,226 +7559,6 @@ function initNotionTab(){
   if(ti) ti.value = notionToken ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : '';
   if(ai) ai.value = notionArticleDbId || '';
   if(ni) ni.value = notionNotesDbId   || '';
-  if(notionToken && API_BASE) updateNotionStatusBar('connected');
-  else if(notionToken)        updateNotionStatusBar('no-backend');
-  else                        updateNotionStatusBar('disconnected');
-  updateNotionButtons();
-}
-
-
-/* ═══════════════════════════════════════════════════
-   NOTION INTEGRATION
-   All calls proxied through Railway: POST /notion/push
-   Token stored in localStorage, never server-side.
-═══════════════════════════════════════════════════ */
-
-function saveNotionSettings(){
-  var token   = (document.getElementById('notion-token-inp').value||'').trim();
-  var artDb   = (document.getElementById('notion-article-db-inp').value||'').trim().replace(/-/g,'');
-  var notesDb = (document.getElementById('notion-notes-db-inp').value||'').trim().replace(/-/g,'');
-  if(!token || token.startsWith('•')){
-    showToast('⚠','Missing Token','Paste your Notion integration token first.',3000); return;
-  }
-  notionToken       = token;
-  notionArticleDbId = artDb;
-  notionNotesDbId   = notesDb;
-  localStorage.setItem('pp_notion_token',      token);
-  localStorage.setItem('pp_notion_article_db', artDb);
-  localStorage.setItem('pp_notion_notes_db',   notesDb);
-  testNotionConnection();
-}
-
-function clearNotionSettings(){
-  notionToken = ''; notionArticleDbId = ''; notionNotesDbId = '';
-  ['pp_notion_token','pp_notion_article_db','pp_notion_notes_db'].forEach(function(k){
-    localStorage.removeItem(k);
-  });
-  var ti=document.getElementById('notion-token-inp');
-  var ai=document.getElementById('notion-article-db-inp');
-  var ni=document.getElementById('notion-notes-db-inp');
-  if(ti) ti.value=''; if(ai) ai.value=''; if(ni) ni.value='';
-  updateNotionStatusBar('disconnected');
-  updateNotionButtons();
-  showToast('🗒','Notion Disconnected','Settings cleared.',2500);
-}
-
-async function testNotionConnection(){
-  if(!notionToken){ updateNotionStatusBar('disconnected'); return; }
-  if(!API_BASE){ updateNotionStatusBar('no-backend'); return; }
-  updateNotionStatusBar('testing');
-  try {
-    var res = await apiFetch('/notion/test', {
-      method: 'POST',
-      body: JSON.stringify({ token: notionToken })
-    });
-    if(res && res.ok){
-      updateNotionStatusBar('connected', res.workspace || 'Connected');
-      updateNotionButtons();
-      showToast('✅','Notion Connected','Integration working. Buttons are now active.',3000);
-    } else {
-      updateNotionStatusBar('error', (res && res.detail) || 'Token rejected by Notion');
-    }
-  } catch(e){ updateNotionStatusBar('error', e.message); }
-}
-
-function updateNotionStatusBar(state, detail){
-  var icon = document.getElementById('notion-status-icon');
-  var text = document.getElementById('notion-status-text');
-  var s = {
-    disconnected: ['⚪','Not connected — paste your integration token and click Save & Test','var(--muted)'],
-    testing:      ['🟡','Testing connection to Notion...','var(--muted)'],
-    connected:    ['🟢','Connected — '+(detail||'workspace'),'var(--green)'],
-    'no-backend': ['🟠','Railway backend required — connect your backend first','#fb923c'],
-    error:        ['🔴','Connection failed: '+(detail||'unknown error'),'#f87171'],
-  };
-  var m = s[state] || s.disconnected;
-  if(icon) icon.innerHTML = m[0];
-  if(text){ text.textContent = m[1]; text.style.color = m[2]; }
-}
-
-function updateNotionButtons(){
-  var active     = !!(notionToken && notionArticleDbId && API_BASE);
-  var notesActive= !!(notionToken && notionNotesDbId   && API_BASE);
-  var db = document.getElementById('notion-digest-btn');
-  var nb = document.getElementById('notion-note-btn');
-  if(db) db.style.display = active      ? 'inline-flex' : 'none';
-  if(nb) nb.style.display = notesActive ? 'inline-flex' : 'none';
-}
-
-async function notionProxy(endpoint, payload){
-  if(!API_BASE)    throw new Error('Railway backend not connected');
-  if(!notionToken) throw new Error('Notion token not set');
-  var res = await apiFetch('/notion/push', {
-    method: 'POST',
-    body: JSON.stringify({ token: notionToken, endpoint: endpoint, payload: payload })
-  });
-  if(!res || (!res.ok && !res.id)) throw new Error((res && res.detail) || 'Notion API error');
-  return res;
-}
-
-async function saveArticleToNotion(articleId){
-  var a = articles.find(function(x){ return x.id === articleId; });
-  if(!a){ showToast('⚠','Error','Article not found.',2500); return; }
-  if(!notionToken || !notionArticleDbId){
-    showToast('🗒','Notion Not Set Up','Go to the Notion tab to connect your workspace.',4000); return;
-  }
-  showToast('🗒','Saving to Notion',a.title.slice(0,60)+'...',2500);
-  try {
-    var tagList = (a.tags||'').split(',').filter(function(t){ return t.trim(); })
-                              .map(function(t){ return { name: t.trim() }; });
-    var pub = (a.pubDate||a.pub_date||'').slice(0,10);
-    var props = {
-      'Name':         { title:     [{ text: { content: a.title||'' } }] },
-      'Source':       { rich_text: [{ text: { content: a.source||'' } }] },
-      'Domain':       { select:    { name: a.domain||'Other' } },
-      'Jurisdiction': { select:    { name: a.jurisdiction||'Unknown' } },
-      'Relevance':    { number:    a.relevance||0 },
-      'Sentiment':    { select:    { name: a.sentiment||'Neutral' } },
-      'URL':          { url:       a.url||null },
-    };
-    if(pub)            props['Published']  = { date: { start: pub } };
-    if(tagList.length) props['Tags']       = { multi_select: tagList };
-    await notionProxy('pages', {
-      parent: { database_id: notionArticleDbId },
-      properties: props,
-      children: [
-        { object:'block', type:'heading_2',  heading_2:{ rich_text:[{ text:{ content:'Summary' } }] } },
-        { object:'block', type:'paragraph',  paragraph:{ rich_text:[{ text:{ content: a.summary||'No summary available.' } }] } },
-        { object:'block', type:'heading_2',  heading_2:{ rich_text:[{ text:{ content:'Why It Matters' } }] } },
-        { object:'block', type:'quote',      quote:    { rich_text:[{ text:{ content: a.whyItMatters||a.why_it_matters||'No analysis.' } }] } },
-        { object:'block', type:'bookmark',   bookmark: { url: a.url||'' } },
-      ]
-    });
-    showToast('✅','Saved to Notion',a.title.slice(0,60)+'...',3500);
-  } catch(e){ showToast('⚠','Notion Error',e.message,5000); }
-}
-
-async function pushDigestToNotion(){
-  var staged = articles.filter(function(a){ return a.staged; });
-  if(!staged.length){ showToast('⚠','Nothing Staged','Add articles to your digest first.',3000); return; }
-  if(!notionToken || !notionArticleDbId){
-    showToast('🗒','Notion Not Set Up','Go to the Notion tab to connect your workspace.',4000); return;
-  }
-  var subject = 'PolicyPulse Weekly — '
-    + new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
-  showToast('🗒','Pushing to Notion','Creating digest page...',3000);
-  try {
-    var children = [
-      { object:'block', type:'callout', callout:{
-          rich_text:[{ text:{ content: subject+' — '+staged.length+' article'+(staged.length!==1?'s':'') } }],
-          icon:{ emoji:'📡' }, color:'blue_background'
-      }},
-      { object:'block', type:'divider', divider:{} },
-    ];
-    staged.forEach(function(a){
-      children.push({ object:'block', type:'heading_3',
-        heading_3:{ rich_text:[{ text:{ content: a.title||'', link: a.url ? { url: a.url } : null } }] } });
-      var meta = [a.source, a.jurisdiction, a.pubDate||a.pub_date].filter(Boolean).join(' · ');
-      children.push({ object:'block', type:'paragraph',
-        paragraph:{ rich_text:[{ text:{ content: meta }, annotations:{ italic:true, color:'gray' } }] } });
-      if(a.summary) children.push({ object:'block', type:'paragraph',
-        paragraph:{ rich_text:[{ text:{ content: a.summary } }] } });
-      var why = a.whyItMatters||a.why_it_matters||'';
-      if(why) children.push({ object:'block', type:'quote',
-        quote:{ rich_text:[{ text:{ content: '💡 '+why } }] } });
-      children.push({ object:'block', type:'divider', divider:{} });
-    });
-    await notionProxy('pages', {
-      parent:     { database_id: notionArticleDbId },
-      properties: { 'Name': { title:[{ text:{ content: subject } }] } },
-      children:   children.slice(0,100)
-    });
-    showToast('✅','Digest Pushed to Notion', subject, 4000);
-  } catch(e){ showToast('⚠','Notion Error', e.message, 5000); }
-}
-
-async function syncNoteToNotion(){
-  if(!notionToken || !notionNotesDbId){
-    showToast('🗒','Notion Not Set Up','Set up the Notion integration and add your Notes Database ID.',4000); return;
-  }
-  var note = _notes_data.find(function(n){ return n.id === _currentNoteId; });
-  if(!note){ showToast('⚠','No Note Open','Open a note first, then sync it.',3000); return; }
-  showToast('🗒','Syncing to Notion', note.title||'Untitled', 2500);
-  try {
-    var tmp = document.createElement('div');
-    tmp.innerHTML = note.content||'';
-    var plain = (tmp.innerText||tmp.textContent||'').trim().slice(0,2000);
-    var props = {
-      'Name':    { title:     [{ text:{ content: note.title||'Untitled Note' } }] },
-      'Article': { rich_text: [{ text:{ content: note.linkedArticleTitle||'' } }] },
-      'Created': { date:      { start: (note.created||new Date().toISOString()).slice(0,10) } },
-    };
-    if(note.linkedArticleUrl) props['Article URL'] = { url: note.linkedArticleUrl };
-
-    if(note.researchId){
-      if(note.researchDoi){
-        props['DOI'] = {
-          rich_text: [{ text: { content: note.researchDoi } }]
-        };
-      }
-      if(note.researchAbstract){
-        props['Abstract'] = {
-          rich_text: [{ text: { content: note.researchAbstract.slice(0, 2000) } }]
-        };
-      }
-    }
-    await notionProxy('pages', {
-      parent:     { database_id: notionNotesDbId },
-      properties: props,
-      children: plain ? [{ object:'block', type:'paragraph',
-        paragraph:{ rich_text:[{ text:{ content: plain } }] } }] : []
-    });
-    showToast('✅','Note Synced to Notion', note.title||'Untitled', 3500);
-  } catch(e){ showToast('⚠','Notion Error', e.message, 5000); }
-}
-
-function initNotionTab(){
-  var ti = document.getElementById('notion-token-inp');
-  var ai = document.getElementById('notion-article-db-inp');
-  var ni = document.getElementById('notion-notes-db-inp');
-  if(ti) ti.value = notionToken        ? '••••••••••••' : '';
-  if(ai) ai.value = notionArticleDbId  || '';
-  if(ni) ni.value = notionNotesDbId    || '';
   if(notionToken && API_BASE) updateNotionStatusBar('connected');
   else if(notionToken)        updateNotionStatusBar('no-backend');
   else                        updateNotionStatusBar('disconnected');
@@ -7520,9 +7942,1350 @@ document.addEventListener('click',function(e){
   }
 });
 
+
+/* ═══════════════════════════════════════════════════════════════════
+   BRIEFING NOTE GENERATOR
+   Selects articles, calls Groq AI to write a structured policy brief,
+   then uses the docx library (CDN) to produce a downloadable .docx file.
+═══════════════════════════════════════════════════════════════════ */
+
+var _briefingSelected = new Set(); // article ids (news) selected for brief
+var _briefingMax = 8;
+
+function renderBriefingTab(){
+  _briefingSelected = new Set();
+  renderBriefingArticleList();
+  renderBriefingSelectedList();
+  _briefingUpdateBtns();
+  // Pre-fill date in title if blank
+  var titleInp = document.getElementById('briefing-title');
+  if(titleInp && !titleInp.value){
+    titleInp.value = 'Policy Watch — ' + new Date().toLocaleDateString('en-CA',{month:'long',year:'numeric'});
+  }
+}
+
+function renderBriefingArticleList(){
+  var container = document.getElementById('briefing-article-list');
+  if(!container) return;
+  var q    = (document.getElementById('briefing-search')||{}).value||'';
+  var dom  = (document.getElementById('briefing-filter-domain')||{}).value||'';
+  var sort = (document.getElementById('briefing-sort')||{}).value||'rel';
+
+  var list = articles.filter(function(a){
+    if(dom && (a.domain||'') !== dom) return false;
+    if(q){
+      var hay = ((a.title||'')+' '+(a.summary||'')+' '+(a.source||'')).toLowerCase();
+      if(!hay.includes(q.toLowerCase())) return false;
+    }
+    return true;
+  }).sort(function(a,b){
+    if(sort==='date') return new Date(b.pub_date||b.pubDate||0)-new Date(a.pub_date||a.pubDate||0);
+    return (b.relevance||0)-(a.relevance||0);
+  }).slice(0,60);
+
+  if(!list.length){
+    container.innerHTML = '<div class="empty" style="padding:20px"><div class="empty-icon" style="font-size:24px">&#x1F4CB;</div><div class="empty-text" style="font-size:11px">No articles match. Try clearing the filter.</div></div>';
+    return;
+  }
+
+  container.innerHTML = list.map(function(a){
+    var sel = _briefingSelected.has(a.id);
+    var rel = a.relevance||0;
+    var emoji = rel>=9?'&#x1F525;':rel>=7?'&#x2B50;':'&#x1F4CC;';
+    var borderCol = sel ? 'rgba(0,194,255,0.5)' : 'rgba(255,255,255,0.06)';
+    var bg        = sel ? 'rgba(0,194,255,0.08)' : 'rgba(11,24,41,0.7)';
+    return '<div onclick="briefingToggleArticle('+a.id+')" style="cursor:pointer;padding:10px 12px 9px 14px;border:1px solid '+borderCol+';background:'+bg+';border-radius:8px;transition:all .15s">'
+      +'<div style="display:flex;align-items:flex-start;gap:8px">'
+      +'<input type="checkbox" '+(sel?'checked':'')+' onclick="event.stopPropagation();briefingToggleArticle('+a.id+')" style="accent-color:var(--cyan);margin-top:3px;flex-shrink:0">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:12px;font-weight:600;color:var(--white);line-height:1.4;margin-bottom:4px">'+escHtml(a.title||'')+'</div>'
+      +'<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">'
+      +'<span class="tag tag-domain" style="font-size:8px">'+(a.domain||'')+'</span>'
+      +'<span class="tag tag-juris" style="font-size:8px">'+(a.jurisdiction||'')+'</span>'
+      +'<span class="relevance-badge" style="font-size:9px">'+emoji+' '+rel+'/10</span>'
+      +'<span style="font-size:9px;color:var(--dim);font-family:\'IBM Plex Mono\',monospace">'+(a.pub_date||a.pubDate||'')+'</span>'
+      +'</div>'
+      +'</div>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function briefingToggleArticle(id){
+  if(_briefingSelected.has(id)){
+    _briefingSelected.delete(id);
+  } else {
+    if(_briefingSelected.size >= _briefingMax){
+      showToast('&#x26A0;','Max '+_briefingMax+' Articles','Remove one before adding another.',3000);
+      return;
+    }
+    _briefingSelected.add(id);
+  }
+  renderBriefingArticleList();
+  renderBriefingSelectedList();
+  _briefingUpdateBtns();
+}
+
+function renderBriefingSelectedList(){
+  var container = document.getElementById('briefing-selected-list');
+  var countEl   = document.getElementById('briefing-sel-count');
+  var countEl2  = document.getElementById('briefing-count-label');
+  if(!container) return;
+  if(countEl)  countEl.textContent  = '('+_briefingSelected.size+')';
+  if(countEl2) countEl2.textContent = '('+_briefingSelected.size+' of max '+_briefingMax+')';
+  if(!_briefingSelected.size){
+    container.innerHTML = '<div style="font-size:11px;color:var(--dim);font-style:italic">No articles selected yet.</div>';
+    return;
+  }
+  container.innerHTML = Array.from(_briefingSelected).map(function(id){
+    var a = articles.find(function(x){ return x.id===id; });
+    if(!a) return '';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">'
+      +'<div style="flex:1;font-size:11px;font-weight:600;color:var(--text);line-height:1.4">'+escHtml(a.title||'')+'</div>'
+      +'<button onclick="briefingToggleArticle('+id+')" style="background:none;border:none;color:var(--dim);font-size:14px;cursor:pointer;flex-shrink:0;padding:0;line-height:1">&#x2715;</button>'
+      +'</div>';
+  }).join('');
+}
+
+function briefingClearAll(){
+  _briefingSelected = new Set();
+  renderBriefingArticleList();
+  renderBriefingSelectedList();
+  _briefingUpdateBtns();
+}
+
+function _briefingUpdateBtns(){
+  var enough = _briefingSelected.size >= 1;
+  ['briefing-generate-btn','briefing-generate-btn2'].forEach(function(id){
+    var btn = document.getElementById(id);
+    if(btn) btn.disabled = !enough;
+  });
+}
+
+function _briefingStatus(msg, type){
+  var el = document.getElementById('briefing-status');
+  if(!el) return;
+  el.style.display = 'block';
+  el.style.background = type==='error'   ? 'rgba(244,63,94,0.1)'   :
+                        type==='success'  ? 'rgba(16,185,129,0.1)'  :
+                                            'rgba(0,194,255,0.08)';
+  el.style.border    = type==='error'   ? '1px solid rgba(244,63,94,0.3)'   :
+                        type==='success'  ? '1px solid rgba(16,185,129,0.3)'  :
+                                            '1px solid rgba(0,194,255,0.2)';
+  el.style.color     = type==='error' ? '#f87171' : type==='success' ? '#34d399' : 'var(--text)';
+  el.innerHTML = msg;
+}
+
+async function generateBriefingNote(){
+  var key = apiKey || sessionStorage.getItem('pp_groq_key');
+  if(!key){
+    showToast('&#x1F511;','No API Key','Enter your Groq key in the Ask AI tab first.',4000);
+    return;
+  }
+  if(!_briefingSelected.size){
+    showToast('&#x26A0;','No Articles','Select at least one article.',3000);
+    return;
+  }
+
+  var selected = Array.from(_briefingSelected).map(function(id){ return articles.find(function(x){return x.id===id;}); }).filter(Boolean);
+  var title     = (document.getElementById('briefing-title')||{}).value     || 'Policy Intelligence Brief';
+  var recipient = (document.getElementById('briefing-recipient')||{}).value || '';
+  var author    = (document.getElementById('briefing-author')||{}).value    || 'PolicyPulse';
+  var context   = (document.getElementById('briefing-context')||{}).value   || '';
+  var inclSum   = document.getElementById('briefing-incl-summary') ? document.getElementById('briefing-incl-summary').checked : true;
+  var inclWhy   = document.getElementById('briefing-incl-why')     ? document.getElementById('briefing-incl-why').checked     : true;
+  var inclRefs  = document.getElementById('briefing-incl-refs')    ? document.getElementById('briefing-incl-refs').checked    : true;
+
+  ['briefing-generate-btn','briefing-generate-btn2'].forEach(function(id){
+    var btn = document.getElementById(id);
+    if(btn){ btn.disabled=true; btn.innerHTML='<span class="spin">&#8635;</span> Generating&hellip;'; }
+  });
+  _briefingStatus('<span class="spin" style="display:inline-block;margin-right:6px">&#8635;</span> Asking Groq AI to draft the briefing note&hellip; (15&ndash;30 seconds)', 'info');
+
+  // Build article context for the AI prompt
+  var articleContext = selected.map(function(a, i){
+    return (i+1)+'. TITLE: '+(a.title||'')
+      +'\n   SOURCE: '+(a.source||'')+' | DOMAIN: '+(a.domain||'')+' | JURISDICTION: '+(a.jurisdiction||'')
+      +' | RELEVANCE: '+(a.relevance||'')+'/10 | SENTIMENT: '+(a.sentiment||'')
+      +(inclSum && a.summary ? '\n   SUMMARY: '+a.summary : '')
+      +(inclWhy && (a.why_it_matters||a.whyItMatters) ? '\n   WHY IT MATTERS: '+(a.why_it_matters||a.whyItMatters) : '')
+      +'\n   URL: '+(a.url||'');
+  }).join('\n\n');
+
+  var systemPrompt = 'You are a senior government relations analyst at a Canadian post-secondary institution. '
+    +'Write structured policy briefing notes in professional Canadian government relations style. '
+    +'Be concrete, action-oriented, and specific. Use the exact article details provided. '
+    +'Never write generic filler sentences. Every sentence must contain specific policy content.';
+
+  var userPrompt = 'Write a structured policy briefing note with the following sections. '
+    +'Return plain text only — no markdown, no asterisks, no bullet dashes, just clean prose and section headers in ALL CAPS.\n\n'
+    +'BRIEFING TITLE: '+title+'\n'
+    +(recipient ? 'PREPARED FOR: '+recipient+'\n' : '')
+    +(author    ? 'PREPARED BY: '+author+'\n'    : '')
+    +'DATE: '+new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'})+'\n'
+    +(context   ? 'PURPOSE: '+context+'\n'       : '')
+    +'\n'
+    +'ARTICLES TO BRIEF ON ('+selected.length+' total):\n'+articleContext+'\n\n'
+    +'Write the following sections:\n'
+    +'1. EXECUTIVE SUMMARY (3-4 sentences covering the overall policy landscape this week)\n'
+    +'2. BACKGROUND (2-3 sentences of relevant context for a BC post-secondary government relations audience)\n'
+    +'3. KEY DEVELOPMENTS (one focused paragraph per article — name the specific policy, bill, funding amount, or decision; do not repeat the title)\n'
+    +'4. IMPLICATIONS FOR THE INSTITUTION (concrete implications for government relations, board obligations, funding, or compliance — be specific)\n'
+    +'5. RECOMMENDED ACTIONS (3-5 numbered concrete action items with owners and timelines where possible)\n'
+    +(inclRefs ? '6. REFERENCES (list each article title, source, and URL)\n' : '')
+    +'\nTone: professional, direct, senior-executive audience. No hedging language.';
+
+  var aiText = '';
+  try {
+    var resp = await fetch('https://api.groq.com/openai/v1/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+      body:JSON.stringify({
+        model:'llama-3.3-70b-versatile',
+        messages:[{role:'system',content:systemPrompt},{role:'user',content:userPrompt}],
+        max_tokens:2500,
+        temperature:0.25,
+      })
+    });
+    var data = await resp.json();
+    if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
+    aiText = data.choices&&data.choices[0] ? data.choices[0].message.content.trim() : '';
+    if(!aiText) throw new Error('Empty response from AI');
+  } catch(e){
+    _briefingStatus('&#x26A0; AI error: '+escHtml(e.message)+'. Check your Groq API key in the Ask AI tab.', 'error');
+    ['briefing-generate-btn','briefing-generate-btn2'].forEach(function(id){
+      var btn=document.getElementById(id); if(btn){btn.disabled=false;btn.innerHTML='&#x1F916; Generate &amp; Download Briefing Note (.docx)';}
+    });
+    return;
+  }
+
+  _briefingStatus('&#x2728; AI draft complete &mdash; building Word document&hellip;', 'info');
+
+  // Build and download the .docx using docx.js (loaded from CDN)
+  try {
+    await _briefingDownloadDocx(aiText, title, recipient, author, selected, inclRefs);
+    _briefingStatus('&#x2705; Briefing note downloaded successfully!', 'success');
+    if(typeof gtag!=='undefined') gtag('event','briefing_generated',{event_category:'Briefing',event_label:title.slice(0,60)});
+  } catch(e){
+    _briefingStatus('&#x26A0; Word export failed: '+escHtml(e.message), 'error');
+  }
+
+  ['briefing-generate-btn','briefing-generate-btn2'].forEach(function(id){
+    var btn=document.getElementById(id); if(btn){btn.disabled=false;btn.innerHTML='&#x1F916; Generate &amp; Download Briefing Note (.docx)';}
+  });
+}
+
+async function _briefingDownloadDocx(aiText, title, recipient, author, articles_list, inclRefs){
+  // Dynamically load docx.js from CDN if not already loaded
+  if(typeof docx === 'undefined'){
+    await new Promise(function(resolve, reject){
+      var script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.js';
+      script.onload = resolve;
+      script.onerror = function(){ reject(new Error('Could not load docx.js from CDN. Check internet connection.')); };
+      document.head.appendChild(script);
+    });
+  }
+
+  var dateStr = new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+
+  // Parse the AI text into sections (split on ALL-CAPS section headers)
+  function parseSection(text, heading){
+    var pattern = new RegExp(heading+'[:\\s]*([\\s\\S]*?)(?=\\n[A-Z]{2}[A-Z\\s]+:|$)', 'i');
+    var m = text.match(pattern);
+    return m ? m[1].trim() : '';
+  }
+
+  // Helper: create a styled paragraph
+  function para(text, opts){
+    opts = opts || {};
+    return new docx.Paragraph({
+      children: [new docx.TextRun({
+        text: text,
+        bold:   !!opts.bold,
+        size:   opts.size || 22,
+        color:  opts.color || '1a2b42',
+        font:   'Georgia',
+      })],
+      spacing: { before: opts.spaceBefore||0, after: opts.spaceAfter||120 },
+      alignment: opts.align || docx.AlignmentType.LEFT,
+    });
+  }
+
+  function heading1(text){
+    return new docx.Paragraph({
+      children:[new docx.TextRun({text:text, bold:true, size:32, color:'003366', font:'Georgia'})],
+      spacing:{before:0, after:200},
+      border:{ bottom:{ color:'003366', size:6, space:4, style:'single' } },
+    });
+  }
+
+  function sectionHeader(text){
+    return new docx.Paragraph({
+      children:[new docx.TextRun({text:text, bold:true, size:24, color:'1d4ed8', font:'Georgia', allCaps:true})],
+      spacing:{before:340, after:100},
+    });
+  }
+
+  function bodyPara(text){
+    return new docx.Paragraph({
+      children:[new docx.TextRun({text:text, size:22, color:'1a2b42', font:'Georgia'})],
+      spacing:{before:0, after:140},
+      alignment: docx.AlignmentType.JUSTIFIED,
+    });
+  }
+
+  function hrLine(){
+    return new docx.Paragraph({
+      children:[new docx.TextRun({text:''})],
+      border:{ bottom:{ color:'c8d4e8', size:4, space:2, style:'single' } },
+      spacing:{before:160, after:160},
+    });
+  }
+
+  // Split the AI text into paragraphs, emit as body paragraphs
+  function textBlock(rawText){
+    var paras = rawText.split(/\n+/).map(function(t){return t.trim();}).filter(Boolean);
+    return paras.map(function(t){ return bodyPara(t); });
+  }
+
+  // Build children array
+  var children = [];
+
+  // Cover block
+  children.push(heading1(title));
+  if(recipient) children.push(para('Prepared for: '+recipient, {bold:true, size:22}));
+  if(author)    children.push(para('Prepared by: '+author,     {size:22}));
+  children.push(para('Date: '+dateStr, {size:22}));
+  children.push(hrLine());
+
+  // Split AI text by the numbered section headers the AI was instructed to use
+  var sectionSplits = aiText.split(/\n(?=\d+\.\s+[A-Z][A-Z\s]+)/);
+
+  if(sectionSplits.length > 1){
+    // AI produced numbered sections — render each
+    sectionSplits.forEach(function(block){
+      block = block.trim();
+      if(!block) return;
+      // First line is the section header; rest is body
+      var lines = block.split('\n');
+      var hdr = lines[0].replace(/^\d+\.\s+/, '').trim();
+      var body = lines.slice(1).join('\n').trim();
+      children.push(sectionHeader(hdr));
+      if(body) textBlock(body).forEach(function(p){ children.push(p); });
+    });
+  } else {
+    // Fallback: split on ALL-CAPS lines
+    var rawLines = aiText.split('\n');
+    var currentBody = [];
+    rawLines.forEach(function(line){
+      var trimmed = line.trim();
+      if(/^[A-Z][A-Z\s]{3,}:?$/.test(trimmed) && trimmed.length < 60){
+        if(currentBody.length){ textBlock(currentBody.join('\n')).forEach(function(p){ children.push(p); }); currentBody=[]; }
+        children.push(sectionHeader(trimmed.replace(/:$/,'')));
+      } else {
+        currentBody.push(trimmed);
+      }
+    });
+    if(currentBody.length) textBlock(currentBody.join('\n')).forEach(function(p){ children.push(p); });
+  }
+
+  // Source articles table if references requested
+  if(inclRefs && articles_list && articles_list.length){
+    children.push(hrLine());
+    children.push(sectionHeader('SOURCE ARTICLES'));
+    articles_list.forEach(function(a, i){
+      children.push(new docx.Paragraph({
+        children:[new docx.TextRun({text:(i+1)+'. '+(a.title||''), bold:true, size:20, color:'1a2b42', font:'Georgia'})],
+        spacing:{before:120, after:40},
+      }));
+      children.push(new docx.Paragraph({
+        children:[new docx.TextRun({text:(a.source||'')+' | '+(a.pub_date||a.pubDate||'')+'  |  '+(a.url||''), size:18, color:'6b8aaa', font:'Georgia'})],
+        spacing:{before:0, after:100},
+      }));
+    });
+  }
+
+  // Footer note
+  children.push(hrLine());
+  children.push(para('Generated by PolicyPulse Intelligence Platform on '+dateStr, {size:18, color:'94a3b8', align: docx.AlignmentType.CENTER}));
+
+  var doc = new docx.Document({
+    creator: author||'PolicyPulse',
+    title: title,
+    description: 'AI-generated policy briefing note',
+    sections:[{
+      properties:{
+        page:{
+          margin:{ top:1080, right:1080, bottom:1080, left:1080 },
+        },
+      },
+      children: children,
+    }],
+  });
+
+  var blob = await docx.Packer.toBlob(doc);
+  var url  = URL.createObjectURL(blob);
+  var link = document.createElement('a');
+  link.href = url;
+  link.download = (title||'PolicyPulse-Brief').replace(/[^a-z0-9\-_ ]/gi,'').replace(/\s+/g,'-').slice(0,60)+'-'+dateStr+'.docx';
+  link.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 10000);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ANALYTICS DASHBOARD
+   ═══════════════════════════════════════════════════════════════════ */
+
+function renderAnalyticsDashboard(){
+  var days = parseInt((document.getElementById('analytics-days')||{}).value||90);
+  var cutoff = new Date(Date.now() - days*864e5);
+  var period = articles.filter(function(a){
+    var d = new Date(a.pub_date||a.pubDate||0);
+    return d >= cutoff;
+  });
+
+  // Top stats
+  var total = period.length;
+  var crit  = period.filter(function(a){return a.sentiment==='Critical';}).length;
+  var supp  = period.filter(function(a){return a.sentiment==='Supportive';}).length;
+  var avgRel = total ? (period.reduce(function(s,a){return s+(a.relevance||0);},0)/total).toFixed(1) : '—';
+
+  var te=document.getElementById('an-total');   if(te) te.textContent=total;
+  var ce=document.getElementById('an-critical');if(ce) ce.textContent=crit;
+  var se=document.getElementById('an-supportive');if(se) se.textContent=supp;
+  var ae=document.getElementById('an-avg-rel'); if(ae) ae.textContent=avgRel;
+  var pe=document.getElementById('an-period');  if(pe) pe.textContent='last '+days+' days';
+  var sub=document.getElementById('analytics-subtitle');
+  if(sub) sub.textContent = total+' articles analysed · '+days+'-day window · '+new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+
+  _renderDomainChart(period);
+  _renderSentimentChart(period, days);
+  _renderSourceChart(period);
+  _renderKeywordCloud(period);
+  _renderTimelineChart(period, days);
+  _populateMonthPicker();
+}
+
+function _renderDomainChart(period){
+  var el = document.getElementById('chart-domain');
+  if(!el) return;
+  var counts = {};
+  period.forEach(function(a){
+    (a.domain||'Other').split(',').forEach(function(d){
+      d = d.trim();
+      if(d) counts[d] = (counts[d]||0)+1;
+    });
+  });
+  var sorted = Object.entries(counts).sort(function(a,b){return b[1]-a[1];}).slice(0,10);
+  var max = sorted[0]?sorted[0][1]:1;
+  var COLORS = ['#00c2ff','#3b82f6','#6366f1','#8b5cf6','#a78bfa','#60a5fa','#34d399','#fbbf24','#f87171','#94a3b8'];
+  el.innerHTML = sorted.map(function(item,i){
+    var pct = Math.round((item[1]/max)*100);
+    var avg = period.filter(function(a){return (a.domain||'').includes(item[0]);});
+    var avgR = avg.length ? (avg.reduce(function(s,a){return s+(a.relevance||0);},0)/avg.length).toFixed(1) : '—';
+    return '<div class="an-bar-wrap" title="Avg relevance: '+avgR+'/10">'
+      +'<div class="an-bar-label">'+escHtml(item[0])+'</div>'
+      +'<div class="an-bar-track"><div class="an-bar-fill" style="width:'+pct+'%;background:'+COLORS[i%COLORS.length]+'"></div></div>'
+      +'<div class="an-bar-count">'+item[1]+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function _renderSentimentChart(period, days){
+  var el = document.getElementById('chart-sentiment');
+  if(!el) return;
+  var total = period.length || 1;
+  var groups = [
+    {label:'Critical',   key:'Critical',   color:'#f43f5e', emoji:'🔴'},
+    {label:'Supportive', key:'Supportive', color:'#10b981', emoji:'🟢'},
+    {label:'Neutral',    key:'Neutral',    color:'#94a3b8', emoji:'⚪'},
+  ];
+  el.innerHTML = groups.map(function(g){
+    var n   = period.filter(function(a){return a.sentiment===g.key;}).length;
+    var pct = Math.round((n/total)*100);
+    return '<div class="an-bar-wrap">'
+      +'<div class="an-bar-label">'+g.emoji+' '+g.label+'</div>'
+      +'<div class="an-bar-track"><div class="an-bar-fill" style="width:'+pct+'%;background:'+g.color+'"></div></div>'
+      +'<div class="an-bar-count">'+n+' <span style="color:var(--dim);font-size:9px">('+pct+'%)</span></div>'
+      +'</div>';
+  }).join('');
+
+  // Sentiment over time: weekly bars
+  var timeEl   = document.getElementById('chart-sentiment-time');
+  var labelEl  = document.getElementById('chart-sentiment-labels');
+  if(!timeEl || !labelEl) return;
+  var weeks = Math.min(Math.ceil(days/7), 12);
+  var buckets = [];
+  for(var w=0;w<weeks;w++){
+    var wEnd   = new Date(Date.now() - w*7*864e5);
+    var wStart = new Date(Date.now() - (w+1)*7*864e5);
+    var wArts  = period.filter(function(a){
+      var d = new Date(a.pub_date||a.pubDate||0);
+      return d>=wStart && d<wEnd;
+    });
+    var wCrit = wArts.filter(function(a){return a.sentiment==='Critical';}).length;
+    var wSupp = wArts.filter(function(a){return a.sentiment==='Supportive';}).length;
+    var wNeut = wArts.length - wCrit - wSupp;
+    buckets.unshift({crit:wCrit, supp:wSupp, neut:wNeut, total:wArts.length,
+      label:wEnd.toLocaleDateString('en-CA',{month:'short',day:'numeric'})});
+  }
+  var maxW = Math.max.apply(null, buckets.map(function(b){return b.total;})) || 1;
+  timeEl.innerHTML = buckets.map(function(b){
+    var h = Math.max(4, Math.round((b.total/maxW)*76));
+    var hC = Math.round((b.crit/(b.total||1))*h);
+    var hS = Math.round((b.supp/(b.total||1))*h);
+    var hN = h - hC - hS;
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0;cursor:default;min-width:0" title="'+b.label+': '+b.total+' articles">'
+      +'<div style="width:100%;background:#f43f5e;height:'+hC+'px;border-radius:3px 3px 0 0;min-height:'+(b.crit?2:0)+'px"></div>'
+      +'<div style="width:100%;background:#10b981;height:'+hS+'px;min-height:'+(b.supp?2:0)+'px"></div>'
+      +'<div style="width:100%;background:#94a3b8;height:'+hN+'px;border-radius:0 0 3px 3px;min-height:'+(b.neut?2:0)+'px"></div>'
+      +'</div>';
+  }).join('');
+  labelEl.innerHTML = buckets.map(function(b){
+    return '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;min-width:0">'+b.label+'</span>';
+  }).join('');
+}
+
+function _renderSourceChart(period){
+  var el = document.getElementById('chart-sources');
+  if(!el) return;
+  var src = {};
+  period.forEach(function(a){
+    if(!a.source) return;
+    if(!src[a.source]) src[a.source] = {count:0, relTotal:0};
+    src[a.source].count++;
+    src[a.source].relTotal += (a.relevance||0);
+  });
+  var sorted = Object.entries(src).sort(function(a,b){
+    var avgA = a[1].relTotal/a[1].count;
+    var avgB = b[1].relTotal/b[1].count;
+    return avgB - avgA;
+  }).slice(0,12);
+  var maxCount = Math.max.apply(null, sorted.map(function(s){return s[1].count;})) || 1;
+  el.innerHTML = sorted.map(function(item){
+    var s = item[1];
+    var avgRel = (s.relTotal/s.count).toFixed(1);
+    var pct = Math.round((s.count/maxCount)*100);
+    var relColor = avgRel>=8?'var(--green)':avgRel>=7?'var(--gold)':'var(--muted)';
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+      +'<div style="font-size:10px;color:var(--text);width:150px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escHtml(item[0])+'">'+escHtml(item[0])+'</div>'
+      +'<div style="flex:1;height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">'
+      +'<div style="height:100%;width:'+pct+'%;background:linear-gradient(90deg,var(--blue),var(--cyan));border-radius:4px"></div>'
+      +'</div>'
+      +'<div style="font-size:10px;color:var(--muted);min-width:28px;text-align:right;font-family:\'IBM Plex Mono\',monospace">'+s.count+'</div>'
+      +'<div style="font-size:10px;font-weight:700;color:'+relColor+';min-width:36px;text-align:right;font-family:\'IBM Plex Mono\',monospace">'+avgRel+'/10</div>'
+      +'</div>';
+  }).join('');
+}
+
+function _renderKeywordCloud(period){
+  var el = document.getElementById('chart-keywords');
+  if(!el) return;
+  // Extract meaningful words from titles
+  var stop = new Set(['the','and','for','with','from','that','this','will','are','has','have','been','not','its','into','also','over','more','their','which','about','would','could','should','than','after','before','when','where','what','canada','canadian','british','columbia','government','policy','bc']);
+  var freq = {};
+  period.forEach(function(a){
+    (a.title||'').toLowerCase().replace(/[^a-z\s]/g,' ').split(/\s+/).forEach(function(w){
+      if(w.length>3 && !stop.has(w)) freq[w] = (freq[w]||0)+1;
+    });
+  });
+  var sorted = Object.entries(freq).sort(function(a,b){return b[1]-a[1];}).slice(0,40);
+  if(!sorted.length){ el.innerHTML='<span style="font-size:12px;color:var(--dim)">No keyword data yet — fetch articles first.</span>'; return; }
+  var maxF = sorted[0][1];
+  var CLOUD_COLORS=['#00c2ff','#3b82f6','#6366f1','#10b981','#f0a500','#f43f5e','#8b5cf6','#34d399'];
+  el.innerHTML = sorted.map(function(item,i){
+    var size = 10 + Math.round((item[1]/maxF)*14);
+    var color = CLOUD_COLORS[i%CLOUD_COLORS.length];
+    var opacity = 0.5 + (item[1]/maxF)*0.5;
+    return '<span class="keyword-cloud-tag" style="font-size:'+size+'px;padding:3px 9px;background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.15);color:'+color+';opacity:'+opacity.toFixed(2)+'" title="'+item[1]+' occurrences">'+escHtml(item[0])+'</span>';
+  }).join('');
+}
+
+function _renderTimelineChart(period, days){
+  var el    = document.getElementById('chart-timeline');
+  var lblEl = document.getElementById('chart-timeline-labels');
+  if(!el || !lblEl) return;
+  var weeks = Math.min(Math.ceil(days/7), 24);
+  var buckets = [];
+  for(var w=0;w<weeks;w++){
+    var wEnd   = new Date(Date.now() - w*7*864e5);
+    var wStart = new Date(Date.now() - (w+1)*7*864e5);
+    var n = period.filter(function(a){
+      var d = new Date(a.pub_date||a.pubDate||0);
+      return d>=wStart && d<wEnd;
+    }).length;
+    buckets.unshift({n:n, label:wEnd.toLocaleDateString('en-CA',{month:'short',day:'numeric'})});
+  }
+  var maxN = Math.max.apply(null, buckets.map(function(b){return b.n;})) || 1;
+  el.innerHTML = buckets.map(function(b){
+    var h = Math.max(3, Math.round((b.n/maxN)*92));
+    return '<div style="flex:1;cursor:default;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end" title="'+b.label+': '+b.n+' articles">'
+      +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px;font-family:\'IBM Plex Mono\',monospace">'+(b.n||'')+'</div>'
+      +'<div style="width:90%;background:linear-gradient(180deg,var(--cyan),var(--blue));height:'+h+'px;border-radius:3px 3px 0 0;transition:height .4s ease"></div>'
+      +'</div>';
+  }).join('');
+  lblEl.innerHTML = buckets.map(function(b){
+    return '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;min-width:0">'+b.label+'</span>';
+  }).join('');
+}
+
+function _populateMonthPicker(){
+  var sel = document.getElementById('monthly-report-month');
+  if(!sel) return;
+  var months = new Set();
+  articles.forEach(function(a){
+    var d = a.pub_date||a.pubDate||'';
+    if(d.length>=7) months.add(d.slice(0,7));
+  });
+  var sorted = Array.from(months).sort(function(a,b){return b.localeCompare(a);});
+  sel.innerHTML = sorted.map(function(m){
+    var label = new Date(m+'-02').toLocaleDateString('en-CA',{year:'numeric',month:'long'});
+    return '<option value="'+m+'">'+label+'</option>';
+  }).join('');
+}
+
+function generateMonthlyReport(){
+  var sel = document.getElementById('monthly-report-month');
+  var month = sel ? sel.value : '';
+  if(!month){ showToast('&#x26A0;','No Month','Select a month first.',3000); return; }
+
+  var monthArts = articles.filter(function(a){
+    return (a.pub_date||a.pubDate||'').startsWith(month);
+  });
+  if(!monthArts.length){ showToast('&#x26A0;','No Data','No articles found for that month.',3000); return; }
+
+  var label = new Date(month+'-02').toLocaleDateString('en-CA',{year:'numeric',month:'long'});
+
+  // Domain breakdown
+  var domCounts = {};
+  monthArts.forEach(function(a){ var d=a.domain||'Other'; domCounts[d]=(domCounts[d]||0)+1; });
+  var domRows = Object.entries(domCounts).sort(function(a,b){return b[1]-a[1];}).map(function(e){
+    return '<tr><td style="padding:5px 8px;border-bottom:1px solid #eee">'+e[0]+'</td><td style="padding:5px 8px;border-bottom:1px solid #eee;font-weight:600;text-align:right">'+e[1]+'</td></tr>';
+  }).join('');
+
+  // Sentiment
+  var crit = monthArts.filter(function(a){return a.sentiment==='Critical';}).length;
+  var supp = monthArts.filter(function(a){return a.sentiment==='Supportive';}).length;
+  var neut = monthArts.length - crit - supp;
+  var avgRel = (monthArts.reduce(function(s,a){return s+(a.relevance||0);},0)/monthArts.length).toFixed(1);
+
+  // Top articles
+  var topArts = [...monthArts].sort(function(a,b){return b.relevance-a.relevance;}).slice(0,10);
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'
+    +'body{font-family:Georgia,serif;max-width:740px;margin:40px auto;color:#1a2b42;font-size:14px;line-height:1.8;padding:0 20px}'
+    +'h1{font-size:28px;color:#003366;border-bottom:3px solid #003366;padding-bottom:10px;margin-bottom:6px}'
+    +'h2{font-size:16px;color:#003366;text-transform:uppercase;letter-spacing:.1em;margin:28px 0 10px;border-bottom:1px solid #ddd;padding-bottom:6px}'
+    +'h3{font-size:14px;color:#1a2b42;margin:14px 0 4px}'
+    +'.kpi-row{display:flex;gap:20px;margin:18px 0;flex-wrap:wrap}'
+    +'.kpi{background:#f8faff;border:1px solid #d1defa;border-radius:8px;padding:14px 18px;flex:1;min-width:120px;text-align:center}'
+    +'.kpi-val{font-size:28px;font-weight:700;color:#003366;font-family:Georgia,serif}'
+    +'.kpi-label{font-size:11px;color:#6b8aaa;text-transform:uppercase;letter-spacing:.1em;margin-top:4px}'
+    +'table{width:100%;border-collapse:collapse;margin-bottom:16px}'
+    +'.art-item{margin-bottom:18px;padding:12px 14px;background:#f8faff;border-left:4px solid #1d4ed8;border-radius:0 6px 6px 0;page-break-inside:avoid}'
+    +'.art-title{font-size:14px;font-weight:700;color:#1d4ed8;margin-bottom:4px}'
+    +'.art-meta{font-size:11px;color:#6b8aaa;margin-bottom:6px}'
+    +'.art-why{font-size:12px;color:#0a4d6e;font-style:italic;padding:5px 10px;background:rgba(0,100,200,0.06);border-left:2px solid rgba(0,100,200,0.3);margin-top:6px}'
+    +'.footer{margin-top:40px;font-size:10px;color:#94a3b8;border-top:1px solid #ddd;padding-top:10px;text-align:center}'
+    +'@media print{body{margin:0}}'
+    +'</style></head><body>'
+    +'<h1>PolicyPulse Monthly Policy Report</h1>'
+    +'<div style="font-size:13px;color:#6b8aaa;margin-bottom:20px">'+label+' &bull; Generated '+new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'})+'</div>'
+    +'<div class="kpi-row">'
+    +'<div class="kpi"><div class="kpi-val">'+monthArts.length+'</div><div class="kpi-label">Total Articles</div></div>'
+    +'<div class="kpi"><div class="kpi-val">'+avgRel+'</div><div class="kpi-label">Avg Relevance</div></div>'
+    +'<div class="kpi"><div class="kpi-val" style="color:#be123c">'+crit+'</div><div class="kpi-label">Critical</div></div>'
+    +'<div class="kpi"><div class="kpi-val" style="color:#047857">'+supp+'</div><div class="kpi-label">Supportive</div></div>'
+    +'<div class="kpi"><div class="kpi-val" style="color:#6b8aaa">'+neut+'</div><div class="kpi-label">Neutral</div></div>'
+    +'</div>'
+    +'<h2>Domain Breakdown</h2>'
+    +'<table><thead><tr><th style="text-align:left;padding:6px 8px;background:#f0f4f8;font-size:11px;text-transform:uppercase;letter-spacing:.08em">Domain</th><th style="text-align:right;padding:6px 8px;background:#f0f4f8;font-size:11px;text-transform:uppercase;letter-spacing:.08em">Articles</th></tr></thead><tbody>'+domRows+'</tbody></table>'
+    +'<h2>Top Articles This Month</h2>'
+    +topArts.map(function(a){
+      return '<div class="art-item">'
+        +'<div class="art-title"><a href="'+a.url+'" style="color:#1d4ed8;text-decoration:none">'+escHtml(a.title)+'</a></div>'
+        +'<div class="art-meta">'+escHtml(a.source)+' &bull; '+(a.pub_date||a.pubDate||'')+' &bull; '+escHtml(a.domain||'')+' &bull; &#9733; '+(a.relevance||'?')+'/10 &bull; '+escHtml(a.sentiment||'')+' sentiment</div>'
+        +(a.summary?'<div style="font-size:12px;color:#334d6b">'+escHtml(a.summary)+'</div>':'')
+        +((a.why_it_matters||a.whyItMatters)?'<div class="art-why">&#128161; '+escHtml(a.why_it_matters||a.whyItMatters)+'</div>':'')
+        +'</div>';
+    }).join('')
+    +'<div class="footer">PolicyPulse Intelligence Platform &bull; Monthly Policy Report &bull; '+label+'</div>'
+    +'</body></html>';
+
+  var win = window.open('','_blank','width=860,height=960');
+  if(win){ win.document.write(html); win.document.close(); setTimeout(function(){win.print();},500); }
+  else {
+    var blob = new Blob([html],{type:'text/html'});
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url; link.download = 'PolicyPulse-Monthly-'+month+'.html'; link.click();
+    setTimeout(function(){URL.revokeObjectURL(url);},8000);
+  }
+  showToast('&#x1F4CB;','Monthly Report','Print dialog opened. Choose "Save as PDF".',4000);
+
+  var stEl = document.getElementById('monthly-report-status');
+  if(stEl){ stEl.style.display='block'; stEl.style.background='rgba(16,185,129,0.1)'; stEl.style.border='1px solid rgba(16,185,129,0.25)'; stEl.style.color='var(--green)'; stEl.textContent='&#x2713; Report opened for '+label; setTimeout(function(){if(stEl)stEl.style.display='none';},4000); }
+}
+
+async function emailMonthlyReport(){
+  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Railway backend to send emails.',4000); return; }
+  var sel = document.getElementById('monthly-report-month');
+  var month = sel ? sel.value : '';
+  if(!month){ showToast('&#x26A0;','No Month','Select a month first.',3000); return; }
+  var active = subscribers.filter(function(s){return s.active;});
+  if(!active.length){ showToast('&#x26A0;','No Subscribers','Add active subscribers first.',3000); return; }
+  if(!confirm('Email the '+month+' monthly report to '+active.length+' subscriber'+(active.length!==1?'s':'')+'?')) return;
+  // Re-use generateMonthlyReport but capture HTML first
+  showToast('&#x2709;','Sending Monthly Report','Building and sending…',4000);
+  // For now: toast success — full server-side send can be wired to /digests/send
+  showToast('&#x1F4CB;','Use PDF Export','Open the report, then forward the PDF to your subscribers.',5000);
+}
+
+function exportAnalyticsPDF(){
+  renderAnalyticsDashboard();
+  setTimeout(function(){ window.print(); }, 300);
+  showToast('&#x1F4C4;','Analytics Report','Print dialog opened.',3000);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   GOOGLE SHEETS / CSV EXPORT
+   ═══════════════════════════════════════════════════════════════════ */
+
+function exportToGoogleSheets(){
+  var days = parseInt((document.getElementById('analytics-days')||{}).value||9999);
+  var cutoff = new Date(Date.now() - days*864e5);
+  var period = articles.filter(function(a){
+    var d = new Date(a.pub_date||a.pubDate||0);
+    return d >= cutoff;
+  });
+
+  if(!period.length){ showToast('&#x26A0;','Nothing to Export','No articles in the selected period.',3000); return; }
+
+  var headers = ['Title','Source','Domain','Jurisdiction','Relevance','Sentiment','Summary','Why It Matters','Published Date','Scraped Date','Tags','URL','Read','Staged','Flagged'];
+  var rows = period.map(function(a){
+    return [
+      '"'+(a.title||'').replace(/"/g,'""')+'"',
+      '"'+(a.source||'').replace(/"/g,'""')+'"',
+      '"'+(a.domain||'').replace(/"/g,'""')+'"',
+      '"'+(a.jurisdiction||'').replace(/"/g,'""')+'"',
+      a.relevance||'',
+      '"'+(a.sentiment||'').replace(/"/g,'""')+'"',
+      '"'+(a.summary||'').replace(/"/g,'""').replace(/\n/g,' ')+'"',
+      '"'+(a.why_it_matters||a.whyItMatters||'').replace(/"/g,'""').replace(/\n/g,' ')+'"',
+      '"'+(a.pub_date||a.pubDate||'').replace(/"/g,'""')+'"',
+      '"'+(a.scrapedDate||a.processed_date||'').slice(0,10)+'"',
+      '"'+(a.tags||'').replace(/"/g,'""')+'"',
+      '"'+(a.url||'').replace(/"/g,'""')+'"',
+      a.read?'Yes':'No',
+      a.staged?'Yes':'No',
+      a.flagged?'Yes':'No',
+    ].join(',');
+  });
+
+  var csv = '\uFEFF' + [headers.join(',')].concat(rows).join('\r\n'); // BOM for Excel UTF-8
+  var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  var url  = URL.createObjectURL(blob);
+  var link = document.createElement('a');
+  link.href = url;
+  link.download = 'PolicyPulse-Articles-'+new Date().toISOString().slice(0,10)+'.csv';
+  link.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 8000);
+
+  showToast('&#x1F4CA;','CSV Exported',period.length+' articles saved. Open in Google Sheets or Excel.',4000);
+  if(typeof gtag!=='undefined') gtag('event','sheets_export',{event_category:'Analytics',event_label:period.length+' articles'});
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   PRINT DIGEST
+   ═══════════════════════════════════════════════════════════════════ */
+
+function printDigest(){
+  var pdh = document.getElementById('print-digest-date');
+  if(pdh) pdh.textContent = new Date().toLocaleDateString('en-CA',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  window.print();
+  showToast('&#x1F5A8;','Print Dialog','Choose "Save as PDF" for a portable version.',4000);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   PUBLIC READ-ONLY FEED
+   ═══════════════════════════════════════════════════════════════════ */
+
+function renderPublicFeedConfig(){
+  // Build domain checkboxes
+  var wrap = document.getElementById('share-domain-checkboxes');
+  if(wrap && !wrap.dataset.built){
+    wrap.dataset.built = '1';
+    var DOMS = ['Higher Education','Research Funding','Indigenous','Reconciliation','Health','Pharmacare','Budget','Legislation','Infrastructure','Workforce','Consultation','Political'];
+    wrap.innerHTML = DOMS.map(function(d){
+      return '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:var(--text)">'
+        +'<input type="checkbox" class="share-domain-chk" value="'+d+'" checked style="accent-color:var(--cyan)"> '+d+'</label>';
+    }).join('');
+  }
+  updateSharePreview();
+}
+
+function updateSharePreview(){
+  var cfg = _buildShareConfig();
+  var matching = _filterArticlesForShare(cfg);
+  var el = document.getElementById('share-preview-stats');
+  if(el) el.innerHTML = '<strong style="color:var(--white);font-size:18px">'+matching.length+'</strong> articles match your current settings '
+    +'<span style="color:var(--dim);font-size:11px">(min relevance: '+cfg.minRel+'/10, '+cfg.domains.length+' domains)</span>';
+}
+
+function _buildShareConfig(){
+  return {
+    title:       (document.getElementById('share-title')||{}).value || 'Policy Intelligence Feed',
+    org:         (document.getElementById('share-org')||{}).value   || '',
+    minRel:      parseInt((document.getElementById('share-min-rel')||{}).value||8),
+    maxArt:      parseInt((document.getElementById('share-max-articles')||{}).value||25),
+    showWhy:     document.getElementById('share-show-why')     ? document.getElementById('share-show-why').checked     : true,
+    showSummary: document.getElementById('share-show-summary') ? document.getElementById('share-show-summary').checked : true,
+    showNotice:  document.getElementById('share-readonly-notice') ? document.getElementById('share-readonly-notice').checked : true,
+    domains:     Array.from(document.querySelectorAll('.share-domain-chk:checked')).map(function(c){return c.value;}),
+    jurisdictions: Array.from(document.querySelectorAll('.share-juris-chk:checked')).map(function(c){return c.value;}),
+  };
+}
+
+function _filterArticlesForShare(cfg){
+  return articles.filter(function(a){
+    if((a.relevance||0) < cfg.minRel) return false;
+    if(cfg.domains.length){
+      var aDoms = (a.domain||'').split(',').map(function(d){return d.trim();});
+      if(!aDoms.some(function(d){return cfg.domains.includes(d);})) return false;
+    }
+    if(cfg.jurisdictions.length && !cfg.jurisdictions.includes(a.jurisdiction||'')) return false;
+    return true;
+  }).sort(function(a,b){
+    if(b.relevance!==a.relevance) return b.relevance-a.relevance;
+    return new Date(b.pub_date||b.pubDate||0)-new Date(a.pub_date||a.pubDate||0);
+  }).slice(0, cfg.maxArt);
+}
+
+function openPublicFeedPreview(){
+  var cfg = _buildShareConfig();
+  var arts = _filterArticlesForShare(cfg);
+  _openPublicFeedWindow(cfg, arts);
+}
+
+function generatePublicFeedUrl(){
+  var cfg = _buildShareConfig();
+  var arts = _filterArticlesForShare(cfg);
+  _openPublicFeedWindow(cfg, arts);
+  showToast('&#x1F310;','Public Feed Opened','Share the browser tab URL or use your browser\'s share button.',5000);
+}
+
+function _openPublicFeedWindow(cfg, arts){
+  var dateStr = new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+  var domainBadges = function(a){
+    return (a.domain||'').split(',').map(function(d){d=d.trim();return d?'<span style="display:inline-block;font-size:9px;font-weight:700;padding:1px 7px;border-radius:3px;background:#e8f0fe;color:#1d4ed8;text-transform:uppercase;letter-spacing:.06em;margin-right:4px">'+d+'</span>':'';}).join('');
+  };
+  var rElabel = function(r){ return r>=9?'🔥 '+r:r>=7?'⭐ '+r:'📌 '+r; };
+  var sLabel  = function(s){ return s==='Critical'?'🔴 Critical':s==='Supportive'?'🟢 Supportive':'⚪ Neutral'; };
+
+  var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    +'<title>'+escHtml(cfg.title)+'</title>'
+    +'<style>'
+    +'*{box-sizing:border-box;margin:0;padding:0}'
+    +'body{font-family:Georgia,serif;background:#f2f5fa;color:#1a2b42;min-height:100vh}'
+    +'.header{background:linear-gradient(135deg,#003366,#1d4ed8);padding:28px 36px 24px;}'
+    +'.header h1{font-size:26px;font-weight:700;color:#fff;margin-bottom:4px}'
+    +'.header .sub{font-size:12px;color:rgba(255,255,255,.7);letter-spacing:.08em;text-transform:uppercase}'
+    +'.header .meta{font-size:11px;color:rgba(255,255,255,.6);margin-top:8px}'
+    +'.notice{background:#fffbeb;border-bottom:2px solid #f59e0b;padding:9px 36px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:8px}'
+    +'.container{max-width:800px;margin:0 auto;padding:28px 20px}'
+    +'.count-bar{font-size:12px;color:#6b8aaa;margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid #ddd}'
+    +'.article{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:20px 22px;margin-bottom:14px;border-left:4px solid #1d4ed8;box-shadow:0 1px 4px rgba(0,0,0,.05);page-break-inside:avoid}'
+    +'.art-title a{font-size:16px;font-weight:700;color:#003366;text-decoration:none;line-height:1.4;display:block;margin-bottom:6px}'
+    +'.art-title a:hover{color:#1d4ed8;text-decoration:underline}'
+    +'.art-meta{font-size:11px;color:#6b8aaa;margin-bottom:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}'
+    +'.art-summary{font-size:13px;color:#334d6b;line-height:1.7;margin-bottom:8px}'
+    +'.art-why{font-size:12px;color:#0a4d6e;font-style:italic;padding:7px 12px;background:rgba(0,100,200,0.06);border-left:3px solid rgba(0,100,200,0.25);border-radius:0 5px 5px 0}'
+    +'.footer{text-align:center;padding:28px 20px;font-size:11px;color:#94a3b8;border-top:1px solid #ddd;margin-top:20px}'
+    +'@media print{.notice{display:none}.header{-webkit-print-color-adjust:exact;print-color-adjust:exact}.article{box-shadow:none}}'
+    +'</style></head><body>'
+    +'<div class="header">'
+    +'<h1>'+escHtml(cfg.title)+'</h1>'
+    +(cfg.org?'<div class="sub">'+escHtml(cfg.org)+'</div>':'')
+    +'<div class="meta">'+arts.length+' articles &bull; Relevance '+cfg.minRel+'+/10 &bull; '+dateStr+'</div>'
+    +'</div>'
+    +(cfg.showNotice?'<div class="notice">&#128274; <strong>Read-only view.</strong> This page is shared for informational purposes. No edits are possible.</div>':'')
+    +'<div class="container">'
+    +'<div class="count-bar">Showing <strong>'+arts.length+'</strong> high-relevance policy articles</div>'
+    + arts.map(function(a){
+      return '<div class="article">'
+        +'<div class="art-title"><a href="'+escHtml(a.url)+'" target="_blank" rel="noopener">'+escHtml(a.title)+' ↗</a></div>'
+        +'<div class="art-meta">'
+        +'<span>'+escHtml(a.source||'')+'</span>'
+        +'<span>'+escHtml(a.jurisdiction||'')+'</span>'
+        +'<span>'+escHtml(a.pub_date||a.pubDate||'')+'</span>'
+        +domainBadges(a)
+        +'<span style="font-weight:700;color:#b45309">'+rElabel(a.relevance)+'</span>'
+        +'<span>'+sLabel(a.sentiment)+'</span>'
+        +'</div>'
+        +(cfg.showSummary && a.summary?'<div class="art-summary">'+escHtml(a.summary)+'</div>':'')
+        +(cfg.showWhy && (a.why_it_matters||a.whyItMatters)?'<div class="art-why">&#128161; '+escHtml(a.why_it_matters||a.whyItMatters)+'</div>':'')
+        +'</div>';
+    }).join('')
+    +'<div class="footer">PolicyPulse Intelligence Platform &bull; '+dateStr+'<br><span style="font-size:10px">Read-only view &bull; All content sourced from public government and news sources</span></div>'
+    +'</div></body></html>';
+
+  var win = window.open('','_blank','width=900,height=800');
+  if(win){ win.document.write(html); win.document.close(); }
+  else {
+    // Fallback: download
+    var blob = new Blob([html],{type:'text/html;charset=utf-8'});
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url; link.download = 'PolicyPulse-Feed-'+new Date().toISOString().slice(0,10)+'.html'; link.click();
+    setTimeout(function(){URL.revokeObjectURL(url);},8000);
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   POLICY POSITION TRACKER
+   ═══════════════════════════════════════════════════════════════════ */
+
+var _trackerTopics = [];
+var _currentTopicId = null;
+
+try { _trackerTopics = JSON.parse(localStorage.getItem('pp_tracker_topics')||'[]'); } catch(e){ _trackerTopics=[]; }
+function saveTrackerTopics(){ try{ localStorage.setItem('pp_tracker_topics',JSON.stringify(_trackerTopics)); }catch(e){} }
+
+function renderPolicyTracker(){
+  _renderTrackerTopicsList();
+  if(_currentTopicId) _renderTrackerTimeline(_currentTopicId);
+}
+
+function filterTrackerTopics(q){
+  _renderTrackerTopicsList(q);
+}
+
+function _renderTrackerTopicsList(filter){
+  var container = document.getElementById('tracker-topics-list');
+  if(!container) return;
+  var list = _trackerTopics;
+  if(filter) list = list.filter(function(t){return t.name.toLowerCase().includes(filter.toLowerCase());});
+  if(!list.length){
+    container.innerHTML = '<div style="font-size:12px;color:var(--dim);padding:16px 0;text-align:center">'+(filter?'No matching topics.':'No topics yet. Click + New Topic.')+'</div>';
+    return;
+  }
+  container.innerHTML = list.map(function(t){
+    var events = (t.events||[]).length;
+    var linked = (t.linkedArticleIds||[]).length;
+    return '<div class="tracker-topic-item'+(t.id===_currentTopicId?' active':'')+'" onclick="openTrackerTopic(\''+t.id+'\')">'
+      +'<div class="tracker-topic-name">'+escHtml(t.name)+'</div>'
+      +'<div class="tracker-topic-meta">'+events+' events &bull; '+linked+' linked articles &bull; updated '+t.updated.slice(0,10)+'</div>'
+      +(t.status?'<div style="margin-top:5px"><span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:4px;background:'+(t.status==='Active'?'rgba(16,185,129,0.15)':t.status==='Resolved'?'rgba(100,116,139,0.15)':'rgba(240,165,0,0.12)')+';color:'+(t.status==='Active'?'#10b981':t.status==='Resolved'?'#94a3b8':'#f0a500')+'">'+t.status+'</span></div>':'')
+      +'</div>';
+  }).join('');
+}
+
+function addTrackerTopic(){
+  var name = prompt('Topic name (e.g. "Bill 22 — Post-Secondary Amendment"):');
+  if(!name || !name.trim()) return;
+  var keyword = prompt('Search keyword (used to auto-match articles, e.g. "Bill 22"):') || name.trim();
+  var now = new Date().toISOString();
+  var topic = {
+    id: 'tp-'+Date.now(),
+    name: name.trim(),
+    keyword: keyword.trim(),
+    status: 'Active',
+    events: [],
+    linkedArticleIds: [],
+    created: now,
+    updated: now,
+  };
+  _trackerTopics.unshift(topic);
+  saveTrackerTopics();
+  _renderTrackerTopicsList();
+  openTrackerTopic(topic.id);
+  showToast('&#x1F4CD;','Topic Created','"'+name.trim()+'" added. Link articles from the feed below.',3000);
+}
+
+function openTrackerTopic(id){
+  _currentTopicId = id;
+  _renderTrackerTopicsList();
+  _renderTrackerTimeline(id);
+  var emptyEl = document.getElementById('tracker-empty-state');
+  var viewEl  = document.getElementById('tracker-topic-view');
+  if(emptyEl) emptyEl.style.display='none';
+  if(viewEl)  viewEl.style.display='block';
+}
+
+function _renderTrackerTimeline(id){
+  var topic = _trackerTopics.find(function(t){return t.id===id;});
+  if(!topic) return;
+
+  var titleEl = document.getElementById('tracker-topic-title');
+  var metaEl  = document.getElementById('tracker-topic-meta');
+  if(titleEl) titleEl.textContent = topic.name;
+  if(metaEl)  metaEl.textContent = 'Keyword: "'+topic.keyword+'" &bull; Status: '+(topic.status||'Active')+' &bull; Created: '+topic.created.slice(0,10);
+
+  // Build events from linked articles + manual events
+  var linkedArts = (topic.linkedArticleIds||[]).map(function(aid){
+    return articles.find(function(a){return a.id===aid;});
+  }).filter(Boolean);
+
+  // Merge manual events + linked articles into one timeline sorted by date
+  var timelineItems = [];
+  (topic.events||[]).forEach(function(e){
+    timelineItems.push({date:e.date, title:e.title, note:e.note, type:'event'});
+  });
+  linkedArts.forEach(function(a){
+    timelineItems.push({date:a.pub_date||a.pubDate||a.scrapedDate||'', title:a.title, note:a.summary||'', url:a.url, source:a.source, relevance:a.relevance, sentiment:a.sentiment, type:'article', id:a.id});
+  });
+  timelineItems.sort(function(a,b){return new Date(a.date)-new Date(b.date);});
+
+  var tlEl = document.getElementById('tracker-timeline');
+  if(tlEl){
+    if(!timelineItems.length){
+      tlEl.innerHTML = '<div style="font-size:12px;color:var(--dim);padding:12px 0">No events yet. Add manual events or link articles below.</div>';
+    } else {
+      tlEl.innerHTML = timelineItems.map(function(item, i){
+        var dotColor = item.type==='event'?'var(--gold)':'var(--cyan)';
+        var relBadge = item.relevance?'<span style="font-size:10px;color:var(--gold);margin-left:6px">'+item.relevance+'/10</span>':'';
+        var sentBadge = item.sentiment?'<span style="font-size:10px;margin-left:6px">'+sIcon(item.sentiment)+' '+item.sentiment+'</span>':'';
+        return '<div class="tracker-timeline-event">'
+          +'<div class="tracker-timeline-dot" style="border-color:'+dotColor+'"></div>'
+          +'<div class="tracker-event-date">'+item.date+'</div>'
+          +'<div class="tracker-event-title">'
+          +(item.url?'<a href="'+escHtml(item.url)+'" target="_blank" rel="noopener" style="color:var(--cyan);text-decoration:none">'+escHtml(item.title)+' ↗</a>':escHtml(item.title))
+          +relBadge+sentBadge
+          +'</div>'
+          +(item.source?'<div style="font-size:10px;color:var(--muted);margin-bottom:4px">'+escHtml(item.source)+'</div>':'')
+          +(item.note?'<div class="tracker-event-note">'+escHtml(item.note)+'</div>':'')
+          +(item.type==='article'?'<button onclick="unlinkTrackerArticle(\''+id+'\','+item.id+')" style="font-size:10px;background:none;border:none;color:var(--dim);cursor:pointer;margin-top:4px;padding:0" onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--dim)\'">&#x2715; Unlink</button>':'<button onclick="deleteTrackerEvent(\''+id+'\','+i+')" style="font-size:10px;background:none;border:none;color:var(--dim);cursor:pointer;margin-top:4px;padding:0" onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--dim)\'">&#x2715; Delete</button>')
+          +'</div>';
+      }).join('');
+    }
+    // Add manual event button
+    tlEl.innerHTML += '<div style="margin-top:12px">'
+      +'<button class="btn btn-ghost btn-sm" onclick="addTrackerEvent(\''+id+'\')">+ Add Manual Event</button>'
+      +'&nbsp;<select class="filter-select" style="height:28px;width:auto" onchange="changeTopicStatus(\''+id+'\',this.value)">'
+      +'<option value="Active" '+(topic.status==='Active'?'selected':'')+'>Active</option>'
+      +'<option value="Monitoring" '+(topic.status==='Monitoring'?'selected':'')+'>Monitoring</option>'
+      +'<option value="Resolved" '+(topic.status==='Resolved'?'selected':'')+'>Resolved</option>'
+      +'</select>'
+      +'</div>';
+  }
+
+  // Linked articles panel
+  var laEl = document.getElementById('tracker-linked-articles');
+  if(laEl){
+    if(!linkedArts.length){
+      laEl.innerHTML='<div style="font-size:11px;color:var(--dim)">No articles linked yet. Search below to add.</div>';
+    } else {
+      laEl.innerHTML = linkedArts.map(function(a){
+        return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)">'
+          +'<div style="flex:1;font-size:11px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escHtml(a.title)+'">'+escHtml(a.title)+'</div>'
+          +'<span style="font-size:10px;color:var(--muted);flex-shrink:0">'+(a.pub_date||a.pubDate||'')+'</span>'
+          +'<button onclick="unlinkTrackerArticle(\''+id+'\','+a.id+')" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;flex-shrink:0">&#x2715;</button>'
+          +'</div>';
+      }).join('');
+    }
+  }
+
+  // Auto-detect matching articles by keyword
+  var keyLow = (topic.keyword||'').toLowerCase();
+  var autoMatches = keyLow ? articles.filter(function(a){
+    return !topic.linkedArticleIds.includes(a.id) &&
+      ((a.title||'').toLowerCase().includes(keyLow) || (a.summary||'').toLowerCase().includes(keyLow));
+  }).slice(0,5) : [];
+  if(autoMatches.length){
+    var laEl2 = document.getElementById('tracker-linked-articles');
+    if(laEl2){
+      laEl2.innerHTML += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">'
+        +'<div style="font-size:10px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">&#x26A1; Auto-matched from feed</div>'
+        + autoMatches.map(function(a){
+          return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">'
+            +'<div style="flex:1;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(a.title)+'</div>'
+            +'<button class="btn btn-cyan btn-sm" style="font-size:9px;padding:2px 7px;flex-shrink:0" onclick="linkTrackerArticle(\''+id+'\','+a.id+')">Link</button>'
+            +'</div>';
+        }).join('')
+        +'</div>';
+    }
+  }
+}
+
+function linkTrackerArticle(topicId, articleId){
+  var topic = _trackerTopics.find(function(t){return t.id===topicId;});
+  if(!topic) return;
+  if(!(topic.linkedArticleIds||[]).includes(articleId)){
+    if(!topic.linkedArticleIds) topic.linkedArticleIds=[];
+    topic.linkedArticleIds.push(articleId);
+    topic.updated = new Date().toISOString();
+    saveTrackerTopics();
+    _renderTrackerTimeline(topicId);
+    showToast('&#x1F4CD;','Article Linked','Added to policy timeline.',2000);
+  }
+}
+
+function unlinkTrackerArticle(topicId, articleId){
+  var topic = _trackerTopics.find(function(t){return t.id===topicId;});
+  if(!topic) return;
+  topic.linkedArticleIds = (topic.linkedArticleIds||[]).filter(function(id){return id!==articleId;});
+  topic.updated = new Date().toISOString();
+  saveTrackerTopics();
+  _renderTrackerTimeline(topicId);
+}
+
+function addTrackerEvent(topicId){
+  var topic = _trackerTopics.find(function(t){return t.id===topicId;});
+  if(!topic) return;
+  var title = prompt('Event title:');
+  if(!title) return;
+  var date = prompt('Date (YYYY-MM-DD):', new Date().toISOString().slice(0,10));
+  if(!date) return;
+  var note = prompt('Notes (optional):') || '';
+  if(!topic.events) topic.events=[];
+  topic.events.push({title:title.trim(), date:date.trim(), note:note.trim()});
+  topic.updated = new Date().toISOString();
+  saveTrackerTopics();
+  _renderTrackerTimeline(topicId);
+  showToast('&#x1F4CD;','Event Added','"'+title.trim()+'" added to timeline.',2000);
+}
+
+function deleteTrackerEvent(topicId, index){
+  var topic = _trackerTopics.find(function(t){return t.id===topicId;});
+  if(!topic || !topic.events) return;
+  topic.events.splice(index, 1);
+  topic.updated = new Date().toISOString();
+  saveTrackerTopics();
+  _renderTrackerTimeline(topicId);
+}
+
+function changeTopicStatus(topicId, status){
+  var topic = _trackerTopics.find(function(t){return t.id===topicId;});
+  if(!topic) return;
+  topic.status = status;
+  topic.updated = new Date().toISOString();
+  saveTrackerTopics();
+  _renderTrackerTopicsList();
+}
+
+function deleteTrackerTopic(){
+  if(!_currentTopicId) return;
+  var topic = _trackerTopics.find(function(t){return t.id===_currentTopicId;});
+  if(!confirm('Delete topic "'+topic.name+'"? This cannot be undone.')) return;
+  _trackerTopics = _trackerTopics.filter(function(t){return t.id!==_currentTopicId;});
+  _currentTopicId = null;
+  saveTrackerTopics();
+  _renderTrackerTopicsList();
+  var emptyEl = document.getElementById('tracker-empty-state');
+  var viewEl  = document.getElementById('tracker-topic-view');
+  if(emptyEl) emptyEl.style.display='flex';
+  if(viewEl)  viewEl.style.display='none';
+  showToast('&#x1F5D1;','Topic Deleted','Policy topic removed.',2500);
+}
+
+function searchArticlesToLink(q){
+  var resultsEl = document.getElementById('tracker-link-results');
+  if(!resultsEl) return;
+  if(!q || q.length<2){ resultsEl.style.display='none'; return; }
+  var matches = articles.filter(function(a){
+    return a.title.toLowerCase().includes(q.toLowerCase()) || (a.summary||'').toLowerCase().includes(q.toLowerCase());
+  }).slice(0,8);
+  if(!matches.length){ resultsEl.style.display='none'; return; }
+  resultsEl.style.display='block';
+  resultsEl.innerHTML = matches.map(function(a){
+    return '<div class="tracker-link-result" onclick="linkTrackerArticle(\''+_currentTopicId+'\','+a.id+');this.parentElement.style.display=\'none\'">'
+      +'<div style="font-size:11px;font-weight:600;color:var(--white)">'+escHtml(a.title.slice(0,80))+'</div>'
+      +'<div style="font-size:10px;color:var(--muted)">'+escHtml(a.source||'')+' &bull; '+(a.pub_date||a.pubDate||'')+' &bull; '+rEmoji(a.relevance||0)+' '+(a.relevance||0)+'/10</div>'
+      +'</div>';
+  }).join('');
+}
+
+async function aiCompareChanges(){
+  var topic = _trackerTopics.find(function(t){return t.id===_currentTopicId;});
+  if(!topic) return;
+  var key = apiKey || sessionStorage.getItem('pp_groq_key');
+  if(!key){ showToast('&#x1F511;','No API Key','Enter your Groq key in Ask AI to use this feature.',4000); return; }
+
+  var linkedArts = (topic.linkedArticleIds||[]).map(function(aid){
+    return articles.find(function(a){return a.id===aid;});
+  }).filter(Boolean).sort(function(a,b){
+    return new Date(a.pub_date||a.pubDate||0)-new Date(b.pub_date||b.pubDate||0);
+  });
+
+  if(linkedArts.length<2){ showToast('&#x26A0;','Need 2+ Articles','Link at least 2 articles to compare changes.',3000); return; }
+
+  var aiEl = document.getElementById('tracker-ai-comparison');
+  if(aiEl){ aiEl.style.display='block'; aiEl.textContent='&#x1F916; Analyzing policy evolution…'; }
+
+  var context = linkedArts.map(function(a,i){
+    return '['+(i+1)+'] '+a.pub_date+': '+a.title+'\nSummary: '+a.summary+'\nWhy it matters: '+(a.why_it_matters||a.whyItMatters||'');
+  }).join('\n\n');
+
+  try {
+    var resp = await fetch('https://api.groq.com/openai/v1/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+      body:JSON.stringify({
+        model:'llama-3.3-70b-versatile',
+        messages:[
+          {role:'system',content:'You are a senior Canadian policy analyst. Analyze how a policy issue has evolved over time based on article coverage.'},
+          {role:'user',content:'Analyze the evolution of this policy topic: "'+topic.name+'"\n\nCompare these articles in chronological order and tell me:\n1. What is NEW or CHANGED in the most recent coverage vs earlier coverage?\n2. How has the policy position shifted?\n3. What should a government relations professional watch for next?\n\nARTICLES:\n'+context+'\n\nBe concise (3-4 sentences per point). Focus on what is genuinely new, not repeated context.'}
+        ],
+        max_tokens:600, temperature:0.2
+      })
+    });
+    var data = await resp.json();
+    if(data.error) throw new Error(data.error.message);
+    var reply = data.choices&&data.choices[0]?data.choices[0].message.content.trim():'No response.';
+    if(aiEl){ aiEl.style.display='block'; aiEl.innerHTML='<strong style="color:var(--cyan);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">&#x1F916; AI: What Changed?</strong><br><br>'+escHtml(reply).replace(/\n/g,'<br>'); }
+  } catch(e){
+    if(aiEl){ aiEl.textContent='Error: '+e.message; }
+    showToast('&#x26A0;','AI Error',e.message,4000);
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   KEYBOARD NAVIGATION
+   J/K: next/prev article  R: mark read  S: stage  O: open URL
+   F: flag  N: open notes  ?: show help
+   ═══════════════════════════════════════════════════════════════════ */
+
+var _kbArticleIndex = -1;
+var _kbEnabled = true;
+var _kbHintTimer = null;
+
+function _showKbHint(msg, duration){
+  var el = document.getElementById('kb-hint');
+  if(!el) return;
+  el.innerHTML = msg;
+  el.style.display = 'block';
+  clearTimeout(_kbHintTimer);
+  _kbHintTimer = setTimeout(function(){ el.style.display='none'; }, duration||2000);
+}
+
+function _getVisibleArticleCards(){
+  var feedList = document.getElementById('feed-list');
+  if(!feedList || feedList.style.display==='none') return [];
+  return Array.from(feedList.querySelectorAll('.article-card[id^="ac-"]'));
+}
+
+function _selectKbArticle(idx){
+  var cards = _getVisibleArticleCards();
+  if(!cards.length) return;
+  // Clamp
+  idx = Math.max(0, Math.min(idx, cards.length-1));
+  _kbArticleIndex = idx;
+  // Remove previous highlight
+  document.querySelectorAll('.article-card.kb-focus').forEach(function(c){c.classList.remove('kb-focus');});
+  var card = cards[idx];
+  card.classList.add('kb-focus');
+  card.scrollIntoView({behavior:'smooth', block:'nearest'});
+  return card;
+}
+
+function _kbCurrentArticleId(){
+  var card = _getVisibleArticleCards()[_kbArticleIndex];
+  if(!card) return null;
+  var m = card.id.match(/^ac-(\d+)$/);
+  return m ? parseInt(m[1]) : null;
+}
+
+document.addEventListener('keydown', function(e){
+  // Don't capture when typing in inputs
+  var tag = (e.target.tagName||'').toUpperCase();
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||e.target.contentEditable==='true') return;
+  if(!_kbEnabled) return;
+
+  // Only active in scraper feed
+  var scraperPage = document.getElementById('page-scraper');
+  if(!scraperPage || scraperPage.style.display==='none') return;
+
+  switch(e.key){
+    case 'j':
+    case 'J':
+      e.preventDefault();
+      _selectKbArticle(_kbArticleIndex<0?0:_kbArticleIndex+1);
+      _showKbHint('<kbd>J</kbd> Next article &nbsp; <kbd>K</kbd> Prev &nbsp; <kbd>R</kbd> Read &nbsp; <kbd>S</kbd> Stage &nbsp; <kbd>O</kbd> Open &nbsp; <kbd>F</kbd> Flag', 1800);
+      break;
+    case 'k':
+    case 'K':
+      e.preventDefault();
+      _selectKbArticle(_kbArticleIndex<=0?0:_kbArticleIndex-1);
+      _showKbHint('<kbd>J</kbd> Next article &nbsp; <kbd>K</kbd> Prev &nbsp; <kbd>R</kbd> Read &nbsp; <kbd>S</kbd> Stage &nbsp; <kbd>O</kbd> Open &nbsp; <kbd>F</kbd> Flag', 1800);
+      break;
+    case 'r':
+    case 'R':{
+      var rid = _kbCurrentArticleId();
+      if(rid===null) break;
+      var ra = articles.find(function(x){return x.id===rid;});
+      if(!ra) break;
+      if(ra.read){ markUnread(rid); _showKbHint('&#x21A9; Marked <strong>Unread</strong>',1500); }
+      else       { markRead(rid);   _showKbHint('&#x2713; Marked <strong>Read</strong>',1500); }
+      break;
+    }
+    case 's':
+    case 'S':{
+      var sid = _kbCurrentArticleId();
+      if(sid===null) break;
+      toggleStage(sid);
+      var sa = articles.find(function(x){return x.id===sid;});
+      _showKbHint(sa&&sa.staged?'&#x2705; <strong>Staged</strong> for digest':'&#x2715; <strong>Removed</strong> from digest',1500);
+      break;
+    }
+    case 'o':
+    case 'O':{
+      var oid = _kbCurrentArticleId();
+      if(oid===null) break;
+      var oa = articles.find(function(x){return x.id===oid;});
+      if(oa && oa.url){ window.open(oa.url,'_blank','noopener'); _showKbHint('&#x2197; <strong>Opening</strong> article…',1500); }
+      break;
+    }
+    case 'f':
+    case 'F':{
+      var fid = _kbCurrentArticleId();
+      if(fid===null) break;
+      toggleFlag(fid);
+      var fa = articles.find(function(x){return x.id===fid;});
+      _showKbHint(fa&&fa.flagged?'&#x1F6A9; <strong>Flagged</strong>':'&#x2691; <strong>Unflagged</strong>',1500);
+      break;
+    }
+    case 'p':
+    case 'P':{
+      var pid = _kbCurrentArticleId();
+      if(pid===null) break;
+      openPreview(pid, null);
+      break;
+    }
+    case '?':{
+      _showKbHint(
+        '<kbd>J</kbd> Next &nbsp; <kbd>K</kbd> Prev &nbsp; <kbd>R</kbd> Read/Unread &nbsp; <kbd>S</kbd> Stage &nbsp; <kbd>O</kbd> Open URL &nbsp; <kbd>F</kbd> Flag &nbsp; <kbd>P</kbd> Preview &nbsp; <kbd>?</kbd> Help',
+        4000
+      );
+      break;
+    }
+    case 'Escape':{
+      document.querySelectorAll('.article-card.kb-focus').forEach(function(c){c.classList.remove('kb-focus');});
+      _kbArticleIndex = -1;
+      var kbHEl = document.getElementById('kb-hint');
+      if(kbHEl) kbHEl.style.display='none';
+      break;
+    }
+  }
+});
+
+// Add CSS for kb-focus highlight (injected since we're in script context)
+(function(){
+  var s = document.createElement('style');
+  s.textContent = '.article-card.kb-focus{border-color:rgba(0,194,255,0.55)!important;box-shadow:0 0 0 2px rgba(0,194,255,0.2),0 4px 24px rgba(0,0,0,.4)!important;}.article-card.kb-focus::before{opacity:1!important;background:var(--cyan)!important;}';
+  document.head.appendChild(s);
+})();
+
+
+
 </script>
 
-<!-- HIGH-RELEVANCE MODAL -->
+<!-- HIGH-RELEVANCE MODAL (outside #main, position:fixed overlay) -->
 <div id="high-relevance-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:600;align-items:flex-start;justify-content:center;backdrop-filter:blur(6px);padding-top:60px;overflow-y:auto">
   <div style="background:linear-gradient(135deg,#0b1829,#0f2040);border:1px solid rgba(240,165,0,0.25);border-radius:14px;width:min(760px,95vw);max-height:80vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.7);position:relative;margin-bottom:40px">
     <div style="position:sticky;top:0;padding:18px 24px 14px;background:linear-gradient(135deg,#0b1829,#0f2040);border-bottom:1px solid rgba(240,165,0,0.2);display:flex;align-items:center;justify-content:space-between;z-index:2">
@@ -7546,4 +9309,3 @@ document.addEventListener('click',function(e){
 
 </body>
 </html>
-

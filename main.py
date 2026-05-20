@@ -33,6 +33,8 @@ from database import (
     # Subscribers
     get_subscribers, add_subscriber, toggle_subscriber,
     delete_subscriber, update_subscriber,
+    # Alert helpers
+    get_alert_subscribers, update_subscriber_alerts,
     # Scholarly article lookup
     get_scholarly_article_by_id,
     # Scraper config — now defined in database.py
@@ -313,8 +315,18 @@ def trigger_scrape(background_tasks: BackgroundTasks, body: dict = None, _=Depen
     if filter_config:
         import json
         set_scraper_config("news_filter_config", json.dumps(filter_config))
-    background_tasks.add_task(run_scrape, filter_config)
+    background_tasks.add_task(_scrape_and_alert)
     return {"ok": True, "message": "Scrape started in background"}
+
+
+def _scrape_and_alert():
+    """Run the full scrape then fire urgent + keyword alert emails."""
+    result = run_scrape()
+    new_articles = result.get("new_articles", [])
+    if not new_articles:
+        return
+    _dispatch_urgent_alerts(new_articles)
+    _dispatch_keyword_alerts(new_articles)
 
 
 @app.get("/scrape/status")
@@ -965,6 +977,435 @@ def check_source_reachability(source_id: int):
         return {"reachable": False, "status": "timeout", "url": url}
     except Exception as e:
         return {"reachable": False, "status": str(e)[:80], "url": url}
+
+
+# ── ARTICLE PRUNING / ARCHIVING ───────────────────────────────────────────────
+
+@app.delete("/articles/prune")
+def prune_old_articles(
+    days: int = Query(180, ge=30, le=3650),
+    dry_run: bool = Query(False),
+    _=Depends(require_auth),
+):
+    """
+    Delete news articles older than `days` days (default 180).
+    Staged articles are never deleted regardless of age.
+    Pass dry_run=true to see the count without deleting.
+
+    Example:  DELETE /articles/prune?days=180
+              DELETE /articles/prune?days=90&dry_run=true
+    """
+    from database import get_conn
+    conn = get_conn()
+    cutoff = (datetime.utcnow() - __import__("datetime").timedelta(days=days)).date().isoformat()
+    count_row = conn.execute(
+        "SELECT COUNT(*) FROM articles WHERE pub_date < ? AND staged = 0",
+        (cutoff,)
+    ).fetchone()[0]
+    if not dry_run:
+        conn.execute(
+            "DELETE FROM articles WHERE pub_date < ? AND staged = 0",
+            (cutoff,)
+        )
+        conn.commit()
+    conn.close()
+    return {
+        "ok":      True,
+        "dry_run": dry_run,
+        "deleted": 0 if dry_run else count_row,
+        "would_delete": count_row,
+        "cutoff_date": cutoff,
+        "note": "Staged articles are never pruned.",
+    }
+
+
+@app.get("/articles/prune/preview")
+def prune_preview(
+    days: int = Query(180, ge=30, le=3650),
+    _=Depends(require_auth),
+):
+    """Return how many articles would be deleted by a prune with the given days cutoff."""
+    from database import get_conn
+    conn = get_conn()
+    cutoff = (datetime.utcnow() - __import__("datetime").timedelta(days=days)).date().isoformat()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM articles WHERE pub_date < ? AND staged = 0",
+        (cutoff,)
+    ).fetchone()[0]
+    total = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
+    conn.close()
+    return {"would_delete": count, "total": total, "cutoff_date": cutoff, "days": days}
+
+
+# ── ARTICLE RE-ANALYSIS ───────────────────────────────────────────────────────
+
+@app.post("/articles/{article_id}/reanalyze")
+def reanalyze_article(article_id: int, _=Depends(require_auth)):
+    """
+    Re-run Gemini AI analysis on a single existing article and update the DB.
+    Useful after prompt improvements — the article's summary, why_it_matters,
+    domain, jurisdiction, sentiment, relevance, and tags are all refreshed.
+    The article URL is re-fetched to get fresh body text.
+    """
+    from database import get_conn, get_article_by_id
+    from scraper import fetch_article_details
+    from ai_processor import analyze_article
+
+    a = get_article_by_id(article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    # Re-fetch body text — best effort, fall back to empty string
+    article_text, _ = fetch_article_details(a["url"])
+
+    result = analyze_article(
+        title=a["title"],
+        url=a["url"],
+        source_name=a["source"],
+        article_text=article_text or "",
+    )
+    if not result:
+        raise HTTPException(
+            status_code=422,
+            detail="AI scored this article below 6 — it would be filtered out if re-scraped."
+        )
+
+    conn = get_conn()
+    conn.execute(
+        """UPDATE articles
+           SET domain=?, jurisdiction=?, relevance=?, sentiment=?,
+               summary=?, why_it_matters=?, tags=?
+           WHERE id=?""",
+        (
+            result["domain"], result["jurisdiction"], result["relevance"],
+            result["sentiment"], result["summary"], result["why_it_matters"],
+            ",".join(result.get("tags", [])),
+            article_id,
+        )
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "article_id": article_id, "result": result}
+
+
+@app.post("/articles/reanalyze-bulk")
+def reanalyze_bulk(
+    body: dict,
+    background_tasks: BackgroundTasks,
+    _=Depends(require_auth),
+):
+    """
+    Re-analyze multiple articles in the background.
+    Body: {"ids": [1, 2, 3]} or {"all_unread": true} or {"days": 7}
+    """
+    from database import get_conn
+
+    conn = get_conn()
+    if "ids" in body and body["ids"]:
+        ids = [int(i) for i in body["ids"][:50]]  # cap at 50
+    elif body.get("all_unread"):
+        rows = conn.execute(
+            "SELECT id FROM articles WHERE read=0 ORDER BY relevance DESC LIMIT 50"
+        ).fetchall()
+        ids = [r["id"] for r in rows]
+    elif "days" in body:
+        rows = conn.execute(
+            "SELECT id FROM articles WHERE pub_date >= date('now', ?) ORDER BY relevance DESC LIMIT 50",
+            (f"-{int(body['days'])} days",)
+        ).fetchall()
+        ids = [r["id"] for r in rows]
+    else:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Provide ids, all_unread, or days")
+    conn.close()
+
+    background_tasks.add_task(_reanalyze_batch_bg, ids)
+    return {"ok": True, "queued": len(ids), "ids": ids}
+
+
+def _reanalyze_batch_bg(ids: list):
+    """Background task: re-analyze a batch of articles sequentially."""
+    import time as _time
+    from database import get_article_by_id, get_conn
+    from scraper import fetch_article_details
+    from ai_processor import analyze_article
+    import logging as _log
+    log = _log.getLogger(__name__)
+
+    for article_id in ids:
+        try:
+            a = get_article_by_id(article_id)
+            if not a:
+                continue
+            article_text, _ = fetch_article_details(a["url"])
+            result = analyze_article(
+                title=a["title"], url=a["url"],
+                source_name=a["source"], article_text=article_text or "",
+            )
+            if not result:
+                log.info(f"  [reanalyze] id={article_id} scored <6, skipping update")
+                continue
+            conn = get_conn()
+            conn.execute(
+                """UPDATE articles
+                   SET domain=?, jurisdiction=?, relevance=?, sentiment=?,
+                       summary=?, why_it_matters=?, tags=?
+                   WHERE id=?""",
+                (result["domain"], result["jurisdiction"], result["relevance"],
+                 result["sentiment"], result["summary"], result["why_it_matters"],
+                 ",".join(result.get("tags", [])), article_id)
+            )
+            conn.commit()
+            conn.close()
+            log.info(f"  [reanalyze] id={article_id} updated (rel={result['relevance']})")
+        except Exception as e:
+            log.warning(f"  [reanalyze] id={article_id} error: {e}")
+        _time.sleep(0.5)  # gentle rate-limiting between Gemini calls
+
+
+# ── EMAIL HELPER ──────────────────────────────────────────────────────────────
+
+def _smtp_send(recipients: list[dict], subject: str, html: str) -> dict:
+    """
+    Send an HTML email to a list of recipients using Railway SMTP env vars.
+    recipients: [{"name": "...", "email": "..."}, ...]
+    Returns {"sent": int, "errors": list[str]}
+    """
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from re import sub as re_sub
+    import logging as _log
+    log = _log.getLogger(__name__)
+
+    smtp_host = os.environ.get("SMTP_HOST", "")
+    smtp_port = int(os.environ.get("SMTP_PORT", 587))
+    smtp_user = os.environ.get("SMTP_USER", "")
+    smtp_pass = os.environ.get("SMTP_PASSWORD", "")
+    smtp_from = os.environ.get("SMTP_FROM", smtp_user)
+
+    if not all([smtp_host, smtp_user, smtp_pass]):
+        log.warning("_smtp_send: SMTP not configured — skipping")
+        return {"sent": 0, "errors": ["SMTP not configured"]}
+
+    sent, errors = 0, []
+    try:
+        server = smtplib.SMTP(smtp_host, smtp_port)
+        server.ehlo()
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        for r in recipients:
+            try:
+                msg = MIMEMultipart("alternative")
+                msg["Subject"] = subject
+                msg["From"]    = smtp_from
+                msg["To"]      = r["email"]
+                plain = re_sub(r"<[^>]+>", "", html.replace("<br>", "
+").replace("</p>", "
+
+"))
+                msg.attach(MIMEText(plain, "plain"))
+                msg.attach(MIMEText(html,  "html"))
+                server.sendmail(smtp_user, r["email"], msg.as_string())
+                sent += 1
+            except Exception as e:
+                errors.append(f"{r.get('email')}: {e}")
+        server.quit()
+    except smtplib.SMTPException as e:
+        errors.append(f"SMTP connection: {e}")
+    return {"sent": sent, "errors": errors}
+
+
+# ── ALERT DISPATCH ────────────────────────────────────────────────────────────
+
+def _build_article_card_html(a: dict, accent: str = "#c41e3a") -> str:
+    """Build a single article HTML block for use in alert emails."""
+    rel   = a.get("relevance", 0)
+    emoji = "🔥" if rel >= 9 else "⭐" if rel >= 7 else "📌"
+    sent  = a.get("sentiment", "Neutral")
+    sent_color = {"Critical": "#f43f5e", "Supportive": "#10b981"}.get(sent, "#94a3b8")
+    return f"""
+<div style="margin-bottom:20px;padding:14px 16px;background:#f8faff;
+            border-left:4px solid {accent};border-radius:0 6px 6px 0">
+  <div style="font-size:13px;font-weight:700;color:#0f1f35;margin-bottom:4px">
+    <a href="{a.get('url','')}" style="color:#1d4ed8;text-decoration:none">
+      {a.get('title','')} ↗
+    </a>
+  </div>
+  <div style="font-size:11px;color:#6b8aaa;margin-bottom:8px">
+    {a.get('source','')} &bull; {a.get('jurisdiction','')} &bull;
+    {a.get('pub_date','')} &bull;
+    <span style="color:{sent_color};font-weight:600">{sent}</span> &bull;
+    {emoji} {rel}/10
+  </div>
+  <div style="font-size:12px;color:#334d6b;line-height:1.7;margin-bottom:6px">
+    {a.get('summary','')}
+  </div>
+  <div style="font-size:12px;color:#0a4d6e;font-style:italic;
+              padding:5px 10px;background:rgba(0,119,170,0.06);
+              border-left:2px solid rgba(0,119,170,0.3)">
+    💡 {a.get('why_it_matters','')}
+  </div>
+</div>"""
+
+
+def _email_wrapper(title: str, subtitle: str, body_html: str, badge_color: str = "#c41e3a") -> str:
+    """Wrap article cards in a branded email shell."""
+    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="font-family:Georgia,serif;background:#f2f5fa;margin:0;padding:20px">
+<div style="max-width:620px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;
+            box-shadow:0 2px 12px rgba(0,0,0,.08)">
+  <div style="background:linear-gradient(135deg,#003366,{badge_color});padding:22px 28px">
+    <div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+                color:rgba(255,255,255,.7);margin-bottom:4px">PolicyPulse Intelligence</div>
+    <div style="font-size:22px;font-weight:700;color:#fff;font-family:Georgia,serif">
+      {title}
+    </div>
+    <div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:4px">{subtitle}</div>
+  </div>
+  <div style="padding:24px 28px">{body_html}</div>
+  <div style="background:#f8faff;padding:16px 28px;border-top:1px solid #e8eef4;
+              font-size:11px;color:#6b8aaa;text-align:center">
+    PolicyPulse Intelligence Platform &bull; You are receiving this because you opted into
+    policy alerts. To unsubscribe, contact your PolicyPulse administrator.
+  </div>
+</div></body></html>"""
+
+
+def _dispatch_urgent_alerts(new_articles: list[dict]):
+    """Send immediate email for any newly-scraped article scoring 9–10."""
+    import logging as _log
+    log = _log.getLogger(__name__)
+
+    urgent = [a for a in new_articles if a.get("relevance", 0) >= 9]
+    if not urgent:
+        return
+
+    recipients = get_alert_subscribers("urgent")
+    if not recipients:
+        log.info(f"[alert] {len(urgent)} urgent articles — no urgent-alert subscribers")
+        return
+
+    cards = "".join(_build_article_card_html(a, "#c41e3a") for a in urgent)
+    html  = _email_wrapper(
+        title=f"🔥 {len(urgent)} Urgent Policy Alert{'s' if len(urgent)>1 else ''}",
+        subtitle=f"Critical relevance articles scraped {datetime.utcnow().strftime('%B %d, %Y')}",
+        body_html=cards,
+        badge_color="#c41e3a",
+    )
+    result = _smtp_send(recipients, f"🔥 PolicyPulse Urgent Alert — {len(urgent)} critical article(s)", html)
+    log.info(f"[alert] urgent dispatch: sent={result['sent']} errors={result['errors']}")
+
+
+def _dispatch_keyword_alerts(new_articles: list[dict]):
+    """
+    For each watchlist keyword, if any newly-scraped article is tagged with it
+    (via forced_tag from Google News feed) send a targeted keyword alert email.
+    """
+    import logging as _log
+    log = _log.getLogger(__name__)
+
+    recipients = get_alert_subscribers("keyword")
+    if not recipients:
+        return
+
+    # Group articles by their watchlist keyword tag
+    keyword_hits: dict[str, list[dict]] = {}
+    for a in new_articles:
+        tag = a.get("forced_tag")
+        if tag:
+            keyword_hits.setdefault(tag, []).append(a)
+
+    if not keyword_hits:
+        return
+
+    for keyword, arts in keyword_hits.items():
+        cards = "".join(_build_article_card_html(a, "#1d4ed8") for a in arts)
+        html  = _email_wrapper(
+            title=f'📡 Watchlist Alert: "{keyword}"',
+            subtitle=(f"{len(arts)} new article{'s' if len(arts)>1 else ''} matched your watchlist "
+                      f"keyword on {datetime.utcnow().strftime('%B %d, %Y')}"),
+            body_html=cards,
+            badge_color="#1d4ed8",
+        )
+        result = _smtp_send(
+            recipients,
+            f'📡 PolicyPulse Watchlist Alert: "{keyword}" — {len(arts)} new article(s)',
+            html,
+        )
+        log.info(f"[alert] keyword '{keyword}': sent={result['sent']} errors={result['errors']}")
+
+
+# ── ALERT ENDPOINTS ───────────────────────────────────────────────────────────
+
+@app.patch("/subscribers/{subscriber_id}/alerts")
+def update_subscriber_alert_prefs(subscriber_id: int, body: dict, _=Depends(require_auth)):
+    """
+    Toggle urgent_alerts and keyword_alerts opt-in for a subscriber.
+    Body: {"urgent_alerts": 0|1, "keyword_alerts": 0|1}
+    """
+    urgent  = int(body.get("urgent_alerts",  0))
+    keyword = int(body.get("keyword_alerts", 0))
+    update_subscriber_alerts(subscriber_id, urgent, keyword)
+    return {"ok": True}
+
+
+@app.post("/alerts/test-urgent")
+def test_urgent_alert(body: dict, _=Depends(require_auth)):
+    """
+    Send a test urgent-alert email to all opted-in subscribers.
+    Useful for verifying SMTP is configured correctly.
+    """
+    recipients = get_alert_subscribers("urgent")
+    if not recipients:
+        return {"ok": False, "detail": "No subscribers have opted into urgent alerts."}
+    test_article = {
+        "title":          "TEST: PolicyPulse Urgent Alert — Configuration Check",
+        "url":            "https://policypulse.ca",
+        "source":         "PolicyPulse System",
+        "jurisdiction":   "Test",
+        "domain":         "Configuration",
+        "relevance":      10,
+        "sentiment":      "Neutral",
+        "summary":        "This is a test alert sent from the PolicyPulse admin panel to verify that urgent alerts are configured correctly.",
+        "why_it_matters": "If you received this email, urgent alert delivery is working correctly for your account.",
+        "pub_date":       datetime.utcnow().date().isoformat(),
+        "tags":           ["Test"],
+        "forced_tag":     None,
+    }
+    cards = _build_article_card_html(test_article, "#c41e3a")
+    html  = _email_wrapper("🔥 TEST: Urgent Alert", "This is a configuration test — not a real alert.", cards, "#c41e3a")
+    result = _smtp_send(recipients, "TEST: PolicyPulse Urgent Alert", html)
+    return {"ok": True, **result}
+
+
+@app.post("/alerts/test-keyword")
+def test_keyword_alert(body: dict, _=Depends(require_auth)):
+    """Send a test keyword-alert email to all opted-in subscribers."""
+    recipients = get_alert_subscribers("keyword")
+    if not recipients:
+        return {"ok": False, "detail": "No subscribers have opted into keyword alerts."}
+    keyword = body.get("keyword", "DRIPA")
+    test_article = {
+        "title":          f"TEST: PolicyPulse Keyword Alert for '{keyword}'",
+        "url":            "https://policypulse.ca",
+        "source":         "PolicyPulse System",
+        "jurisdiction":   "Test",
+        "domain":         "Configuration",
+        "relevance":      8,
+        "sentiment":      "Neutral",
+        "summary":        f"This is a test alert for the watchlist keyword '{keyword}'.",
+        "why_it_matters": "If you received this email, keyword alert delivery is working correctly.",
+        "pub_date":       datetime.utcnow().date().isoformat(),
+        "tags":           [keyword],
+        "forced_tag":     keyword,
+    }
+    cards = _build_article_card_html(test_article, "#1d4ed8")
+    html  = _email_wrapper(f'📡 TEST: Keyword Alert "{keyword}"', "This is a configuration test.", cards, "#1d4ed8")
+    result = _smtp_send(recipients, f"TEST: PolicyPulse Keyword Alert — '{keyword}'", html)
+    return {"ok": True, **result}
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
     uvicorn.run('main:app', host='0.0.0.0', port=port, reload=False)
