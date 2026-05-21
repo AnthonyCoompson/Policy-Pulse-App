@@ -1205,10 +1205,8 @@ def _smtp_send(recipients: list[dict], subject: str, html: str) -> dict:
                 msg["Subject"] = subject
                 msg["From"]    = smtp_from
                 msg["To"]      = r["email"]
-                plain = re_sub(r"<[^>]+>", "", html.replace("<br>", "
-").replace("</p>", "
+                plain = re_sub(r"<[^>]+>", "", html.replace("<br>", "\n").replace("</p>", "\n\n"))
 
-"))
                 msg.attach(MIMEText(plain, "plain"))
                 msg.attach(MIMEText(html,  "html"))
                 server.sendmail(smtp_user, r["email"], msg.as_string())
