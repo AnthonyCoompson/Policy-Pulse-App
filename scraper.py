@@ -412,8 +412,12 @@ def scrape_generic(url, source_name, base_url=None):
                 href = urljoin(base_url or url, href)
             if href and title:
                 seen.add(href)
+                # pub_date intentionally left None — we will fetch the real
+                # publish date from the article page in Phase 1b.  Using
+                # today's scrape date as a fallback caused all HTML-scraped
+                # articles to show today's date as their "published" date.
                 articles.append({"title": title, "url": href,
-                                 "pub_date": datetime.utcnow().date().isoformat()})
+                                 "pub_date": None})
         if len(articles) >= 12:
             break
     return articles[:12]
@@ -530,7 +534,7 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
     for raw in raw_articles:
         title      = (raw.get("title") or "").strip()
         url        = (raw.get("url")   or "").strip()
-        pub_date   = raw.get("pub_date", datetime.utcnow().date().isoformat())
+        pub_date   = raw.get("pub_date")  # None means "unknown" — resolved in Phase 1b
         forced_tag = raw.get("forced_tag")
 
         if not title or not url or len(title) < 10:
@@ -567,7 +571,7 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
         })
 
     if not candidates:
-        return 0
+        return 0, []
 
     # ── Phase 1b — parallel body fetch ────────────────────────────────────────
     # All article pages for this source are fetched concurrently in one call.
@@ -593,7 +597,11 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
     meta  = []
 
     for candidate, (article_text, extracted_date) in zip(candidates, body_results):
-        pub_date = extracted_date if extracted_date else candidate["pub_date"]
+        # Priority: 1) date extracted from article page, 2) date from RSS feed,
+        # 3) None (saved as processed_date so DB shows when it was scraped, not today)
+        # This prevents HTML-scraped articles from showing today as their publish date.
+        raw_feed_date = candidate["pub_date"]  # from RSS or None (HTML sources)
+        pub_date = extracted_date or raw_feed_date  # None if both are missing
         batch.append({
             "title":        candidate["title"],
             "url":          candidate["url"],
@@ -608,7 +616,7 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
         })
 
     if not batch:
-        return 0
+        return 0, []
 
     # ── Phase 2 — AI ──────────────────────────────────────────────────────────
     if len(batch) > 3:

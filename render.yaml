@@ -1,0 +1,58 @@
+services:
+  - type: web
+    name: policypulse
+    runtime: python
+    plan: free
+
+    # Build — installs all dependencies from requirements.txt
+    buildCommand: pip install -r requirements.txt
+
+    # Start — identical to Railway's startCommand
+    startCommand: python main.py
+
+    # Render free tier spins down after 15 min of inactivity.
+    # First request after sleep takes ~30 seconds to wake up.
+    # For a personal daily-use tool this is completely fine.
+
+    envVars:
+      # ── Required ─────────────────────────────────────────────────────────
+      # Paste your actual values in the Render dashboard under
+      # Environment → Add Environment Variable
+      # Do NOT paste real keys here — this file goes in your Git repo.
+
+      - key: GEMINI_API_KEY
+        sync: false           # you type the value in the Render dashboard
+
+      - key: PP_API_KEY
+        sync: false           # same random key you used on Railway
+
+      # ── Database path ─────────────────────────────────────────────────────
+      # Render free tier uses an ephemeral disk — data resets on redeploy.
+      # This is fine for development. To persist data across deploys,
+      # upgrade to Render Starter ($7/mo) and attach a persistent disk,
+      # then change this path to /var/data/policypulse.db
+      - key: DB_PATH
+        value: /opt/render/project/src/policypulse.db
+
+      # ── CORS ──────────────────────────────────────────────────────────────
+      # Add your Render app URL here once deployed, e.g.:
+      # https://policypulse.onrender.com
+      - key: ALLOWED_ORIGINS
+        value: "*"            # change to your actual URL after first deploy
+
+      # ── Port ─────────────────────────────────────────────────────────────
+      - key: PORT
+        value: 10000          # Render's default port for web services
+
+      # ── Email / SMTP (optional — only needed for digest sending) ──────────
+      # Uncomment and fill in the Render dashboard if you use email sending
+      # - key: SMTP_HOST
+      #   sync: false
+      # - key: SMTP_PORT
+      #   sync: false
+      # - key: SMTP_USER
+      #   sync: false
+      # - key: SMTP_PASSWORD
+      #   sync: false
+      # - key: SMTP_FROM
+      #   sync: false

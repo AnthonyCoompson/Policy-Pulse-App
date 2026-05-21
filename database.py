@@ -350,11 +350,21 @@ def get_article_by_id(article_id):
 def save_article(title, url, url_hash, source, jurisdiction, domain,
                  relevance, sentiment, summary, why_it_matters,
                  pub_date, tags=""):
-    """Insert article if URL not already in DB. Returns True if inserted."""
+    """Insert article if URL not already in DB. Returns True if inserted.
+
+    pub_date may be None when the scraper could not determine the real
+    publish date from the article page.  In that case we store NULL so the
+    frontend can display "date unknown" rather than today's scrape date.
+    month_year falls back to the scrape date's month so archive tabs work.
+    """
     conn = get_conn()
     cur = conn.cursor()
     now = datetime.utcnow().isoformat()
-    month_year = pub_date[:7] if pub_date and len(pub_date) >= 7 else now[:7]
+    # month_year for archive grouping: use pub_date if known, else scrape month
+    if pub_date and len(pub_date) >= 7:
+        month_year = pub_date[:7]
+    else:
+        month_year = now[:7]
 
     try:
         cur.execute("""
@@ -936,6 +946,125 @@ def get_all_scraper_config() -> dict:
     try:
         rows = conn.execute("SELECT key, value FROM scraper_config").fetchall()
         return {r["key"]: r["value"] for r in rows}
+    except Exception:
+        return {}
+    finally:
+        conn.close()
+
+
+# ── DATE FIX HELPERS ──────────────────────────────────────────────────────────
+
+def get_articles_missing_pub_date(limit: int = 200) -> list[dict]:
+    """Return articles whose pub_date is NULL or equals their processed_date.
+
+    These are articles where the scraper could not extract a real publish date
+    from the article page.  The date fix endpoint re-fetches each URL and tries
+    to extract the real date.
+    """
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            """SELECT id, url, pub_date, processed_date
+               FROM articles
+               WHERE pub_date IS NULL
+                  OR pub_date = ''
+                  OR (processed_date IS NOT NULL AND pub_date = substr(processed_date,1,10))
+               ORDER BY id DESC
+               LIMIT ?""",
+            (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+
+def update_article_pub_date(article_id: int, pub_date: str):
+    """Update pub_date (and month_year) for a single article."""
+    if not pub_date:
+        return
+    month_year = pub_date[:7]
+    conn = get_conn()
+    try:
+        conn.execute(
+            "UPDATE articles SET pub_date = ?, month_year = ? WHERE id = ?",
+            (pub_date, month_year, article_id)
+        )
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+
+def get_scholarly_articles_missing_pub_date(limit: int = 100) -> list[dict]:
+    """Return scholarly articles with NULL or empty pub_date."""
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            """SELECT id, url, pub_date, processed_date
+               FROM scholarly_articles
+               WHERE pub_date IS NULL OR pub_date = ''
+               ORDER BY id DESC
+               LIMIT ?""",
+            (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+
+def update_scholarly_pub_date(article_id: int, pub_date: str):
+    """Update pub_date for a single scholarly article."""
+    if not pub_date:
+        return
+    conn = get_conn()
+    try:
+        conn.execute(
+            "UPDATE scholarly_articles SET pub_date = ? WHERE id = ?",
+            (pub_date, article_id)
+        )
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+
+# ── APP SETTINGS / PREFERENCES ────────────────────────────────────────────────
+
+def get_app_setting(key: str, default: str = "") -> str:
+    """Retrieve a single app preference/setting by key."""
+    conn = get_conn()
+    try:
+        # Settings are stored in the same scraper_config table under a 'setting:' prefix
+        row = conn.execute(
+            "SELECT value FROM scraper_config WHERE key = ?",
+            ("setting:" + key,)
+        ).fetchone()
+        return row["value"] if row else default
+    except Exception:
+        return default
+    finally:
+        conn.close()
+
+
+def set_app_setting(key: str, value: str):
+    """Store a single app preference/setting."""
+    set_scraper_config("setting:" + key, value)
+
+
+def get_all_app_settings() -> dict:
+    """Return all app settings (keys without the 'setting:' prefix)."""
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT key, value FROM scraper_config WHERE key LIKE 'setting:%'"
+        ).fetchall()
+        return {r["key"][8:]: r["value"] for r in rows}
     except Exception:
         return {}
     finally:

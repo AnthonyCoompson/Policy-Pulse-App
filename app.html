@@ -1022,6 +1022,7 @@ function skipApiKey(){
   <button class="nav-btn" onclick="showTab('instructions')" id="tab-instructions">📚 Reference Guide</button>
   <button class="nav-btn" onclick="showTab('subscribers')" id="tab-subscribers">👥 Subscribers</button>
   <button class="nav-btn" onclick="showTab('privacy')" id="tab-privacy">&#x1F512; Privacy</button>
+  <button class="nav-btn" onclick="showTab('settings')" id="tab-settings">&#x2699;&#xFE0F; Settings</button>
 </div>
 <div id="main">
 
@@ -2326,6 +2327,269 @@ function skipApiKey(){
     </div>
   </div>
 
+  <!-- ═══════════════════════════════════════════════════════════════
+       SETTINGS TAB
+       ═══════════════════════════════════════════════════════════════ -->
+  <div id="page-settings" style="display:none" class="fade-in">
+    <div style="max-width:800px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+        <div>
+          <div class="page-title">&#x2699;&#xFE0F; Settings &amp; Preferences</div>
+          <div class="page-subtitle">Customise PolicyPulse — changes are saved immediately</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="resetAllSettings()">&#x21BA; Reset Defaults</button>
+          <button class="btn btn-primary" onclick="saveAllSettings()">&#x2713; Save All</button>
+        </div>
+      </div>
+
+      <div id="settings-saved-banner" style="display:none;padding:10px 16px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:8px;margin-bottom:14px;font-size:12px;color:#34d399">
+        &#x2713; Settings saved successfully.
+      </div>
+
+      <!-- ── DATE & TIME ── -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:16px">&#x1F4C5; Date &amp; Time</div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <!-- Timezone -->
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Timezone</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">How dates are displayed throughout the app. Article publish dates from the source are shown in this timezone.</div>
+            <select id="setting-timezone" class="filter-select" style="width:100%" onchange="previewTimezone()">
+              <option value="America/Vancouver">Pacific Time — Vancouver / BC (PT)</option>
+              <option value="America/Edmonton">Mountain Time — Calgary / Edmonton (MT)</option>
+              <option value="America/Winnipeg">Central Time — Winnipeg (CT)</option>
+              <option value="America/Toronto">Eastern Time — Toronto / Ottawa (ET)</option>
+              <option value="America/Halifax">Atlantic Time — Halifax (AT)</option>
+              <option value="America/St_Johns">Newfoundland Time (NT)</option>
+              <option value="UTC">UTC / GMT</option>
+              <option value="Europe/London">London (GMT/BST)</option>
+              <option value="Europe/Paris">Paris / Brussels (CET)</option>
+              <option value="America/New_York">New York (ET)</option>
+              <option value="America/Los_Angeles">Los Angeles (PT)</option>
+            </select>
+            <div id="setting-tz-preview" style="margin-top:6px;font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace"></div>
+          </div>
+
+          <!-- Date format -->
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Date Display Format</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">How dates appear on article cards and in the digest.</div>
+            <select id="setting-date-format" class="filter-select" style="width:100%">
+              <option value="YYYY-MM-DD">2026-05-15 (ISO — default)</option>
+              <option value="MMM D, YYYY">May 15, 2026</option>
+              <option value="DD/MM/YYYY">15/05/2026</option>
+            </select>
+            <div style="margin-top:8px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text)">
+                <input type="checkbox" id="setting-show-unknown-label" style="accent-color:var(--cyan)">
+                Show <em style="color:var(--amber)">&ldquo;date unknown&rdquo;</em> label on articles where date couldn&rsquo;t be extracted
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fix Dates Tool -->
+        <div style="margin-top:16px;padding:12px 16px;background:rgba(240,165,0,0.06);border:1px solid rgba(240,165,0,0.2);border-radius:8px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:8px">&#x1F504; Fix Published Dates</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:10px">
+            Re-fetches article pages for all articles whose published date is missing or could not be extracted during scraping. The scraper re-reads each article&rsquo;s metadata to find the real publish date.
+            <br><span id="fix-dates-preview-text" style="color:var(--gold);font-weight:600"></span>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-ghost btn-sm" onclick="previewFixDates()">&#x1F50D; Preview Count</button>
+            <button class="btn btn-gold" id="fix-news-dates-btn" onclick="runFixDates('news')">&#x1F504; Fix News Article Dates</button>
+            <button class="btn btn-ghost" id="fix-research-dates-btn" onclick="runFixDates('scholarly')">&#x1F4DA; Fix Research Dates</button>
+          </div>
+          <div id="fix-dates-status" style="display:none;margin-top:8px;font-size:12px;color:var(--muted)"></div>
+        </div>
+      </div>
+
+      <!-- ── FEED & DISPLAY ── -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:16px">&#x1F4F0; Feed &amp; Display</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Articles Per Page</div>
+            <select id="setting-articles-per-page" class="filter-select" style="width:100%">
+              <option value="10">10 articles</option>
+              <option value="20">20 articles (default)</option>
+              <option value="30">30 articles</option>
+              <option value="50">50 articles</option>
+              <option value="100">100 articles</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Default Sort Order</div>
+            <select id="setting-default-sort" class="filter-select" style="width:100%">
+              <option value="date_desc">Newest First</option>
+              <option value="date_asc">Oldest First</option>
+              <option value="rel_desc">Highest Relevance First</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="setting-compact-cards" style="accent-color:var(--cyan)">
+              Compact article cards (smaller padding, hidden summary by default)
+            </label>
+          </div>
+          <div>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="setting-show-why" style="accent-color:var(--cyan)" checked>
+              Show &ldquo;Why It Matters&rdquo; block on cards
+            </label>
+          </div>
+          <div>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="setting-auto-mark-read" style="accent-color:var(--cyan)">
+              Auto-mark article as read when preview is opened
+            </label>
+          </div>
+          <div>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="setting-keyboard-shortcuts" style="accent-color:var(--cyan)" checked>
+              Enable keyboard shortcuts (J/K navigate, R read, S stage, F flag, O open)
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCRAPING SCHEDULE ── -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:16px">&#x23F0; Scraping Schedule</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.7">
+          The scheduled scrape runs automatically on the backend (Railway). These settings control when it fires. Times are in your selected timezone above.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Scrape Days</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap" id="setting-scrape-days-btns">
+              <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text);cursor:pointer"><input type="checkbox" class="scrape-day-chk" value="mon" checked style="accent-color:var(--cyan)">Mon</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text);cursor:pointer"><input type="checkbox" class="scrape-day-chk" value="tue" checked style="accent-color:var(--cyan)">Tue</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text);cursor:pointer"><input type="checkbox" class="scrape-day-chk" value="wed" checked style="accent-color:var(--cyan)">Wed</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text);cursor:pointer"><input type="checkbox" class="scrape-day-chk" value="thu" checked style="accent-color:var(--cyan)">Thu</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text);cursor:pointer"><input type="checkbox" class="scrape-day-chk" value="fri" checked style="accent-color:var(--cyan)">Fri</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text);cursor:pointer"><input type="checkbox" class="scrape-day-chk" value="sat" style="accent-color:var(--cyan)">Sat</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text);cursor:pointer"><input type="checkbox" class="scrape-day-chk" value="sun" style="accent-color:var(--cyan)">Sun</label>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Scrape Time</div>
+            <select id="setting-scrape-time" class="filter-select" style="width:100%">
+              <option value="05:00">5:00 AM</option>
+              <option value="06:00">6:00 AM</option>
+              <option value="07:00" selected>7:00 AM (default)</option>
+              <option value="08:00">8:00 AM</option>
+              <option value="09:00">9:00 AM</option>
+              <option value="12:00">12:00 PM</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ALERTS ── -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:16px">&#x1F514; Alert Thresholds</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Minimum relevance for urgent alert email</div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <input type="range" id="setting-alert-relevance" min="7" max="10" step="1" value="9"
+                style="flex:1;accent-color:var(--red)"
+                oninput="document.getElementById('setting-alert-rel-lbl').textContent=this.value+'/10'">
+              <span id="setting-alert-rel-lbl" style="font-size:14px;font-weight:700;color:var(--gold);font-family:'IBM Plex Mono',monospace;min-width:40px">9/10</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Dashboard alert panel minimum score</div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <input type="range" id="setting-dashboard-alert-relevance" min="6" max="10" step="1" value="8"
+                style="flex:1;accent-color:var(--gold)"
+                oninput="document.getElementById('setting-dash-alert-lbl').textContent=this.value+'/10'">
+              <span id="setting-dash-alert-lbl" style="font-size:14px;font-weight:700;color:var(--gold);font-family:'IBM Plex Mono',monospace;min-width:40px">8/10</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── KEYBOARD SHORTCUTS REFERENCE ── -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px">&#x2328; Keyboard Shortcuts Reference</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
+          <div style="display:flex;gap:10px;align-items:center"><kbd class="kbd">J</kbd><span style="font-size:12px;color:var(--muted)">Next article in feed</span></div>
+          <div style="display:flex;gap:10px;align-items:center"><kbd class="kbd">K</kbd><span style="font-size:12px;color:var(--muted)">Previous article in feed</span></div>
+          <div style="display:flex;gap:10px;align-items:center"><kbd class="kbd">R</kbd><span style="font-size:12px;color:var(--muted)">Toggle read / unread</span></div>
+          <div style="display:flex;gap:10px;align-items:center"><kbd class="kbd">S</kbd><span style="font-size:12px;color:var(--muted)">Stage / unstage for digest</span></div>
+          <div style="display:flex;gap:10px;align-items:center"><kbd class="kbd">F</kbd><span style="font-size:12px;color:var(--muted)">Flag / unflag article</span></div>
+          <div style="display:flex;gap:10px;align-items:center"><kbd class="kbd">O</kbd><span style="font-size:12px;color:var(--muted)">Open article URL</span></div>
+          <div style="display:flex;gap:10px;align-items:center"><kbd class="kbd">P</kbd><span style="font-size:12px;color:var(--muted)">Open article preview</span></div>
+          <div style="display:flex;gap:10px;align-items:center"><kbd class="kbd">Esc</kbd><span style="font-size:12px;color:var(--muted)">Close modal / preview</span></div>
+          <div style="display:flex;gap:10px;align-items:center"><kbd class="kbd">?</kbd><span style="font-size:12px;color:var(--muted)">Show this reference</span></div>
+          <div style="display:flex;gap:10px;align-items:center"><kbd class="kbd">G D</kbd><span style="font-size:12px;color:var(--muted)">Go to Dashboard</span></div>
+          <div style="display:flex;gap:10px;align-items:center"><kbd class="kbd">G N</kbd><span style="font-size:12px;color:var(--muted)">Go to News feed</span></div>
+          <div style="display:flex;gap:10px;align-items:center"><kbd class="kbd">G X</kbd><span style="font-size:12px;color:var(--muted)">Go to Digest</span></div>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:var(--dim)">Shortcuts only work when no text input is focused. Disable above if they interfere with typing.</div>
+      </div>
+
+      <!-- ── BACKEND CONNECTION ── -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px">&#x1F517; Backend Connection</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Your Railway deployment URL. All scraping, AI analysis, and data persistence happens here.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <input id="setting-backend-url" class="filter-input" placeholder="https://your-app.railway.app" style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:12px">
+          <button class="btn btn-cyan" onclick="saveBackendUrl()">&#x2714; Connect</button>
+          <button class="btn btn-ghost" onclick="testBackendConnection()">&#x1F50D; Test</button>
+        </div>
+        <div id="setting-backend-status" style="font-size:11px;color:var(--muted)"></div>
+        <div style="margin-top:10px">
+          <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">API Key (PP_API_KEY)</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Set this to the same value as the PP_API_KEY environment variable in Railway to enable write operations.</div>
+          <div style="display:flex;gap:8px">
+            <input id="setting-api-key" type="password" class="filter-input" placeholder="Bearer token..." style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:12px">
+            <button class="btn btn-ghost" onclick="saveApiKeyFromSettings()">&#x2714; Save Key</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── APPEARANCE ── -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px">&#x1F3A8; Appearance</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">Theme</div>
+            <div style="display:flex;gap:8px">
+              <button class="pill" id="theme-btn-dark" onclick="setThemeFromSettings('dark')">&#x1F319; Dark</button>
+              <button class="pill" id="theme-btn-light" onclick="setThemeFromSettings('light')">&#x2600;&#xFE0F; Light</button>
+            </div>
+          </div>
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:11px;color:var(--muted);line-height:1.7">
+              Dark mode is easier on the eyes for extended reading sessions. Light mode is better for printing and bright environments.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ABOUT ── -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:12px">&#x2139; About PolicyPulse</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.8">
+          <strong style="color:var(--text)">Version:</strong> 5.1.0 &nbsp;&bull;&nbsp;
+          <strong style="color:var(--text)">Built by:</strong> Anthony Coompson &nbsp;&bull;&nbsp;
+          <strong style="color:var(--text)">Backend:</strong> <span id="settings-backend-url-display" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--cyan)">Not connected</span>
+        </div>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="showTab('quickstart')">&#x1F4CB; Quick Start</button>
+          <button class="btn btn-ghost btn-sm" onclick="showTab('instructions')">&#x1F4D6; Reference Guide</button>
+          <button class="btn btn-ghost btn-sm" onclick="showTab('privacy')">&#x1F512; Privacy</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- CITATIONS PAGE -->
   <div id="page-citations" style="display:none" class="fade-in">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
@@ -3333,7 +3597,7 @@ function buildResearchCard(a, forDashboard){
       +'<div class="research-card-title" style="font-size:12px;font-weight:600;line-height:1.4;margin-bottom:4px">'+escHtml(a.title)+'</div>'
       +(shortAbs?'<div class="research-abstract" style="font-size:10px;margin-bottom:4px;-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden">'+escHtml(shortAbs)+'</div>':'')
       +'<div class="article-footer" style="padding-top:5px;border-top:1px solid rgba(255,255,255,0.04)">'
-      +(pub?'<span class="article-date" style="font-size:9px" title="Published">&#x1F4C5; '+pub+'</span>':'')
+      +(pub?'<span class="article-date" style="font-size:9px" title="Published">&#x1F4C5; '+formatDateTZ(pub)+'</span>':'')
       +(scraped&&scraped.slice(0,10)!==pub?'<span class="article-date" style="font-size:9px;color:var(--dim)" title="Found by scraper"> &middot; found '+scraped.slice(0,10)+'</span>':'')
       +'<button class="btn btn-cyan btn-sm" style="font-size:9px;padding:2px 7px;margin-left:auto" onclick="event.stopPropagation();openResearchPreview('+a.id+')">&#x25BA; Preview</button>'
       +'<a href="'+escHtml(a.url)+'" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="font-size:9px;padding:2px 7px" onclick="event.stopPropagation()">Open &#x2197;</a>'
@@ -3648,10 +3912,14 @@ function openResearchPreview(id){
     +(a.relevance?'<span class="relevance-badge">'+rEmoji_r(a.relevance)+' '+a.relevance+'/10</span>':'');
   var _rPub     = a.pub_date  || a.pubDate     || '';
   var _rScraped = a.scrapedDate || a.processed_date || '';
+  var _rUnk     = !_rPub || (_rScraped && _rPub === _rScraped.slice(0,10));
   if(datesEl) datesEl.innerHTML =
-    (_rPub
-      ? '<span title="Published">&#x1F4C5; <strong style="color:var(--text)">Published:</strong> <span style="color:var(--text)">'+_rPub+'</span></span>'
-      : '<span style="color:var(--muted);font-size:11px">&#x1F4C5; Publish date unavailable</span>')
+    (_rUnk
+      ? '<span style="color:var(--amber);font-size:11px">&#x1F4C5; <strong style="color:var(--amber)">Published:</strong> <em>unknown</em></span>'
+      : (_rPub
+          ? '<span title="Published">&#x1F4C5; <strong style="color:var(--text)">Published:</strong> <span style="color:var(--text)">'+formatDateTZ(_rPub)+'</span></span>'
+          : '<span style="color:var(--muted);font-size:11px">&#x1F4C5; Publish date unavailable</span>')
+    )
     +(_rScraped && _rScraped.slice(0,10) !== _rPub
       ? '<span title="Found by scraper" style="color:var(--muted)"> &nbsp;&#x1F50D; <strong style="color:var(--muted)">Found:</strong> '+_rScraped.slice(0,10)+'</span>'
       : '')
@@ -4000,7 +4268,7 @@ var _articleCache = [];
 var _cacheTime = 0;
 var _cacheMaxAge = 5 * 60 * 1000; // 5 minutes
 var _page = 0;
-var _pageSize = 20;
+var _pageSize = parseInt(_appSettings.articles_per_page||'20') || 20;
 var _totalArticles = 0;
 
 function isCacheValid(){ return _articleCache.length > 0 && (Date.now() - _cacheTime) < _cacheMaxAge; }
@@ -4031,15 +4299,20 @@ async function apiFetch(path, opts) {
 }
 
 function normaliseArticle(a) {
-  // Prefer real pub_date (from article meta) over scrape date
-  var realPubDate = a.pub_date || a.pubDate || '';
-  var scrapedDate = a.processed_date || a.scrapedDate || '';
-  // If pub_date looks like it was set to today's scrape date (i.e., same as processed_date),
-  // still show it — but label the scraped date separately so users can tell
+  var realPubDate  = a.pub_date || a.pubDate || '';
+  var scrapedDate  = a.processed_date || a.scrapedDate || '';
+
+  // Flag articles where pub_date is null/empty OR equals the scrape date
+  // (which means the scraper used today as a fallback — not a real pub date)
+  var scrapedDay   = scrapedDate ? scrapedDate.slice(0,10) : '';
+  var pubDay       = realPubDate ? realPubDate.slice(0,10) : '';
+  var pubDateUnknown = !pubDay || (scrapedDay && pubDay === scrapedDay);
+
   return Object.assign({}, a, {
-    pubDate:      realPubDate,
-    scrapedDate:  scrapedDate,
-    whyItMatters: a.why_it_matters || a.whyItMatters  || '',
+    pubDate:        realPubDate,
+    scrapedDate:    scrapedDate,
+    pubDateUnknown: pubDateUnknown,   // true → date shown as "unknown" + fix button
+    whyItMatters:   a.why_it_matters || a.whyItMatters || '',
     read:   a.read   === 1 || a.read   === true,
     staged: a.staged === 1 || a.staged === true,
   });
@@ -4096,7 +4369,10 @@ async function apiLoadStats() {
   var e;
   e = document.getElementById('stat-unread'); if (e) e.textContent = d.unread || 0;
   e = document.getElementById('stat-staged'); if (e) e.textContent = d.staged || 0;
-  if (d.last_scraped) { e = document.getElementById('last-scraped-txt'); if(e) e.textContent = '· Last scraped: ' + d.last_scraped.slice(0,16).replace('T',' '); }
+  if (d.last_scraped) {
+    e = document.getElementById('last-scraped-txt');
+    if(e) e.textContent = '· Last scraped: ' + formatDateTimeTZ(d.last_scraped) + ' PT';
+  }
 }
 
 async function apiLoadSources() {
@@ -4327,9 +4603,17 @@ function openPreview(id, event){
   if(datesEl){
     var _pub     = a.pubDate     || a.pub_date      || '';
     var _scraped = a.scrapedDate || a.processed_date || '';
-    datesEl.innerHTML =
-      (_pub     ? '<span title="Date published by the original source">&#x1F4C5; <strong style="color:var(--text)">Published:</strong> <span style="color:var(--text)">'+_pub+'</span></span>' : '<span style="color:var(--muted);font-size:11px">&#x1F4C5; Publish date unavailable</span>') +
-      (_scraped && _scraped.slice(0,10) !== _pub ? '<span title="Date PolicyPulse scraped this article" style="color:var(--muted)"> &nbsp;&#x1F50D; <strong style="color:var(--muted)">Scraped:</strong> '+_scraped.slice(0,10)+'</span>' : '');
+    var _unk     = a.pubDateUnknown;
+    var _pubHtml = _unk
+      ? '<span style="color:var(--amber);font-size:11px" title="Publish date could not be extracted — click Fix Date to re-fetch">&#x1F4C5; <strong style="color:var(--amber)">Published:</strong> <em>unknown</em></span>'
+        + '<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;margin-left:6px" onclick="fixSingleArticleDate('+a.id+')">&#x1F504; Fix Date</button>'
+      : (_pub
+          ? '<span title="Date published by the original source">&#x1F4C5; <strong style="color:var(--text)">Published:</strong> <span style="color:var(--text)">'+formatDateTZ(_pub)+'</span></span>'
+          : '<span style="color:var(--muted);font-size:11px">&#x1F4C5; Publish date unavailable</span>');
+    datesEl.innerHTML = _pubHtml +
+      (_scraped && _scraped.slice(0,10) !== _pub
+        ? '<span title="Date PolicyPulse scraped this article" style="color:var(--muted)"> &nbsp;&#x1F50D; <strong style="color:var(--muted)">Found:</strong> '+_scraped.slice(0,10)+'</span>'
+        : '');
   }
 
   document.getElementById('preview-title').textContent = a.title;
@@ -4780,7 +5064,7 @@ function _setBootStatus(msg){
 }
 
 async function showTab(n){
-  ['dashboard','quickstart','scraper','digest','subscribers','briefing','askai','instructions','citations','notes','privacy','notion','research','analytics','tracker','share'].forEach(t=>{
+  ['dashboard','quickstart','scraper','digest','subscribers','briefing','askai','instructions','citations','notes','privacy','notion','research','analytics','tracker','share','settings'].forEach(t=>{
     var pg=document.getElementById('page-'+t);
     var tb=document.getElementById('tab-'+t);
     if(pg) pg.style.display=t===n?'block':'none';
@@ -4832,13 +5116,135 @@ async function showTab(n){
   if(n==='analytics'){ renderAnalyticsDashboard(); }
   if(n==='tracker'){   renderPolicyTracker(); }
   if(n==='share'){     renderPublicFeedConfig(); }
+  if(n==='settings'){  initSettingsTab(); }
 }
 
 function sIcon(s){return s==='Critical'?'🔴':s==='Supportive'?'🟢':'⚪';}
 function rEmoji(r){return r>=9?'🔥':r>=7?'⭐':'📌';}
-function isNew(d){if(!d)return false;return(Date.now()-new Date(d))/864e5<7;} // uses real Date.now()
+function isNew(d){if(!d)return false;return(Date.now()-new Date(d))/864e5<7;}
 function stageCount(){return articles.filter(a=>a.staged===true||a.staged===1).length;}
 function unreadCount(){return articles.filter(a=>a.read===false||a.read===0).length;}
+
+/* ═══════════════════════════════════════════════════
+   TIMEZONE & DATE FORMATTING
+   ═══════════════════════════════════════════════════ */
+
+// App-wide settings state — loaded from localStorage and backend
+var _appSettings = {
+  timezone: 'America/Vancouver',
+  date_format: 'YYYY-MM-DD',
+  keyboard_shortcuts: 'true',
+  auto_mark_read_on_open: 'false',
+  compact_cards: 'false',
+  show_why_it_matters: 'true',
+  articles_per_page: '20',
+  default_sort: 'date_desc',
+  alert_min_relevance: '8',
+  theme: 'dark',
+};
+
+// Load saved settings from localStorage on startup
+(function _loadAppSettings(){
+  try {
+    var saved = localStorage.getItem('pp_app_settings');
+    if(saved) _appSettings = Object.assign(_appSettings, JSON.parse(saved));
+  } catch(e){}
+})();
+
+function saveAppSettingsLocal(){
+  try { localStorage.setItem('pp_app_settings', JSON.stringify(_appSettings)); } catch(e){}
+}
+
+/**
+ * Format a YYYY-MM-DD date string in the user's chosen timezone.
+ * Falls back gracefully if Intl is unavailable.
+ */
+function formatDateTZ(dateStr) {
+  if(!dateStr) return '—';
+  var tz = _appSettings.timezone || 'America/Vancouver';
+  var fmt = _appSettings.date_format || 'YYYY-MM-DD';
+  try {
+    // Parse the date — if it's YYYY-MM-DD (no time), treat as noon UTC to avoid
+    // off-by-one from timezone conversion shifting the date backward.
+    var d;
+    if(/^\d{4}-\d{2}-\d{2}$/.test(dateStr)){
+      d = new Date(dateStr + 'T12:00:00Z');
+    } else {
+      d = new Date(dateStr);
+    }
+    if(isNaN(d)) return dateStr;
+
+    if(fmt === 'YYYY-MM-DD'){
+      // Show in chosen timezone
+      return d.toLocaleDateString('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+    } else if(fmt === 'MMM D, YYYY'){
+      return d.toLocaleDateString('en-CA', { timeZone: tz, year: 'numeric', month: 'short', day: 'numeric' });
+    } else if(fmt === 'DD/MM/YYYY'){
+      return d.toLocaleDateString('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+    }
+    return dateStr;
+  } catch(e){
+    return dateStr;
+  }
+}
+
+/**
+ * Format a full ISO datetime string as a human-readable date+time in chosen TZ.
+ */
+function formatDateTimeTZ(isoStr) {
+  if(!isoStr) return '—';
+  var tz = _appSettings.timezone || 'America/Vancouver';
+  try {
+    var d = new Date(isoStr);
+    if(isNaN(d)) return isoStr.slice(0,16).replace('T',' ');
+    return d.toLocaleString('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit',
+      day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+  } catch(e){
+    return isoStr.slice(0,16).replace('T',' ');
+  }
+}
+
+/**
+ * Get current time as a string in the chosen timezone.
+ */
+function nowInTZ(){
+  var tz = _appSettings.timezone || 'America/Vancouver';
+  try {
+    return new Date().toLocaleString('en-CA', { timeZone: tz, hour: '2-digit',
+      minute: '2-digit', hour12: false, weekday: 'short' });
+  } catch(e){ return new Date().toLocaleTimeString(); }
+}
+
+/* ── Single article date fix ── */
+async function fixSingleArticleDate(id){
+  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Railway backend to fix dates.',4000); return; }
+  showToast('&#x1F504;','Fixing Date','Re-fetching article page to extract publish date…',4000);
+  var d = await apiFetch('/articles/fix-dates',{method:'POST',body:JSON.stringify({ids:[id]})});
+  if(d&&d.ok){
+    showToast('&#x2705;','Fix Started','Date fix running in background. Refresh in ~10s.',5000);
+    // Optimistically reload after 12s
+    setTimeout(async function(){
+      await apiLoadArticles({limit:100,force:true});
+      // Re-open preview with updated data
+      var a = articles.find(function(x){return x.id===id;});
+      if(a){
+        var datesEl = document.getElementById('preview-dates');
+        if(datesEl){
+          var _pub = a.pubDate||a.pub_date||'';
+          var _scraped = a.scrapedDate||a.processed_date||'';
+          var _unk = a.pubDateUnknown;
+          datesEl.innerHTML = _unk
+            ? '<span style="color:var(--amber);font-size:11px">&#x1F4C5; Published: <em>still unknown</em></span><button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;margin-left:6px" onclick="fixSingleArticleDate('+id+')">&#x1F504; Retry</button>'
+            : '<span>&#x1F4C5; <strong style="color:var(--text)">Published:</strong> <span style="color:var(--text)">'+formatDateTZ(_pub)+'</span></span>'
+              +(_scraped?'<span style="color:var(--muted)"> &nbsp;&#x1F50D; <strong>Found:</strong> '+_scraped.slice(0,10)+'</span>':'');
+        }
+      }
+      renderFeed();
+    }, 12000);
+  } else {
+    showToast('&#x26A0;','Error','Could not start date fix.',3000);
+  }
+}
 
 function updateBadges(){
   const uc=unreadCount(),sc=stageCount();
@@ -4911,7 +5317,18 @@ function buildCard(a,expanded){
         </span>
       </div>
       <div class="article-footer">
-        <span class="article-date" title="Published by source">&#x1F4C5; ${a.pubDate||a.pub_date||'—'}</span>${a.scrapedDate?'<span class="article-date" style="color:var(--dim);font-size:10px" title="Scraped: '+a.scrapedDate.slice(0,10)+'"> · found '+a.scrapedDate.slice(0,10)+'</span>':''}
+        ${(function(){
+          var _pub     = a.pubDate||a.pub_date||'';
+          var _scraped = a.scrapedDate||a.processed_date||'';
+          var _unk     = a.pubDateUnknown;
+          var _pubDisp = _unk
+            ? '<span class="article-date" style="color:var(--amber);font-style:italic" title="Publish date could not be extracted from this article — click Fix Date to re-fetch">&#x1F4C5; date unknown</span>'
+            : '<span class="article-date" title="Published by source">&#x1F4C5; '+formatDateTZ(_pub)+'</span>';
+          var _scrapedDisp = _scraped
+            ? '<span class="article-date" style="color:var(--dim);font-size:10px" title="Found by PolicyPulse scraper"> · found '+_scraped.slice(0,10)+'</span>'
+            : '';
+          return _pubDisp + _scrapedDisp;
+        })()}
         <span style="font-size:10px;color:var(--dim)">~${Math.max(1,Math.ceil((_sum.length/5)/200))} min read</span>
         ${a.read
           ?'<button class="btn btn-ghost btn-sm" onclick="markUnread('+a.id+')">↩ Unread</button>'
@@ -5184,7 +5601,7 @@ async function loadScrapeLog(){
   var rows = data.log.map(function(entry){
     var added    = entry.articles_added || 0;
     var hasError = entry.errors && entry.errors.trim() && entry.errors !== 'None' && entry.errors !== '';
-    var ts       = (entry.scraped_at || '').replace('T',' ').slice(0,16);
+    var ts = formatDateTimeTZ(entry.scraped_at || '');
     var addedColor = added > 0 ? 'var(--green)' : 'var(--muted)';
     var statusIcon = hasError ? '&#x26A0;' : '&#x2713;';
     var statusColor = hasError ? '#f59e0b' : 'var(--green)';
@@ -7327,10 +7744,23 @@ function updateFlagCount(){
   if(btn) btn.innerHTML = '&#x1F6A9; Flagged' + (count > 0 ? ' ('+count+')' : '');
 }
 
-// Set dashboard date dynamically
+// Set dashboard date dynamically with timezone awareness
 (function(){
   var el = document.getElementById('dash-subtitle');
-  if(el) el.textContent = 'Policy intelligence overview · '+new Date().toLocaleDateString('en-CA',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  var tz = (_appSettings && _appSettings.timezone) || 'America/Vancouver';
+  var opts = {timeZone: tz, weekday:'long', year:'numeric', month:'long', day:'numeric'};
+  try {
+    var dateStr = new Date().toLocaleDateString('en-CA', opts);
+    var tzLabel = tz.includes('Vancouver') || tz.includes('Los_Angeles') ? 'PT'
+      : tz.includes('Edmonton') || tz.includes('Denver') ? 'MT'
+      : tz.includes('Winnipeg') || tz.includes('Chicago') ? 'CT'
+      : tz.includes('Toronto') || tz.includes('New_York') ? 'ET'
+      : tz.includes('Halifax') ? 'AT'
+      : tz.replace('America/','').replace('Europe/','');
+    if(el) el.textContent = 'Policy intelligence overview · ' + dateStr + ' · ' + tzLabel;
+  } catch(e){
+    if(el) el.textContent = 'Policy intelligence overview · ' + new Date().toDateString();
+  }
 })();
 function clearPrivacyData(type){
   var keys = {
@@ -9280,6 +9710,272 @@ document.addEventListener('keydown', function(e){
   s.textContent = '.article-card.kb-focus{border-color:rgba(0,194,255,0.55)!important;box-shadow:0 0 0 2px rgba(0,194,255,0.2),0 4px 24px rgba(0,0,0,.4)!important;}.article-card.kb-focus::before{opacity:1!important;background:var(--cyan)!important;}';
   document.head.appendChild(s);
 })();
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   SETTINGS TAB — full init, save, and helper logic
+═══════════════════════════════════════════════════════════════════ */
+
+function initSettingsTab(){
+  // Timezone
+  var tzSel = document.getElementById('setting-timezone');
+  if(tzSel) tzSel.value = _appSettings.timezone || 'America/Vancouver';
+  previewTimezone();
+
+  // Date format
+  var dfSel = document.getElementById('setting-date-format');
+  if(dfSel) dfSel.value = _appSettings.date_format || 'YYYY-MM-DD';
+
+  // Show unknown label
+  var unkChk = document.getElementById('setting-show-unknown-label');
+  if(unkChk) unkChk.checked = _appSettings.show_pub_date_unknown_label !== 'false';
+
+  // Feed settings
+  var ppSel = document.getElementById('setting-articles-per-page');
+  if(ppSel) ppSel.value = _appSettings.articles_per_page || '20';
+
+  var sortSel = document.getElementById('setting-default-sort');
+  if(sortSel) sortSel.value = _appSettings.default_sort || 'date_desc';
+
+  var compChk = document.getElementById('setting-compact-cards');
+  if(compChk) compChk.checked = _appSettings.compact_cards === 'true';
+
+  var whyChk = document.getElementById('setting-show-why');
+  if(whyChk) whyChk.checked = _appSettings.show_why_it_matters !== 'false';
+
+  var autoReadChk = document.getElementById('setting-auto-mark-read');
+  if(autoReadChk) autoReadChk.checked = _appSettings.auto_mark_read_on_open === 'true';
+
+  var kbChk = document.getElementById('setting-keyboard-shortcuts');
+  if(kbChk) kbChk.checked = _appSettings.keyboard_shortcuts !== 'false';
+
+  // Alert thresholds
+  var alertSlider = document.getElementById('setting-alert-relevance');
+  var alertLbl    = document.getElementById('setting-alert-rel-lbl');
+  if(alertSlider){
+    alertSlider.value = _appSettings.alert_min_relevance || '9';
+    if(alertLbl) alertLbl.textContent = alertSlider.value+'/10';
+  }
+
+  var dashSlider = document.getElementById('setting-dashboard-alert-relevance');
+  var dashLbl    = document.getElementById('setting-dash-alert-lbl');
+  if(dashSlider){
+    dashSlider.value = '8';
+    if(dashLbl) dashLbl.textContent = dashSlider.value+'/10';
+  }
+
+  // Scrape days
+  var savedDays = (_appSettings.scrape_days || 'mon,tue,wed,thu,fri').split(',');
+  document.querySelectorAll('.scrape-day-chk').forEach(function(chk){
+    chk.checked = savedDays.includes(chk.value);
+  });
+
+  // Scrape time
+  var stSel = document.getElementById('setting-scrape-time');
+  if(stSel) stSel.value = _appSettings.scrape_time || '07:00';
+
+  // Backend URL
+  var beInp = document.getElementById('setting-backend-url');
+  if(beInp) beInp.value = localStorage.getItem('pp_api_base') || '';
+
+  var apiKeyInp = document.getElementById('setting-api-key');
+  if(apiKeyInp && localStorage.getItem('pp_api_key')) apiKeyInp.value = '••••••••••••••••';
+
+  // Backend display
+  var beDisp = document.getElementById('settings-backend-url-display');
+  if(beDisp) beDisp.textContent = API_BASE || 'Not connected';
+
+  var beStat = document.getElementById('setting-backend-status');
+  if(beStat) beStat.textContent = API_BASE ? '✓ Connected to: '+API_BASE : 'Not connected';
+
+  // Theme buttons
+  var isDark = !document.body.classList.contains('light-mode');
+  var darkBtn  = document.getElementById('theme-btn-dark');
+  var lightBtn = document.getElementById('theme-btn-light');
+  if(darkBtn)  darkBtn.classList.toggle('active', isDark);
+  if(lightBtn) lightBtn.classList.toggle('active', !isDark);
+
+  // Preview fix dates count
+  previewFixDates();
+}
+
+function previewTimezone(){
+  var sel  = document.getElementById('setting-timezone');
+  var prev = document.getElementById('setting-tz-preview');
+  if(!sel || !prev) return;
+  var tz = sel.value;
+  try {
+    var now = new Date();
+    var opts = { timeZone: tz, year:'numeric', month:'long', day:'numeric',
+                 hour:'2-digit', minute:'2-digit', hour12: false };
+    prev.textContent = 'Current time: ' + now.toLocaleString('en-CA', opts);
+  } catch(e){
+    prev.textContent = 'Invalid timezone';
+  }
+}
+
+function setThemeFromSettings(theme){
+  _isDark = (theme === 'dark');
+  localStorage.setItem('pp_theme', theme);
+  applyTheme();
+  _appSettings.theme = theme;
+  saveAppSettingsLocal();
+  var darkBtn  = document.getElementById('theme-btn-dark');
+  var lightBtn = document.getElementById('theme-btn-light');
+  if(darkBtn)  darkBtn.classList.toggle('active', theme==='dark');
+  if(lightBtn) lightBtn.classList.toggle('active', theme==='light');
+  showToast(theme==='dark'?'&#x1F319;':'&#x2600;&#xFE0F;',
+    theme==='dark'?'Dark Mode':'Light Mode','Theme applied.',1500);
+}
+
+async function saveAllSettings(){
+  // Read all controls
+  var tz    = (document.getElementById('setting-timezone')||{}).value || 'America/Vancouver';
+  var df    = (document.getElementById('setting-date-format')||{}).value || 'YYYY-MM-DD';
+  var unkL  = document.getElementById('setting-show-unknown-label');
+  var pp    = (document.getElementById('setting-articles-per-page')||{}).value || '20';
+  var ds    = (document.getElementById('setting-default-sort')||{}).value || 'date_desc';
+  var comp  = document.getElementById('setting-compact-cards');
+  var why   = document.getElementById('setting-show-why');
+  var amr   = document.getElementById('setting-auto-mark-read');
+  var kb    = document.getElementById('setting-keyboard-shortcuts');
+  var aRel  = (document.getElementById('setting-alert-relevance')||{}).value || '9';
+  var st    = (document.getElementById('setting-scrape-time')||{}).value || '07:00';
+
+  var days = [];
+  document.querySelectorAll('.scrape-day-chk').forEach(function(chk){
+    if(chk.checked) days.push(chk.value);
+  });
+
+  // Update in-memory settings
+  _appSettings.timezone                 = tz;
+  _appSettings.date_format              = df;
+  _appSettings.show_pub_date_unknown_label = unkL  ? String(unkL.checked)  : 'true';
+  _appSettings.articles_per_page        = pp;
+  _appSettings.default_sort             = ds;
+  _appSettings.compact_cards            = comp ? String(comp.checked) : 'false';
+  _appSettings.show_why_it_matters      = why  ? String(why.checked)  : 'true';
+  _appSettings.auto_mark_read_on_open   = amr  ? String(amr.checked)  : 'false';
+  _appSettings.keyboard_shortcuts       = kb   ? String(kb.checked)   : 'true';
+  _appSettings.alert_min_relevance      = aRel;
+  _appSettings.scrape_time              = st;
+  _appSettings.scrape_days              = days.join(',');
+
+  saveAppSettingsLocal();
+
+  // Apply live effects
+  _pageSize = parseInt(pp) || 20;
+
+  // Also push to backend if connected
+  if(API_BASE){
+    await apiFetch('/settings', {
+      method: 'POST',
+      body: JSON.stringify(_appSettings)
+    });
+  }
+
+  // Show success banner
+  var banner = document.getElementById('settings-saved-banner');
+  if(banner){
+    banner.style.display = 'block';
+    setTimeout(function(){ banner.style.display = 'none'; }, 3000);
+  }
+  showToast('&#x2705;','Settings Saved','Preferences applied immediately.',2500);
+
+  // Re-render feed with new page size / sort
+  if(document.getElementById('page-scraper').style.display !== 'none'){
+    renderFeed();
+  }
+}
+
+function saveApiKeyFromSettings(){
+  var inp = document.getElementById('setting-api-key');
+  var val = (inp&&inp.value||'').trim();
+  if(!val || val.startsWith('•')) return;
+  _PP_API_KEY = val;
+  localStorage.setItem('pp_api_key', val);
+  if(inp) inp.value = '••••••••••••••••';
+  showToast('&#x1F511;','API Key Saved','Backend authentication key stored.',2500);
+}
+
+async function testBackendConnection(){
+  var inp = document.getElementById('setting-backend-url');
+  var url = (inp&&inp.value||'').trim() || API_BASE;
+  if(!url){ showToast('&#x26A0;','No URL','Enter your Railway URL first.',3000); return; }
+  var stat = document.getElementById('setting-backend-status');
+  if(stat) stat.textContent = 'Testing…';
+  try {
+    var r = await fetch(url.replace(/\/+$/,'')+'/health', {signal: AbortSignal.timeout(6000)});
+    if(r.ok){
+      if(stat) stat.innerHTML = '<span style="color:var(--green)">&#x2713; Connected — backend is healthy</span>';
+      showToast('&#x2705;','Backend OK','Railway backend is reachable.',3000);
+    } else {
+      if(stat) stat.innerHTML = '<span style="color:var(--red)">&#x2715; HTTP '+r.status+'</span>';
+    }
+  } catch(e){
+    if(stat) stat.innerHTML = '<span style="color:var(--red)">&#x2715; Could not reach: '+escHtml(e.message)+'</span>';
+  }
+}
+
+function resetAllSettings(){
+  if(!confirm('Reset all settings to defaults? This cannot be undone.')) return;
+  _appSettings = {
+    timezone: 'America/Vancouver', date_format: 'YYYY-MM-DD',
+    keyboard_shortcuts: 'true', auto_mark_read_on_open: 'false',
+    compact_cards: 'false', show_why_it_matters: 'true',
+    articles_per_page: '20', default_sort: 'date_desc',
+    alert_min_relevance: '9', theme: 'dark',
+    scrape_time: '07:00', scrape_days: 'mon,tue,wed,thu,fri',
+    show_pub_date_unknown_label: 'true',
+  };
+  saveAppSettingsLocal();
+  try { localStorage.removeItem('pp_app_settings'); } catch(e){}
+  initSettingsTab();
+  showToast('&#x21BA;','Settings Reset','All preferences restored to defaults.',2500);
+}
+
+async function previewFixDates(){
+  var txtEl = document.getElementById('fix-dates-preview-text');
+  if(!txtEl) return;
+  if(!API_BASE){ txtEl.textContent = '(Connect backend to enable)'; return; }
+  var d = await apiFetch('/articles/fix-dates/preview?limit=500');
+  if(d && d.count !== undefined){
+    txtEl.textContent = d.count + ' news article' + (d.count!==1?'s':'')+' with missing publish dates found.';
+  }
+}
+
+async function runFixDates(kind){
+  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Railway backend to fix dates.',4000); return; }
+  var btn    = document.getElementById(kind==='scholarly'?'fix-research-dates-btn':'fix-news-dates-btn');
+  var statEl = document.getElementById('fix-dates-status');
+  if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spin">&#8635;</span> Running…'; }
+  if(statEl){ statEl.style.display='block'; statEl.textContent='Date fix started — running in background…'; }
+
+  var endpoint = kind === 'scholarly' ? '/scholarly/fix-dates' : '/articles/fix-dates';
+  var d = await apiFetch(endpoint, { method: 'POST', body: JSON.stringify({ limit: 300 }) });
+
+  if(d && d.ok){
+    showToast('&#x1F504;','Date Fix Running',
+      'Re-fetching article pages to extract real publish dates. This takes 1–3 minutes.',7000);
+    if(statEl) statEl.textContent = '✓ Fix started. Articles will update over the next 1–3 minutes.';
+    // Reload articles after a delay
+    setTimeout(async function(){
+      await apiLoadArticles({ limit: 100, force: true });
+      _articleCache = []; _cacheTime = 0;
+      renderFeed(); renderDashboard();
+      previewFixDates();
+      if(statEl) statEl.textContent = '✓ Complete — feed updated.';
+      showToast('&#x2705;','Dates Fixed','Article feed refreshed with corrected dates.',4000);
+    }, 90000);
+  } else {
+    if(statEl) statEl.textContent = '⚠ Could not start — check your backend.';
+    showToast('&#x26A0;','Error','Date fix failed to start.',3000);
+  }
+
+  if(btn){ btn.disabled = false; btn.innerHTML = kind==='scholarly'?'&#x1F4DA; Fix Research Dates':'&#x1F504; Fix News Article Dates'; }
+}
+
+
 
 
 

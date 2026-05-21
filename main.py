@@ -39,6 +39,11 @@ from database import (
     get_scholarly_article_by_id,
     # Scraper config — now defined in database.py
     get_scraper_config, set_scraper_config, get_all_scraper_config,
+    # Date fix helpers
+    get_articles_missing_pub_date, update_article_pub_date,
+    get_scholarly_articles_missing_pub_date, update_scholarly_pub_date,
+    # App settings
+    get_app_setting, set_app_setting, get_all_app_settings,
 )
 from scraper import run_scrape
 from scheduler import start_scheduler
@@ -1406,6 +1411,153 @@ def test_keyword_alert(body: dict, _=Depends(require_auth)):
     return {"ok": True, **result}
 
 
+# ── FIX DATES ─────────────────────────────────────────────────────────────────
+
+@app.post("/articles/fix-dates")
+def fix_article_dates(
+    background_tasks: BackgroundTasks,
+    body: dict = None,
+    _=Depends(require_auth),
+):
+    """
+    Re-fetch URLs for articles with missing or wrong publish dates and update
+    the pub_date field in the database with the real date from the article page.
+
+    Optional body:
+        {"limit": 100}          — max articles to fix (default 200)
+        {"ids": [1, 2, 3]}      — fix specific article IDs only
+    """
+    body = body or {}
+    specific_ids = body.get("ids", [])
+    limit = int(body.get("limit", 200))
+    background_tasks.add_task(_fix_dates_bg, specific_ids, limit, "news")
+    return {"ok": True, "message": "Date fix started in background. Check scrape log for progress."}
+
+
+@app.post("/scholarly/fix-dates")
+def fix_scholarly_dates(
+    background_tasks: BackgroundTasks,
+    body: dict = None,
+    _=Depends(require_auth),
+):
+    """Re-fetch URLs for research articles with missing publish dates."""
+    body = body or {}
+    limit = int(body.get("limit", 100))
+    background_tasks.add_task(_fix_dates_bg, [], limit, "scholarly")
+    return {"ok": True, "message": "Scholarly date fix started in background."}
+
+
+@app.get("/articles/fix-dates/preview")
+def preview_articles_needing_date_fix(limit: int = Query(200)):
+    """Return count of articles that have missing or scrape-date pub_dates."""
+    rows = get_articles_missing_pub_date(limit=limit)
+    return {
+        "count": len(rows),
+        "sample": [{"id": r["id"], "pub_date": r["pub_date"],
+                    "processed_date": (r.get("processed_date") or "")[:10]} for r in rows[:10]]
+    }
+
+
+def _fix_dates_bg(specific_ids: list, limit: int, kind: str):
+    """Background task: re-fetch article pages and extract real publish dates."""
+    import time as _time
+    import logging as _log
+    from scraper import fetch_article_details
+    log = _log.getLogger(__name__)
+
+    if kind == "scholarly":
+        rows = get_scholarly_articles_missing_pub_date(limit=limit)
+    else:
+        if specific_ids:
+            from database import get_conn
+            conn = get_conn()
+            rows = []
+            for aid in specific_ids[:limit]:
+                r = conn.execute(
+                    "SELECT id, url, pub_date, processed_date FROM articles WHERE id=?",
+                    (aid,)
+                ).fetchone()
+                if r:
+                    rows.append(dict(r))
+            conn.close()
+        else:
+            rows = get_articles_missing_pub_date(limit=limit)
+
+    log.info(f"[fix-dates] Starting {kind} fix for {len(rows)} articles")
+    fixed = 0
+    skipped = 0
+
+    for row in rows:
+        try:
+            _, extracted_date = fetch_article_details(row["url"])
+            if extracted_date:
+                if kind == "scholarly":
+                    update_scholarly_pub_date(row["id"], extracted_date)
+                else:
+                    update_article_pub_date(row["id"], extracted_date)
+                fixed += 1
+                log.info(f"  [fix-dates] id={row['id']} → {extracted_date}")
+            else:
+                skipped += 1
+                log.debug(f"  [fix-dates] id={row['id']} — no date found on page")
+        except Exception as e:
+            skipped += 1
+            log.warning(f"  [fix-dates] id={row['id']} error: {e}")
+        _time.sleep(0.5)  # gentle rate-limiting
+
+    log.info(f"[fix-dates] Done. Fixed={fixed}, Skipped={skipped}")
+
+
+# ── APP SETTINGS / PREFERENCES ────────────────────────────────────────────────
+
+@app.get("/settings")
+def get_settings():
+    """Return all app settings/preferences."""
+    return {"settings": get_all_app_settings()}
+
+
+@app.post("/settings")
+def save_settings(body: dict, _=Depends(require_auth)):
+    """Save one or more app settings.  Body: {"key": "value", ...}"""
+    allowed_keys = {
+        "timezone",
+        "date_format",
+        "scrape_time",
+        "scrape_days",
+        "default_relevance_threshold",
+        "digest_day",
+        "digest_time",
+        "show_pub_date_unknown_label",
+        "articles_per_page",
+        "default_sort",
+        "theme",
+        "compact_cards",
+        "show_why_it_matters",
+        "show_summary",
+        "keyboard_shortcuts",
+        "auto_mark_read_on_open",
+        "alert_min_relevance",
+        "feed_refresh_interval",
+    }
+    saved = []
+    for key, value in body.items():
+        if key in allowed_keys:
+            set_app_setting(key, str(value))
+            saved.append(key)
+    return {"ok": True, "saved": saved}
+
+
+@app.delete("/settings/{key}")
+def delete_setting(key: str, _=Depends(require_auth)):
+    """Delete a single setting key."""
+    from database import get_conn
+    conn = get_conn()
+    conn.execute("DELETE FROM scraper_config WHERE key = ?", ("setting:" + key,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8000))
+    port = int(os.environ.get('PORT', 10000))
     uvicorn.run('main:app', host='0.0.0.0', port=port, reload=False)
