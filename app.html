@@ -4993,51 +4993,72 @@ async function init(){
   if(_appInitialized) return;
   _appInitialized = true;
 
-  // Show boot loader
   var bootLoader = document.getElementById('boot-loader');
   if(bootLoader) bootLoader.style.display = 'flex';
 
-  applyTheme();
-  populateSavedSearches();
-  loadScheduleUI();
+  // Safety net: no matter what happens, hide the boot loader after 10 seconds
+  var _bootSafetyTimer = setTimeout(function(){
+    if(bootLoader){
+      bootLoader.style.opacity = '0';
+      bootLoader.style.transition = 'opacity 0.4s ease';
+      setTimeout(function(){ bootLoader.style.display = 'none'; bootLoader.style.opacity = '1'; }, 420);
+    }
+  }, 10000);
 
-  if (API_BASE) {
-    _setBootStatus('Connecting to backend…');
-    await apiLoadArticles({ limit: 100 });
-    _setBootStatus('Loading stats…');
-    await apiLoadStats();
-    _setBootStatus('Loading subscribers…');
-    await loadSubscribers();
-    _setBootStatus('Loading sources…');
-    await apiLoadSources();
-    _setBootStatus('Loading digest history…');
-    await apiLoadDigests();
-    _setBootStatus('Syncing keyword watchlist…');
-    await apiSyncWatchlist();
-  }
+  try {
+    applyTheme();
+    populateSavedSearches();
+    loadScheduleUI();
 
-  applyStoredAnalyses();
-  updateFlagCount();
+    if (API_BASE) {
+      try {
+        _setBootStatus('Connecting to backend…');
+        await apiLoadArticles({ limit: 100 });
+        _setBootStatus('Loading stats…');
+        await apiLoadStats();
+        _setBootStatus('Loading subscribers…');
+        await loadSubscribers();
+        _setBootStatus('Loading sources…');
+        await apiLoadSources();
+        _setBootStatus('Loading digest history…');
+        await apiLoadDigests();
+        _setBootStatus('Syncing keyword watchlist…');
+        await apiSyncWatchlist();
+      } catch(backendErr) {
+        console.warn('PolicyPulse: backend load error (continuing anyway):', backendErr);
+        _setBootStatus('Backend unavailable — loading offline mode…');
+      }
+    }
 
-  // Pre-load research for dashboard widget
-  if(API_BASE && !_researchInitialized){
-    _researchInitialized = true;
-    _setBootStatus('Loading research feed…');
-    loadResearchArticles().then(function(){
-      loadResearchStats().then(function(){
-        renderDashboardResearchFeed();
-        updateResearchBadge();
-      });
-    });
-  }
+    applyStoredAnalyses();
+    updateFlagCount();
 
-  renderDashboard(); updateBadges();
+    // Pre-load research for dashboard widget (non-blocking)
+    if(API_BASE && !_researchInitialized){
+      _researchInitialized = true;
+      loadResearchArticles().then(function(){
+        loadResearchStats().then(function(){
+          renderDashboardResearchFeed();
+          updateResearchBadge();
+        });
+      }).catch(function(e){ console.warn('Research load error:', e); });
+    }
 
-  // Hide boot loader
-  if(bootLoader){
-    bootLoader.style.opacity = '0';
-    bootLoader.style.transition = 'opacity 0.4s ease';
-    setTimeout(function(){ bootLoader.style.display = 'none'; bootLoader.style.opacity = '1'; }, 420);
+    renderDashboard();
+    updateBadges();
+
+  } catch(e) {
+    console.warn('PolicyPulse init error:', e);
+    // Render dashboard with whatever data we have
+    try { renderDashboard(); updateBadges(); } catch(e2){}
+  } finally {
+    // Always hide the boot loader — this runs even if an error was thrown
+    clearTimeout(_bootSafetyTimer);
+    if(bootLoader){
+      bootLoader.style.opacity = '0';
+      bootLoader.style.transition = 'opacity 0.4s ease';
+      setTimeout(function(){ bootLoader.style.display = 'none'; bootLoader.style.opacity = '1'; }, 420);
+    }
   }
 
   // Wire share preview live updates
@@ -5052,7 +5073,7 @@ async function init(){
   });
 
   setTimeout(function(){
-    if (!API_BASE) { showToast('&#128268;', 'Connect Your Backend', 'Enter your Railway URL in any feed panel to load real articles.', 7000); }
+    if (!API_BASE) { showToast('&#128268;', 'Connect Your Backend', 'Enter your Render URL in Settings to load real articles.', 7000); }
     else { var ac = articles.filter(function(a){ return a.relevance >= 8 && !a.read; }).length; showToast('&#128225;', 'PolicyPulse Live', ac > 0 ? ac + ' high-relevance articles waiting.' : 'Feed loaded and up to date.', 4000); }
   }, 900);
   appendMsg('Hello! I\'m your PolicyPulse AI assistant. I can help you find key articles, summarize policy trends, suggest digest content, or answer strategic questions. What would you like to know?','msg-ai');
