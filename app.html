@@ -1112,6 +1112,7 @@ function skipApiKey(){
       <button class="sub-tab active" onclick="scraperTab('feed')" id="st-feed">Article Feed</button>
       <button class="sub-tab" onclick="scraperTab('archive')" id="st-archive">Search &amp; Archive</button>
       <button class="sub-tab" onclick="scraperTab('sources')" id="st-sources">Sources</button>
+      <button class="sub-tab" onclick="scraperTab('settings')" id="st-settings">&#x2699; Filter Settings</button>
       <button class="sub-tab" onclick="scraperTab('log')" id="st-log">&#x1F4CB; Scrape Log</button>
     </div>
     <div id="scraper-feed-panel">
@@ -1199,6 +1200,119 @@ function skipApiKey(){
       </table></div>
     </div>
 
+    <!-- ═══ NEWS SCRAPER FILTER SETTINGS PANEL ═══ -->
+    <div id="scraper-settings-panel" style="display:none">
+      <div style="max-width:780px">
+
+        <!-- Header -->
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:4px">&#x2699;&#xFE0F; News Scraper Filter Settings</div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.65">
+              These rules are applied <strong style="color:var(--text)">client-side</strong> — the scraper fetches everything as normal,
+              then these filters decide what gets displayed and staged.
+              Changes take effect immediately on the current feed without re-scraping.
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="resetNewsFilters()">&#x21BA; Reset Defaults</button>
+            <button class="btn btn-primary" onclick="applyNewsFilterSettings()">&#x2713; Apply &amp; Save</button>
+          </div>
+        </div>
+
+        <!-- Live indicator -->
+        <div id="news-filter-status" style="display:none;padding:9px 14px;border-radius:7px;font-size:11px;font-weight:600;margin-bottom:16px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);color:#10b981">
+          &#x2713; Filter settings applied — feed updated
+        </div>
+
+        <!-- ── ROW 1: Relevance threshold ── -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F4CA; Relevance Threshold</div>
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:220px">
+              <div style="font-size:12px;color:var(--text);margin-bottom:4px">Minimum relevance score to display</div>
+              <div style="font-size:11px;color:var(--muted)">Articles below this score are hidden from the feed. The AI pre-filters at 6 — raising this just hides lower-scored articles from view.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+              <input type="range" id="news-min-relevance" min="6" max="10" step="1" value="6"
+                style="width:140px;accent-color:var(--cyan)"
+                oninput="document.getElementById('news-min-rel-label').innerHTML=rEmoji(parseInt(this.value))+' '+this.value+'/10'">
+              <span id="news-min-rel-label" style="font-size:16px;font-weight:700;color:var(--gold);font-family:'IBM Plex Mono',monospace;min-width:55px">&#x1F4CC; 6/10</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── ROW 2: Domain whitelist ── -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F3F7; Domain Filter <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(tick to show, untick to hide)</span></div>
+          <div id="news-domain-checkboxes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"></div>
+        </div>
+
+        <!-- ── ROW 3: Jurisdiction filter ── -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F30E; Jurisdiction Filter</div>
+          <div id="news-juris-checkboxes" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        </div>
+
+        <!-- ── ROW 4: Sentiment filter ── -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F4AC; Sentiment Filter</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="news-sent-critical" checked style="accent-color:var(--cyan)"> &#x1F534; Critical
+            </label>
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="news-sent-supportive" checked style="accent-color:var(--cyan)"> &#x1F7E2; Supportive
+            </label>
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="news-sent-neutral" checked style="accent-color:var(--cyan)"> &#x26AA; Neutral
+            </label>
+          </div>
+        </div>
+
+        <!-- ── ROW 5: Source filter ── -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:10px">&#x1F4E1; Source Filter <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(untick to hide a source)</span></div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <button class="btn btn-ghost btn-sm" onclick="newsSourcesSelectAll(true)">Select All</button>
+            <button class="btn btn-ghost btn-sm" onclick="newsSourcesSelectAll(false)">Deselect All</button>
+          </div>
+          <div id="news-source-checkboxes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px;max-height:220px;overflow-y:auto;padding:4px"></div>
+        </div>
+
+        <!-- ── ROW 6: Age cutoff ── -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F4C5; Age Cutoff</div>
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px;font-size:11px;color:var(--muted)">Hide articles older than this many days. Set to 0 to show all.</div>
+            <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+              <input type="number" id="news-max-age-days" value="0" min="0" max="365"
+                style="width:70px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--text);text-align:center">
+              <span style="font-size:12px;color:var(--muted)">days (0 = no limit)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── ROW 7: Must-contain keyword ── -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:10px">&#x1F50D; Must-Contain Keywords <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(leave empty to show all)</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Only show articles whose title or summary contains at least one of these words.</div>
+          <div id="news-must-contain-tags" style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px"></div>
+          <div style="display:flex;gap:8px">
+            <input class="filter-input" id="news-must-contain-inp" placeholder="e.g. DRIPA, pharmacare, reconciliation…" style="max-width:300px" onkeydown="if(event.key==='Enter')addNewsMustContain()">
+            <button class="btn btn-cyan btn-sm" onclick="addNewsMustContain()">+ Add</button>
+          </div>
+        </div>
+
+        <!-- Preview count -->
+        <div style="padding:12px 16px;background:rgba(0,0,0,.2);border-radius:8px;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <span>&#x1F4CB; Articles matching current settings: <strong id="news-filter-preview-count" style="color:var(--cyan)">—</strong></span>
+          <button class="btn btn-ghost btn-sm" onclick="previewNewsFilterCount()">&#x1F50D; Preview Count</button>
+        </div>
+
+      </div>
+    </div><!-- /scraper-settings-panel -->
+
     <!-- ═══ SCRAPE LOG PANEL ═══ -->
     <div id="scraper-log-panel" style="display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
@@ -1261,8 +1375,8 @@ function skipApiKey(){
       <div id="archive-month-panel" style="display:none"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="month-btns"></div><div id="month-results"></div></div>
       <div id="archive-year-panel" style="display:none"><div style="display:flex;gap:6px;margin-bottom:12px" id="year-btns"></div><div id="year-results"></div></div>
       <div id="archive-domain-panel" style="display:none"><div id="domain-results"></div></div>
-    </div>
-  </div>
+    </div><!-- /scraper-archive-panel -->
+  </div><!-- /page-scraper -->
 
 
   <!-- RESEARCH -->
@@ -1292,14 +1406,11 @@ function skipApiKey(){
       <button class="sub-tab"        id="rst-archive"  onclick="researchTab('archive')">Search &amp; Archive</button>
       <button class="sub-tab"        id="rst-sources"  onclick="researchTab('sources')">Sources</button>
       <button class="sub-tab"        id="rst-settings" onclick="researchTab('settings')">&#x2699; Filter Settings</button>
+      <button class="sub-tab"        id="rst-log"      onclick="researchTab('log')">&#x1F4CB; Research Log</button>
     </div>
 
     <!-- FEED PANEL -->
     <div id="research-feed-panel">
-
-      <!-- Stats row — inside feed panel, below sub-tabs -->
-
-      <!-- Stats shown inline in subtitle via loadResearchStats() -->
 
       <!-- Database legend -->
       <div style="padding:10px 14px;background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
@@ -1523,9 +1634,7 @@ function skipApiKey(){
         </div>
       </div>
 
-    </div><!-- /research-sources-panel -->
-
-
+    </div><!-- /research-scraper filter settings panel
 
     <!-- ═══ RESEARCH SCRAPER FILTER SETTINGS PANEL ═══ -->
     <div id="research-settings-panel" style="display:none">
@@ -1650,8 +1759,21 @@ function skipApiKey(){
 
       </div>
     </div><!-- /research-settings-panel -->
-  </div><!-- /page-research -->
 
+    <!-- ═══ RESEARCH LOG PANEL ═══ -->
+    <div id="research-log-panel" style="display:none">
+     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:4px">&#x1F4CB; Research Scrape History</div>
+        <div style="font-size:11px;color:var(--muted)">Every automated and manual scholarly scrape run — articles added, database breakdown, and timestamps.</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="loadResearchLog()">&#x21BA; Refresh</button>
+      </div>
+      <div id="research-log-content">
+       <div class="empty"><div class="empty-icon">&#x1F4CB;</div><div class="empty-text">Click Refresh to load research scrape history.</div></div>
+      </div>
+    </div>
+  </div>
 
   <!-- DIGEST -->
   <div id="page-digest" style="display:none" class="fade-in">
@@ -2790,7 +2912,7 @@ var _researchArticles = [];
 /* _researchPageNum, _researchPageSz, _researchSearchTimer declared below with the rest of research state */
 
 function researchTab(t){
-  ['feed','archive','sources','settings'].forEach(function(x){
+  ['feed','archive','sources','settings','log'].forEach(function(x){
     var panel = document.getElementById('research-'+x+'-panel');
     var btn   = document.getElementById('rst-'+x);
     if(panel) panel.style.display = x===t ? 'block' : 'none';
@@ -2800,6 +2922,7 @@ function researchTab(t){
   if(t==='archive') { renderScholarlyKeywords(); loadScholarlyExclusionKeywords(); researchArchiveTab('search'); }
   if(t==='sources') { renderResearchSourcesTable(); }
   if(t==='settings'){ initResearchFilterSettings(); }
+  if(t==='log')     { loadResearchLog(); }
 }
 
 /* ── Archive sub-tab router (mirrors archiveTab()) ── */
@@ -5448,13 +5571,14 @@ function helpSection(t){
 }
 
 function scraperTab(t){
-  ['feed','sources','archive','log'].forEach(function(x){
+  ['feed','sources','settings','archive','log'].forEach(function(x){
     var panel = document.getElementById('scraper-'+x+'-panel');
     var btn   = document.getElementById('st-'+x);
     if(panel) panel.style.display = x===t ? 'block' : 'none';
     if(btn)   btn.classList.toggle('active', x===t);
   });
   if(t==='sources')  { renderSources(); }
+  if(t==='settings') { initNewsFilterSettings(); }
   if(t==='archive')  { renderWatchlist(); renderArchive(); loadExclusionKeywords(); }
   if(t==='log')      { loadScrapeLog(); }
 }
@@ -5492,10 +5616,80 @@ async function loadScrapeLog(){
     + '</table></div>'
     + '<div style="font-size:11px;color:var(--dim);padding:8px 0">Showing last '+data.log.length+' scrape runs.</div>';
 }
+
+async function loadResearchLog(){
+  var container = document.getElementById('research-log-content');
+  var statsEl   = document.getElementById('research-log-stats');
+  if(!container) return;
+
+  if(!API_BASE){
+    container.innerHTML = '<div class="empty"><div class="empty-icon">&#128268;</div><div class="empty-text">Connect your Render backend to view research scrape history.</div></div>';
+    return;
+  }
+
+  container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)"><span class="spin" style="display:inline-block;margin-right:6px">&#8635;</span> Loading…</div>';
+
+  // Load scholarly stats for the summary cards
+  if(statsEl){
+    try {
+      var stats = await apiFetch('/scholarly/stats');
+      if(stats){
+        var dbRows = (stats.databases||[]).map(function(db){
+          var cls = dbBadgeClass(db.database_name||'');
+          return '<div class="stat-card" style="padding:12px 14px">'
+            +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span class="research-db-badge '+cls+'">'+escHtml(db.database_name||'')+'</span></div>'
+            +'<div class="stat-val" style="font-size:22px">'+db.n+'</div>'
+            +'<div class="stat-label">articles</div>'
+            +'</div>';
+        }).join('');
+        var totalCard = '<div class="stat-card" style="padding:12px 14px"><div class="stat-val" style="font-size:22px;color:var(--white)">'+stats.total+'</div><div class="stat-label">Total Research Articles</div></div>';
+        var unreadCard = '<div class="stat-card" style="padding:12px 14px"><div class="stat-val" style="font-size:22px;color:#a5b4fc">'+stats.unread+'</div><div class="stat-label">Unread</div></div>';
+        var weekCard = '<div class="stat-card" style="padding:12px 14px"><div class="stat-val" style="font-size:22px;color:var(--green)">'+stats.this_week+'</div><div class="stat-label">Added This Week</div></div>';
+        statsEl.innerHTML = totalCard + unreadCard + weekCard + dbRows;
+      }
+    } catch(e){ statsEl.innerHTML = ''; }
+  }
+
+  // Load scrape log — filter to scholarly runs (they log to the same table)
+  var data = await apiFetch('/scholarly/scrape/log');
+
+  // Fallback: if no dedicated endpoint, use the general scrape log
+  if(!data || !data.log){
+    data = await apiFetch('/scrape/log?limit=30');
+  }
+
+  if(!data || !data.log || !data.log.length){
+    container.innerHTML = '<div class="empty"><div class="empty-icon">&#x1F4CB;</div><div class="empty-text">No research scrape history yet.<br>Click <strong>Fetch New Research</strong> to run your first scrape.</div></div>';
+    return;
+  }
+
+  var rows = data.log.map(function(entry){
+    var added     = entry.articles_added || 0;
+    var hasError  = entry.errors && entry.errors.trim() && entry.errors !== 'None' && entry.errors !== '';
+    var ts        = formatDateTimeTZ(entry.scraped_at || '');
+    var addedColor = added > 0 ? 'var(--green)' : 'var(--muted)';
+    var statusIcon = hasError ? '&#x26A0;' : '&#x2713;';
+    var statusColor = hasError ? '#f59e0b' : 'var(--green)';
+    return '<tr>'
+      + '<td style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--muted);white-space:nowrap">'+ts+'</td>'
+      + '<td><span style="font-size:13px;font-weight:700;color:'+addedColor+'">'+added+'</span> <span style="font-size:10px;color:var(--dim)">articles</span></td>'
+      + '<td><span style="color:'+statusColor+';font-size:12px">'+statusIcon+' '+(hasError?'Completed with errors':'Success')+'</span></td>'
+      + '<td style="font-size:11px;color:#fb7185;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(hasError?escHtml(entry.errors||''):'')+'">'+(hasError?escHtml((entry.errors||'').slice(0,80)):'—')+'</td>'
+      + '</tr>';
+  }).join('');
+
+  container.innerHTML = '<div class="table-wrap"><table>'
+    + '<thead><tr><th>Timestamp</th><th>Articles Added</th><th>Status</th><th>Errors</th></tr></thead>'
+    + '<tbody>'+rows+'</tbody>'
+    + '</table></div>'
+    + '<div style="font-size:11px;color:var(--dim);padding:8px 0">Showing last '+data.log.length+' scrape runs.</div>';
+}
+
 function archiveTab(t){
   ['search','month','year','domain'].forEach(x=>{document.getElementById('archive-'+x+'-panel').style.display=x===t?'block':'none';document.getElementById('at-'+x).classList.toggle('active',x===t);});
   if(t==='month')renderByMonth();if(t==='year')renderByYear();if(t==='domain')renderByDomain();
 }
+
 function renderArchive(){
   const q   = document.getElementById('archive-search').value.toLowerCase();
   const dom = document.getElementById('archive-domain').value;

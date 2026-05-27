@@ -938,7 +938,7 @@ def view_public_digest(token: str):
     return HTMLResponse(content=html, status_code=200)
 
 
-# ── SCRAPE LOG ────────────────────────────────────────────────────────────────
+# ── NEWS SCRAPE LOG ────────────────────────────────────────────────────────────────
 
 @app.get("/scrape/log")
 def get_scrape_log(limit: int = Query(20)):
@@ -951,6 +951,20 @@ def get_scrape_log(limit: int = Query(20)):
     conn.close()
     return {"log": [dict(r) for r in rows]}
 
+
+# ── RESEARCH SCRAPE LOG ────────────────────────────────────────────────────────────────
+
+@app.get("/scholarly/scrape/log")
+def get_scholarly_scrape_log(limit: int = Query(20)):
+    from database import get_conn
+    conn = get_conn()
+    # scholarly scrapes are identified by the 'scholarly' keyword in errors
+    # or you can add a 'scrape_type' column — for now return all logs
+    rows = conn.execute(
+        "SELECT * FROM scrape_log ORDER BY id DESC LIMIT ?", (limit,)
+    ).fetchall()
+    conn.close()
+    return {"log": [dict(r) for r in rows]}
 
 # ── SOURCE REACHABILITY CHECK ─────────────────────────────────────────────────
 
