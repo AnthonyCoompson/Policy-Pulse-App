@@ -673,7 +673,6 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
 .research-card-title{color:var(--text)}
 .research-abstract{font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:8px;font-style:italic}
 .research-source-chip{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.04em}
-.research-stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
 .research-stat{background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(139,92,246,0.05));border:1px solid rgba(99,102,241,0.2);border-radius:var(--radius);padding:12px 14px;text-align:center}
 .research-stat-val{font-size:24px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace}
 .research-stat-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:4px}
@@ -835,7 +834,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
       <button class="btn btn-primary" style="flex:1;padding:11px;font-size:13px" onclick="saveApiKey()">🚀 Launch PolicyPulse</button>
       <button class="btn btn-ghost" style="padding:11px 16px;font-size:13px" onclick="skipApiKey()">Skip</button>
     </div>
-    <div class="modal-note">🔒 Stored in <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--cyan)">sessionStorage</span> — cleared when you close the tab.<br>Get a <strong style="color:var(--green)">free</strong> key at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--cyan)">aistudio.google.com/apikey</a></div>
+    <div class="modal-note">🔒 Stored in <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--cyan)">sessionStorage</span> — cleared when you close the tab.<br>Get a <strong style="color:var(--green)">free</strong> Groq key (starts with <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--cyan)">gsk_</span>) at <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a></div>
   </div>
 </div>
 
@@ -1012,14 +1011,13 @@ function skipApiKey(){
   <button class="nav-btn" onclick="showTab('digest')" id="tab-digest">🗞️ Digest <span class="nav-badge" id="digest-badge" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showTab('analytics')" id="tab-analytics">&#x1F4CA; Analytics</button>
   <button class="nav-btn" onclick="showTab('tracker')" id="tab-tracker">&#x1F4CD; Policy Tracker</button>
-  <button class="nav-btn" onclick="showTab('share')" id="tab-share">&#x1F310; Public Feed</button>
+
   <button class="nav-btn" onclick="showTab('notes')" id="tab-notes">&#x1F4DD; Notes</button>
   <button class="nav-btn" onclick="showTab('notion')" id="tab-notion">📒 Notion</button>
   <button class="nav-btn" onclick="showTab('briefing')" id="tab-briefing">📋 Briefing Note</button>
   <button class="nav-btn" onclick="showTab('askai')" id="tab-askai">🧠 Ask AI</button>
   <button class="nav-btn" onclick="showTab('citations')" id="tab-citations">🔖 Citations</button>
-  <button class="nav-btn" onclick="showTab('quickstart')" id="tab-quickstart">🚀 Quick Start</button>
-  <button class="nav-btn" onclick="showTab('instructions')" id="tab-instructions">📚 Reference Guide</button>
+  <button class="nav-btn" onclick="showTab('help')" id="tab-help">❓ Help</button>
   <button class="nav-btn" onclick="showTab('subscribers')" id="tab-subscribers">👥 Subscribers</button>
   <button class="nav-btn" onclick="showTab('privacy')" id="tab-privacy">&#x1F512; Privacy</button>
   <button class="nav-btn" onclick="showTab('settings')" id="tab-settings">&#x2699;&#xFE0F; Settings</button>
@@ -1089,7 +1087,6 @@ function skipApiKey(){
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
       <div><div class="page-title">News &amp; Articles</div><div class="page-subtitle" id="scraper-count">Loading news &amp; articles…</div></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-ghost btn-sm" onclick="_showKbHint('<kbd>J</kbd> Next &nbsp; <kbd>K</kbd> Prev &nbsp; <kbd>R</kbd> Read &nbsp; <kbd>S</kbd> Stage &nbsp; <kbd>O</kbd> Open &nbsp; <kbd>F</kbd> Flag &nbsp; <kbd>P</kbd> Preview &nbsp; <kbd>?</kbd> Help',4500)" title="Keyboard shortcuts" style="font-size:10px;padding:4px 10px">&#x2328; Shortcuts</button>
         <button id="scrape-btn" onclick="scrapeNow()">&#x1F50D; Scrape Now</button>
       </div>
     </div>
@@ -1103,7 +1100,6 @@ function skipApiKey(){
       <button class="sub-tab" onclick="scraperTab('archive')" id="st-archive">Search &amp; Archive</button>
       <button class="sub-tab" onclick="scraperTab('sources')" id="st-sources">Sources</button>
       <button class="sub-tab" onclick="scraperTab('log')" id="st-log">&#x1F4CB; Scrape Log</button>
-      <button class="sub-tab" onclick="scraperTab('settings')" id="st-settings">&#x2699; Filter Settings</button>
     </div>
     <div id="scraper-feed-panel">
       <div id="bulk-bar" style="display:none;align-items:center;gap:8px;padding:8px 12px;background:rgba(0,194,255,0.08);border:1px solid rgba(0,194,255,0.2);border-radius:8px;margin-bottom:10px;flex-wrap:wrap">
@@ -1164,9 +1160,8 @@ function skipApiKey(){
         <button class="pill" id="pill-flagged" onclick="toggleFlagFilter()">&#x1F6A9; Flagged Only</button>
         <select class="filter-select" id="sort-select" onchange="setSortFromSelect()" style="min-width:155px">
           <option value="date_desc">&#128197; Newest First</option>
-          <option value="date_asc">&#128197; Oldest First</option>
           <option value="rel_desc">&#128293; Highest Relevance</option>
-          <option value="rel_asc">&#128293; Lowest Relevance</option>
+          <option value="date_asc">&#128197; Oldest First</option>
         </select>
       </div>
       <div id="feed-list"></div>
@@ -1205,134 +1200,6 @@ function skipApiKey(){
       </div>
     </div>
 
-    <!-- ═══ NEWS SCRAPER FILTER SETTINGS PANEL ═══ -->
-    <div id="scraper-settings-panel" style="display:none">
-      <div style="max-width:780px">
-
-        <!-- Header -->
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
-          <div>
-            <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:4px">&#x2699;&#xFE0F; News Scraper Filter Settings</div>
-            <div style="font-size:11px;color:var(--muted);line-height:1.65">
-              These rules are applied <strong style="color:var(--text)">client-side</strong> — the scraper fetches everything as normal,
-              then these filters decide what gets displayed and staged.
-              Changes take effect immediately on the current feed without re-scraping.
-            </div>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-ghost btn-sm" onclick="resetNewsFilters()">&#x21BA; Reset Defaults</button>
-            <button class="btn btn-primary" onclick="applyNewsFilterSettings()">&#x2713; Apply &amp; Save</button>
-          </div>
-        </div>
-
-        <!-- Live indicator -->
-        <div id="news-filter-status" style="display:none;padding:9px 14px;border-radius:7px;font-size:11px;font-weight:600;margin-bottom:16px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);color:#10b981">
-          &#x2713; Filter settings applied — feed updated
-        </div>
-
-        <!-- ── ROW 1: Relevance threshold ── -->
-        <div class="card" style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F4CA; Relevance Threshold</div>
-          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-            <div style="flex:1;min-width:220px">
-              <div style="font-size:12px;color:var(--text);margin-bottom:4px">Minimum relevance score to display</div>
-              <div style="font-size:11px;color:var(--muted)">Articles below this score are hidden from the feed. The AI pre-filters at 6 — raising this just hides lower-scored articles from view.</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
-              <input type="range" id="news-min-relevance" min="6" max="10" step="1" value="6"
-                style="width:140px;accent-color:var(--cyan)"
-                oninput="document.getElementById('news-min-rel-label').innerHTML=rEmoji(parseInt(this.value))+' '+this.value+'/10'">
-              <span id="news-min-rel-label" style="font-size:16px;font-weight:700;color:var(--gold);font-family:'IBM Plex Mono',monospace;min-width:55px">&#x1F4CC; 6/10</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- ── ROW 2: Domain whitelist ── -->
-        <div class="card" style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F3F7; Domain Filter <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(tick to show, untick to hide)</span></div>
-          <div id="news-domain-checkboxes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"></div>
-        </div>
-
-        <!-- ── ROW 3: Jurisdiction filter ── -->
-        <div class="card" style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F30E; Jurisdiction Filter</div>
-          <div id="news-juris-checkboxes" style="display:flex;gap:8px;flex-wrap:wrap"></div>
-        </div>
-
-        <!-- ── ROW 4: Sentiment filter ── -->
-        <div class="card" style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F4AC; Sentiment Filter</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
-              <input type="checkbox" id="news-sent-critical" checked style="accent-color:var(--cyan)"> &#x1F534; Critical
-            </label>
-            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
-              <input type="checkbox" id="news-sent-supportive" checked style="accent-color:var(--cyan)"> &#x1F7E2; Supportive
-            </label>
-            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
-              <input type="checkbox" id="news-sent-neutral" checked style="accent-color:var(--cyan)"> &#x26AA; Neutral
-            </label>
-          </div>
-        </div>
-
-        <!-- ── ROW 5: Source filter ── -->
-        <div class="card" style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:10px">&#x1F4E1; Source Filter <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(untick to hide a source)</span></div>
-          <div style="display:flex;gap:8px;margin-bottom:10px">
-            <button class="btn btn-ghost btn-sm" onclick="newsSourcesSelectAll(true)">Select All</button>
-            <button class="btn btn-ghost btn-sm" onclick="newsSourcesSelectAll(false)">Deselect All</button>
-          </div>
-          <div id="news-source-checkboxes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px;max-height:220px;overflow-y:auto;padding:4px"></div>
-        </div>
-
-        <!-- ── ROW 6: Age cutoff ── -->
-        <div class="card" style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F4C5; Age Cutoff</div>
-          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-            <div style="flex:1;min-width:200px;font-size:11px;color:var(--muted)">Hide articles older than this many days. Set to 0 to show all.</div>
-            <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
-              <input type="number" id="news-max-age-days" value="0" min="0" max="365"
-                style="width:70px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--text);text-align:center">
-              <span style="font-size:12px;color:var(--muted)">days (0 = no limit)</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- ── ROW 7: Must-contain keyword ── -->
-        <div class="card" style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:10px">&#x1F50D; Must-Contain Keywords <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(leave empty to show all)</span></div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Only show articles whose title or summary contains at least one of these words.</div>
-          <div id="news-must-contain-tags" style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px"></div>
-          <div style="display:flex;gap:8px">
-            <input class="filter-input" id="news-must-contain-inp" placeholder="e.g. DRIPA, pharmacare, reconciliation…" style="max-width:300px" onkeydown="if(event.key==='Enter')addNewsMustContain()">
-            <button class="btn btn-cyan btn-sm" onclick="addNewsMustContain()">+ Add</button>
-          </div>
-        </div>
-
-        <!-- Preview count -->
-        <div style="padding:12px 16px;background:rgba(0,0,0,.2);border-radius:8px;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-          <span>&#x1F4CB; Articles matching current settings: <strong id="news-filter-preview-count" style="color:var(--cyan)">—</strong></span>
-          <button class="btn btn-ghost btn-sm" onclick="previewNewsFilterCount()">&#x1F50D; Preview Count</button>
-        </div>
-
-      </div>
-
-      <!-- DB PRUNING -->
-      <div class="card" style="margin-top:10px;border-color:rgba(244,63,94,0.2)">
-        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#fb7185;margin-bottom:12px">&#x1F5D1; Database Pruning</div>
-        <div style="font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:12px">Permanently delete news articles older than a set number of days. <strong style="color:var(--white)">Staged articles are never deleted.</strong> Use the preview first to see how many articles would be removed.</div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <label style="font-size:12px;color:var(--text);display:flex;align-items:center;gap:8px">Keep last
-            <input type="number" id="prune-days-inp" value="180" min="30" max="3650" style="width:70px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:13px;color:var(--text);text-align:center">
-            days of articles
-          </label>
-          <button class="btn btn-ghost btn-sm" onclick="prunePreview()">&#x1F50D; Preview</button>
-          <button class="btn btn-red btn-sm" onclick="pruneArticles()">&#x1F5D1; Prune Now</button>
-        </div>
-        <div id="prune-result" style="display:none;margin-top:10px;font-size:12px;padding:8px 12px;border-radius:6px"></div>
-      </div>
-
-    </div><!-- /scraper-settings-panel -->
 
     <div id="scraper-archive-panel" style="display:none">
       <div style="margin-bottom:14px">
@@ -1418,13 +1285,8 @@ function skipApiKey(){
     <div id="research-feed-panel">
 
       <!-- Stats row — inside feed panel, below sub-tabs -->
-      <div class="research-stats-grid" id="research-stats-grid" style="margin-top:12px">
-        <div class="research-stat"><div class="research-stat-val" id="rs-total">—</div><div class="research-stat-label">Total Articles</div></div>
-        <div class="research-stat"><div class="research-stat-val" id="rs-unread" style="color:#a5b4fc">—</div><div class="research-stat-label">Unread</div></div>
-        <div class="research-stat"><div class="research-stat-val" id="rs-week" style="color:var(--gold)">—</div><div class="research-stat-label">Added This Week</div></div>
-        <div class="research-stat"><div class="research-stat-val" id="rs-dbs">6</div><div class="research-stat-label">Databases</div></div>
-        <div class="research-stat"><div class="research-stat-val" id="rs-oa" style="color:#10b981">100%</div><div class="research-stat-label">Open Access</div></div>
-      </div>
+
+      <!-- Stats shown inline in subtitle via loadResearchStats() -->
 
       <!-- Database legend -->
       <div style="padding:10px 14px;background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
@@ -1499,9 +1361,8 @@ function skipApiKey(){
         <button class="pill" id="research-pill-flagged" onclick="toggleResearchFlagFilter()">&#x1F6A9; Flagged</button>
         <select class="filter-select" id="research-sort" onchange="renderResearchFeed()" style="min-width:155px">
           <option value="date_desc">&#x1F4C5; Newest First</option>
-          <option value="date_asc">&#x1F4C5; Oldest First</option>
           <option value="rel_desc">&#x1F525; Highest Relevance</option>
-          <option value="rel_asc">&#x1F525; Lowest Relevance</option>
+          <option value="date_asc">&#x1F4C5; Oldest First</option>
         </select>
       </div>
       <div id="research-feed-list">
@@ -1782,9 +1643,26 @@ function skipApiKey(){
   <!-- DIGEST -->
   <div id="page-digest" style="display:none" class="fade-in">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-      <div><div class="page-title">Digest</div><div class="page-subtitle">Build and send your weekly policy intelligence brief</div>
-        <div id="schedule-panel" style="margin-top:10px;padding:10px 14px;background:rgba(0,194,255,0.04);border:1px solid rgba(0,194,255,0.12);border-radius:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <span style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#00c2ff">&#x23F0; Auto-Schedule</span>
+      <div><div class="page-title">Digest</div><div class="page-subtitle">Build and send your weekly policy intelligence brief</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="toggleSchedulePanel()" title="Configure auto-send schedule">&#x23F0; Schedule</button>
+        <button class="btn btn-ghost" onclick="printDigest()">&#x1F5A8; Print</button>
+        <button class="btn btn-ghost" onclick="copyDigest()">⎘ Copy</button>
+        <button class="btn btn-ghost" onclick="exportDigestPDF()">&#x1F4C4; Export PDF</button>
+        <button class="btn btn-ghost" id="notion-digest-btn" onclick="pushDigestToNotion()" style="display:none">&#x1F5D2; Push to Notion</button>
+        <button class="btn btn-ghost" onclick="generatePublicUrl()">🔗 Public URL</button>
+        <button class="btn btn-primary" onclick="sendDigest()">✉ Send Digest</button>
+      </div>
+    </div>
+    <div class="sub-tabs">
+      <button class="sub-tab active" onclick="digestTab('staging')" id="dt-staging">Staging Area</button>
+      <button class="sub-tab" onclick="digestTab('history')" id="dt-history">Digest History</button>
+    </div>
+    <div id="digest-staging-panel">
+      <!-- Collapsible schedule panel -->
+      <div id="schedule-panel" style="display:none;margin-bottom:12px;padding:12px 16px;background:rgba(0,194,255,0.04);border:1px solid rgba(0,194,255,0.15);border-radius:8px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#00c2ff;margin-bottom:10px">&#x23F0; Auto-Send Schedule</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <select id="schedule-day" class="filter-select" style="width:auto">
             <option value="">Off</option>
             <option value="1">Every Monday</option>
@@ -1802,21 +1680,8 @@ function skipApiKey(){
           </select>
           <button class="btn btn-cyan btn-sm" onclick="saveSchedule()">Save Schedule</button>
           <span id="schedule-status" style="font-size:11px;color:#6b8aaa"></span>
-        </div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-ghost" onclick="printDigest()">&#x1F5A8; Print</button>
-        <button class="btn btn-ghost" onclick="copyDigest()">⎘ Copy</button>
-        <button class="btn btn-ghost" onclick="exportDigestPDF()">&#x1F4C4; Export PDF</button>
-        <button class="btn btn-ghost" id="notion-digest-btn" onclick="pushDigestToNotion()" style="display:none">&#x1F5D2; Push to Notion</button>
-        <button class="btn btn-ghost" onclick="generatePublicUrl()">🔗 Public URL</button>
-        <button class="btn btn-primary" onclick="sendDigest()">✉ Send Digest</button>
+        </div>
       </div>
-    </div>
-    <div class="sub-tabs">
-      <button class="sub-tab active" onclick="digestTab('staging')" id="dt-staging">Staging Area</button>
-      <button class="sub-tab" onclick="digestTab('history')" id="dt-history">Digest History</button>
-    </div>
-    <div id="digest-staging-panel">
       <div id="digest-sections"></div>
       <div class="card" style="margin-top:10px">
         <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Editor's Note</div>
@@ -1847,7 +1712,7 @@ function skipApiKey(){
       <strong style="color:var(--text)">&#x1F514; Per-subscriber alert opt-ins &mdash;</strong>
       <span style="color:#f87171;font-weight:600">&#x1F525; Urgent Alerts:</span> immediate email when a scraped article scores 9&ndash;10.
       <span style="color:#60a5fa;font-weight:600">&#x1F4E1; Keyword Alerts:</span> email when a watchlist keyword match is found.
-      Requires SMTP in Railway. Toggle per subscriber using the buttons below.
+      Requires SMTP in Render. Toggle per subscriber using the buttons below.
     </div>
     <div class="table-wrap" style="overflow-x:auto"><table>
       <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>
@@ -1866,7 +1731,7 @@ function skipApiKey(){
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
       <div>
         <div class="page-title">&#x1F4CB; Briefing Note Generator</div>
-        <div class="page-subtitle">Select 3&ndash;8 articles, then generate and download a structured policy brief as a Word .docx</div>
+        <div class="page-subtitle">Select up to 3 articles, then generate and download a structured policy brief as a Word .docx</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="briefingClearAll()">&#x2715; Clear</button>
@@ -1979,142 +1844,134 @@ function skipApiKey(){
 
   <!-- INSTRUCTIONS -->
   <!-- QUICK START GUIDE TAB -->
-  <div id="page-quickstart" style="display:none" class="fade-in">
+  <div id="page-help" style="display:none" class="fade-in">
     <div style="margin-bottom:18px">
-      <div class="page-title">Quick Start Guide</div>
-      <div class="page-subtitle">Get up and running with PolicyPulse in minutes</div>
+      <div class="page-title">❓ Help</div>
+      <div class="page-subtitle">Getting started guide and feature reference</div>
       <button class="btn btn-cyan" onclick="startTour()" style="margin-top:10px">&#x25B6; Start Interactive Tour</button>
     </div>
-    <div class="card">
-      <div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:16px;text-transform:uppercase;letter-spacing:.12em">Quick Start Guide</div>
-      <!-- AI Setup explanation box — fix 5 -->
-      <div style="margin-bottom:16px;padding:14px 16px;background:rgba(240,165,0,0.07);border:1px solid rgba(240,165,0,0.25);border-radius:10px;position:relative;overflow:hidden">
-        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--gold),transparent)"></div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:10px">&#x26A0; PolicyPulse uses TWO separate AI services — both are free</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;color:var(--muted);line-height:1.7">
-          <div style="background:rgba(0,0,0,.2);border-radius:8px;padding:10px 12px">
-            <div style="font-size:11px;font-weight:700;color:var(--white);margin-bottom:4px">&#x1F916; Groq AI (frontend)</div>
-            Used for: <strong style="color:var(--text)">Ask AI</strong>, article-level <strong style="color:var(--text)">Generate</strong> button, citation refining.<br>
-            Key goes into the <strong style="color:var(--text)">app on your browser</strong> (never sent to Railway).<br>
-            Get it free at <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a>.
-          </div>
-          <div style="background:rgba(0,0,0,.2);border-radius:8px;padding:10px 12px">
-            <div style="font-size:11px;font-weight:700;color:var(--white);margin-bottom:4px">&#x1F4E1; Gemini AI (backend scraper)</div>
-            Used for: <strong style="color:var(--text)">automatic article analysis</strong> during every scrape run — relevance scoring, domain tagging, "Why It Matters" summaries.<br>
-            Key goes into <strong style="color:var(--text)">Railway environment variables</strong> as <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">GEMINI_API_KEY</code>.<br>
-            Get it free at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--cyan)">aistudio.google.com/apikey</a>.
-          </div>
-        </div>
-        <div style="font-size:11px;color:var(--dim);margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">
-          &#x2139; If you only set up Groq: Ask AI works, but scraped articles will use keyword-based fallback analysis instead of Gemini.<br>
-          If you only set up Gemini in Railway: scraped articles get full AI analysis, but Ask AI won't work until you enter a Groq key.
-        </div>
-      </div>
-      <div class="inst-step"><div class="step-num">1</div><div class="step-content"><h4>Set Up Gemini AI Key in Railway (for article analysis)</h4><p>Go to your Railway project &rarr; <strong style="color:var(--white)">Variables</strong> &rarr; add <code style="font-size:11px;background:rgba(0,0,0,.3);padding:1px 6px;border-radius:3px">GEMINI_API_KEY</code> with a free key from <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--cyan)">aistudio.google.com/apikey</a>. This powers automatic relevance scoring, tagging, and "Why It Matters" summaries on every article scraped.</p></div></div>
-      <div class="inst-step"><div class="step-num">2</div><div class="step-content"><h4>Get Your Free Groq API Key (for Ask AI)</h4><p>Visit <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a> &rarr; sign up &rarr; API Keys &rarr; Create Key. Free, no credit card. Paste it when PolicyPulse loads to enable the Ask AI tab, the Generate button on articles, and AI citation refining.</p></div></div>
-      <div class="inst-step"><div class="step-num">3</div><div class="step-content"><h4>Configure Your Sources</h4><p>Go to <strong style="color:var(--white)">Scraper → Sources</strong> to add or remove government/policy news sources. Click <kbd class="kbd">Scrape Now</kbd> to fetch new articles on demand.</p></div></div>
-      <div class="inst-step"><div class="step-num">4</div><div class="step-content"><h4>Set Up Your Keyword Watchlist</h4><p>In <strong style="color:var(--white)">Scraper → Search &amp; Archive</strong>, add keywords like "pharmacare", "TRC", "DRIPA". Articles matching your keywords are surfaced automatically in the Dashboard Recommended panel.</p></div></div>
-      <div class="inst-step"><div class="step-num">5</div><div class="step-content"><h4>Review the Article Feed</h4><p>Click any article <strong style="color:var(--white)">headline ↗</strong> to open the source article in a new tab. Use <strong style="color:var(--white)">✓ Mark Read</strong> to track what you've reviewed, and <strong style="color:var(--white)">↩ Mark Unread</strong> to undo. Use <strong style="color:var(--white)">+ Add to Digest</strong> to stage an article.</p></div></div>
-      <div class="inst-step"><div class="step-num">6</div><div class="step-content"><h4>Build &amp; Send Your Digest</h4><p>Staged articles auto-organize in <strong style="color:var(--white)">Digest → Staging Area</strong>. Add "Why This Matters" notes, then click <strong style="color:var(--white)">Send Digest</strong>, <strong style="color:var(--white)">Copy</strong> for Teams/Slack, or <strong style="color:var(--white)">Public URL</strong> to share a read-only version.</p></div></div>
-      <div class="inst-step"><div class="step-num">7</div><div class="step-content"><h4>Use Ask AI</h4><p>Query your database in plain language in the <strong style="color:var(--white)">Ask AI</strong> tab. Try: <em style="color:var(--muted)">"What are the top 3 items for my next digest?"</em></p></div></div>
-      <div class="inst-step"><div class="step-num">8</div><div class="step-content"><h4>Assign Digest Sections</h4><p>After clicking <strong style="color:var(--white)">+ Add to Digest</strong> on any article, a section picker appears. Use the <strong style="color:var(--cyan)">&#x21C6; Move to…</strong> dropdown to assign it to: <strong>Headline of the Week</strong>, <strong>Federal Watch</strong>, <strong>Provincial Watch</strong>, <strong>Regulatory &amp; Funding</strong>, or <strong>On Our Radar</strong>.</p></div></div>
-      <div class="inst-step"><div class="step-num">9</div><div class="step-content"><h4>Filter by Category Tags</h4><p>Use the tag chips above the article feed (TRC, DRIPA, Budget, Urgent, etc.) to instantly filter articles by category. Click any tag on an article card to filter to that category. Click <strong>All</strong> to reset.</p></div></div>
+
+    <!-- Section toggle tabs -->
+    <div class="sub-tabs" style="margin-bottom:18px">
+      <button class="sub-tab active" id="help-tab-start" onclick="helpSection('start')">🚀 Getting Started</button>
+      <button class="sub-tab" id="help-tab-ref" onclick="helpSection('ref')">📚 Reference Guide</button>
     </div>
-  </div>
 
-  <div id="page-instructions" style="display:none" class="fade-in">
-    <div style="margin-bottom:18px">
-      <div class="page-title">Reference Guide</div>
-      <div class="page-subtitle">Definitions, colour codes, and feature explanations</div>
-      <button class="btn btn-cyan" onclick="showTab('quickstart')" style="margin-top:10px">&#x1F4CB; Quick Start Guide</button>
+    <!-- GETTING STARTED SECTION -->
+    <div id="help-panel-start">
+      <div class="card">
+        <div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:16px;text-transform:uppercase;letter-spacing:.12em">Quick Start Guide</div>
+        <!-- AI Setup box -->
+        <div style="margin-bottom:16px;padding:14px 16px;background:rgba(240,165,0,0.07);border:1px solid rgba(240,165,0,0.25);border-radius:10px;position:relative;overflow:hidden">
+          <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--gold),transparent)"></div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:10px">&#x26A0; PolicyPulse uses TWO separate AI services — both are free</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;color:var(--muted);line-height:1.7">
+            <div style="background:rgba(0,0,0,.2);border-radius:8px;padding:10px 12px">
+              <div style="font-size:11px;font-weight:700;color:var(--white);margin-bottom:4px">&#x1F916; Groq AI (frontend)</div>
+              Used for: <strong style="color:var(--text)">Ask AI</strong>, article-level <strong style="color:var(--text)">Generate</strong> button, citation refining.<br>
+              Key goes into the <strong style="color:var(--text)">app on your browser</strong> (never sent to the server).<br>
+              Get it free at <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a>.
+            </div>
+            <div style="background:rgba(0,0,0,.2);border-radius:8px;padding:10px 12px">
+              <div style="font-size:11px;font-weight:700;color:var(--white);margin-bottom:4px">&#x1F4E1; Gemini AI (backend scraper)</div>
+              Used for: <strong style="color:var(--text)">automatic article analysis</strong> during every scrape run — relevance scoring, domain tagging, "Why It Matters" summaries.<br>
+              Key goes into <strong style="color:var(--text)">Render environment variables</strong> as <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">GEMINI_API_KEY</code>.<br>
+              Get it free at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--cyan)">aistudio.google.com/apikey</a>.
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--dim);margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">
+            &#x2139; If you only set up Groq: Ask AI works, but scraped articles will use keyword-based fallback analysis instead of Gemini.<br>
+            If you only set up Gemini in Render: scraped articles get full AI analysis, but Ask AI won't work until you enter a Groq key.
+          </div>
+        </div>
+        <div class="inst-step"><div class="step-num">1</div><div class="step-content"><h4>Set Up Gemini AI Key in Render (for article analysis)</h4><p>Go to your Render service &rarr; <strong style="color:var(--white)">Environment</strong> &rarr; add <code style="font-size:11px;background:rgba(0,0,0,.3);padding:1px 6px;border-radius:3px">GEMINI_API_KEY</code> with a free key from <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--cyan)">aistudio.google.com/apikey</a>. This powers automatic relevance scoring, tagging, and "Why It Matters" summaries on every article scraped.</p></div></div>
+        <div class="inst-step"><div class="step-num">2</div><div class="step-content"><h4>Get Your Free Groq API Key (for Ask AI)</h4><p>Visit <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a> &rarr; sign up &rarr; API Keys &rarr; Create Key. Free, no credit card. Paste it when PolicyPulse loads to enable the Ask AI tab, the Generate button on articles, and AI citation refining.</p></div></div>
+        <div class="inst-step"><div class="step-num">3</div><div class="step-content"><h4>Connect Your Backend</h4><p>Go to <strong style="color:var(--white)">Settings → Backend Connection</strong> and paste your Render URL (e.g. <code style="font-size:11px;background:rgba(0,0,0,.3);padding:1px 6px;border-radius:3px">https://your-app.onrender.com</code>). Click <strong style="color:var(--white)">Connect</strong>. This is required for live scraping and real article data.</p></div></div>
+        <div class="inst-step"><div class="step-num">4</div><div class="step-content"><h4>Configure Your Sources</h4><p>Go to <strong style="color:var(--white)">News &amp; Articles → Sources</strong> to add or remove government/policy news sources. Click <kbd class="kbd">Scrape Now</kbd> to fetch new articles on demand.</p></div></div>
+        <div class="inst-step"><div class="step-num">5</div><div class="step-content"><h4>Set Up Your Keyword Watchlist</h4><p>In <strong style="color:var(--white)">News &amp; Articles → Search &amp; Archive</strong>, add keywords like "pharmacare", "TRC", "DRIPA". Articles matching your keywords are surfaced automatically in the Dashboard.</p></div></div>
+        <div class="inst-step"><div class="step-num">6</div><div class="step-content"><h4>Review the Article Feed</h4><p>Click any article <strong style="color:var(--white)">headline</strong> to preview it. Use <strong style="color:var(--white)">✓ Mark Read</strong> to track what you've reviewed. Use <strong style="color:var(--white)">+ Add to Digest</strong> to stage an article for your weekly brief.</p></div></div>
+        <div class="inst-step"><div class="step-num">7</div><div class="step-content"><h4>Build &amp; Send Your Digest</h4><p>Staged articles auto-organize in <strong style="color:var(--white)">Digest → Staging Area</strong>. Add "Why This Matters" notes, then click <strong style="color:var(--white)">Send Digest</strong>, <strong style="color:var(--white)">Copy</strong> for Teams/Slack, or <strong style="color:var(--white)">Public URL</strong> to share a read-only version.</p></div></div>
+        <div class="inst-step"><div class="step-num">8</div><div class="step-content"><h4>Use Ask AI</h4><p>Query your database in plain language in the <strong style="color:var(--white)">Ask AI</strong> tab. Try: <em style="color:var(--muted)">"What are the top 3 items for my next digest?"</em></p></div></div>
+        <div class="inst-step"><div class="step-num">9</div><div class="step-content"><h4>Assign Digest Sections</h4><p>After clicking <strong style="color:var(--white)">+ Add to Digest</strong>, use the <strong style="color:var(--cyan)">&#x21C6; Move to…</strong> dropdown to assign articles to: <strong>Headline of the Week</strong>, <strong>Federal Watch</strong>, <strong>Provincial Watch</strong>, <strong>Regulatory &amp; Funding</strong>, or <strong>On Our Radar</strong>.</p></div></div>
+        <div class="inst-step"><div class="step-num">10</div><div class="step-content"><h4>Filter by Category Tags</h4><p>Use the tag chips above the article feed (TRC, DRIPA, Budget, Urgent, etc.) to instantly filter articles by category. Click <strong>All</strong> to reset.</p></div></div>
+      </div>
     </div>
-    <div class="card" id="reference-guide-card">
-      <div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:16px;text-transform:uppercase;letter-spacing:.12em">Reference Guide</div>
-      <div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Sentiment Tags</div>
-      <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;font-size:12px">
-        <div><span style="font-size:14px">🔴</span> <strong>Critical</strong> <span style="color:var(--muted)">— Critical of / negatively impacts policy</span></div>
-        <div><span style="font-size:14px">🟢</span> <strong>Supportive</strong> <span style="color:var(--muted)">— Positive / reinforces policy direction</span></div>
-        <div><span style="font-size:14px">⚪</span> <strong>Neutral</strong> <span style="color:var(--muted)">— Informational / no clear stance</span></div>
-      </div>
-      <div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Relevance Scores (1–10 AI Scoring)</div>
-      <div style="font-size:12px;color:var(--muted);line-height:2">
-        🔥 <strong style="color:var(--white)">9–10</strong> — Critical; brief-worthy, immediate attention<br>
-        ⭐ <strong style="color:var(--white)">7–8</strong> — High relevance; strong digest candidate<br>
-        📌 <strong style="color:var(--white)">6</strong> — Moderate; articles below 6 are filtered out<br>
-        <span style="color:var(--dim)">1–5</span> — Low relevance; filtered out automatically by AI
-      </div>
-      <div style="margin-top:16px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Age Badges</div>
-      <div style="font-size:12px;color:var(--muted);line-height:2">
-        <span class="age-badge age-today">&#x1F7E2; Today</span> — Published today. Hover over this badge on any article card to see this tooltip. <em>Today</em> means the article was published or scraped within the last 24 hours — highest priority for review.<br>
-        <span class="age-badge age-week">&#x1F7E1; This week</span> — Scraped within the last 7 days.<br>
-        <em style="color:var(--dim)">(No badge)</em> — Older than one week.
-      </div>
-      <div style="margin-top:16px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Loading Your Groq API Key</div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.8">
-        PolicyPulse uses <strong style="color:var(--white)">Groq AI</strong> (free, no credit card) to power Ask AI, article analysis, and AI summaries. To load your API key at any time:<br>
-        1. Go to the <strong style="color:var(--white)">Ask AI</strong> tab<br>
-        2. Click the <span style="background:rgba(0,194,255,0.1);color:var(--cyan);border:1px solid rgba(0,194,255,0.25);border-radius:4px;padding:1px 7px;font-size:11px">🔑 Load API Key</span> button in the top-right<br>
-        3. Get a free key at <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a> → sign in → API Keys → Create Key<br>
-        4. Paste the key (starts with <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--cyan)">gsk_</span>) and click Save<br>
-        The key is stored in <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--cyan)">sessionStorage</span> (cleared when you close the tab — re-enter each session for privacy).
-      </div>
-      <div style="margin-top:16px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Citation Formats (3+)</div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.8">
-        PolicyPulse supports <strong style="color:var(--white)">APA</strong>, <strong style="color:var(--white)">MLA</strong>, and <strong style="color:var(--white)">Chicago</strong> citation formats. Use the Citations tab to auto-generate a bibliography from any tracked article. The AI Auto-Generate button uses Groq to refine formatting to academic standards.
-      </div>
-      <!-- ARTICLE SIDE COLOURS -->
-      <div style="margin-top:16px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:10px">Article Side Colours</div>
-      <div style="font-size:12px;color:var(--muted);line-height:2.2">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <div style="width:4px;height:36px;background:var(--cyan);border-radius:2px;flex-shrink:0"></div>
-          <div><strong style="color:var(--white)">Cyan / Blue</strong> — Unread article. You haven't opened or reviewed this article yet. Disappears once you mark it read.</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <div style="width:4px;height:36px;background:var(--gold);border-radius:2px;flex-shrink:0"></div>
-          <div><strong style="color:var(--white)">Gold / Amber</strong> — Staged for digest. You've added this article to your weekly briefing. It will appear in the Digest tab.</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <div style="width:4px;height:36px;background:linear-gradient(180deg,#ef4444,#dc2626);border-radius:2px;flex-shrink:0"></div>
-          <div><strong style="color:var(--white)">Red</strong> — Flagged for follow-up. Use the 🚩 Flag button to mark articles that need action, monitoring, or review later.</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:4px;height:36px;background:rgba(255,255,255,0.08);border-radius:2px;flex-shrink:0;border:1px solid rgba(255,255,255,0.1)"></div>
-          <div><strong style="color:var(--white)">No colour</strong> — Read. You've already reviewed this article.</div>
-        </div>
-      </div>
 
-      <!-- FLAG BUTTON -->
-      <div style="margin-top:20px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">🚩 Flag Button</div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.8">
-        The <strong style="color:var(--white)">Flag</strong> button (hover over any article card to reveal it) marks an article for follow-up with a red side bar. Use it for articles that need action — an upcoming consultation deadline, a bill you're tracking, or an article to bring to a meeting.<br><br>
-        To see all flagged articles at once, click the <span style="background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:4px;padding:1px 7px;font-size:11px">🚩 Flagged Only</span> pill filter above the article feed. Flagged articles are never removed automatically.
-      </div>
-
-      <!-- STAGING -->
-      <div style="margin-top:20px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">+ Stage / Add to Digest</div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.8">
-        Clicking <strong style="color:var(--white)">+ Add to Digest</strong> on any article card (or <strong style="color:var(--white)">+ Digest</strong> in the article preview) stages it for your weekly briefing. The article gets a gold side bar and is automatically sorted into a digest section based on jurisdiction:<br><br>
-        <div style="padding-left:12px;border-left:2px solid rgba(240,165,0,0.3);margin:8px 0">
-          <strong style="color:var(--white)">Briefing Note Worthy / Relevance 10</strong> → Headline of the Week<br>
-          <strong style="color:var(--white)">Federal jurisdiction</strong> → Federal Watch<br>
-          <strong style="color:var(--white)">BC / Municipal</strong> → Provincial Watch<br>
-          <strong style="color:var(--white)">Everything else</strong> → Regulatory &amp; Funding
+    <!-- REFERENCE GUIDE SECTION -->
+    <div id="help-panel-ref" style="display:none">
+      <div class="card">
+        <div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:16px;text-transform:uppercase;letter-spacing:.12em">Reference Guide</div>
+        <div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Sentiment Tags</div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;font-size:12px">
+          <div><span style="font-size:14px">🔴</span> <strong>Critical</strong> <span style="color:var(--muted)">— Critical of / negatively impacts policy</span></div>
+          <div><span style="font-size:14px">🟢</span> <strong>Supportive</strong> <span style="color:var(--muted)">— Positive / reinforces policy direction</span></div>
+          <div><span style="font-size:14px">⚪</span> <strong>Neutral</strong> <span style="color:var(--muted)">— Informational / no clear stance</span></div>
         </div>
-        You can manually move any article to a different section using the <strong style="color:var(--cyan)">⇆ Move to…</strong> dropdown in the Digest tab.
-      </div>
-
-      <!-- NOTES & PDF -->
-      <div style="margin-top:20px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Notes — Article-Linked Notes &amp; PDF Attachments</div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.8">
-        Notes can be <strong style="color:var(--white)">linked to articles</strong>: click <span style="background:rgba(0,194,255,0.1);color:var(--cyan);border:1px solid rgba(0,194,255,0.25);border-radius:4px;padding:1px 7px;font-size:11px">Open in Notes ↗</span> on any article preview to create a note pre-filled with that article's details.<br>
-        <strong style="color:var(--white)">PDF Attachments</strong>: Use <span style="background:rgba(0,194,255,0.1);color:var(--cyan);border:1px solid rgba(0,194,255,0.25);border-radius:4px;padding:1px 7px;font-size:11px">📎 Attach PDF</span> to attach a downloaded article PDF to any note. Click the filename to open it in a new browser tab.<br>
-        <strong style="color:var(--white)">Export</strong>: Use <span style="background:rgba(0,194,255,0.1);color:var(--cyan);border:1px solid rgba(0,194,255,0.25);border-radius:4px;padding:1px 7px;font-size:11px">📄 Export PDF</span> to save any note as a PDF, or export all notes as a .txt file.
-      </div>
-
-      <!-- DIGEST SEND NOTE -->
-      <div style="margin-top:20px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">✉ Sending the Digest</div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.8">
-        The <strong style="color:var(--white)">Send Digest</strong> button in the Digest tab requires your <strong style="color:var(--white)">Railway backend</strong> to be connected — it uses your backend's email service to deliver to subscribers. If you haven't connected a backend yet, use <strong style="color:var(--white)">Copy Digest</strong> to copy the full text and paste it into an email manually, or use <strong style="color:var(--white)">Export PDF</strong> to save a formatted version.
+        <div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Relevance Scores (1–10 AI Scoring)</div>
+        <div style="font-size:12px;color:var(--muted);line-height:2">
+          🔥 <strong style="color:var(--white)">9–10</strong> — Critical; brief-worthy, immediate attention<br>
+          ⭐ <strong style="color:var(--white)">7–8</strong> — High relevance; strong digest candidate<br>
+          📌 <strong style="color:var(--white)">6</strong> — Moderate; articles below 6 are filtered out<br>
+          <span style="color:var(--dim)">1–5</span> — Low relevance; filtered out automatically by AI
+        </div>
+        <div style="margin-top:16px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Age Badges</div>
+        <div style="font-size:12px;color:var(--muted);line-height:2">
+          <span class="age-badge age-today">&#x1F7E2; Today</span> — Published today; highest priority for review.<br>
+          <span class="age-badge age-week">&#x1F7E1; This week</span> — Published within the last 7 days.<br>
+          <em style="color:var(--dim)">(No badge)</em> — Older than one week.
+        </div>
+        <div style="margin-top:16px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Article Side Colours</div>
+        <div style="font-size:12px;color:var(--muted);line-height:2.2">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            <div style="width:4px;height:36px;background:var(--cyan);border-radius:2px;flex-shrink:0"></div>
+            <div><strong style="color:var(--white)">Cyan</strong> — Unread. Disappears once you mark it read.</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            <div style="width:4px;height:36px;background:var(--gold);border-radius:2px;flex-shrink:0"></div>
+            <div><strong style="color:var(--white)">Gold</strong> — Staged for digest.</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            <div style="width:4px;height:36px;background:linear-gradient(180deg,#ef4444,#dc2626);border-radius:2px;flex-shrink:0"></div>
+            <div><strong style="color:var(--white)">Red</strong> — Flagged for follow-up.</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:4px;height:36px;background:rgba(255,255,255,0.08);border-radius:2px;flex-shrink:0;border:1px solid rgba(255,255,255,0.1)"></div>
+            <div><strong style="color:var(--white)">No colour</strong> — Read.</div>
+          </div>
+        </div>
+        <div style="margin-top:20px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">🚩 Flag Button</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.8">
+          Hover any article card to reveal the <strong style="color:var(--white)">Flag</strong> button. Marks articles for follow-up with a red side bar — consultation deadlines, bills to track, items for a meeting.<br><br>
+          Use the <span style="background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:4px;padding:1px 7px;font-size:11px">🚩 Flagged Only</span> pill filter to see all flagged articles at once.
+        </div>
+        <div style="margin-top:20px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">+ Stage / Add to Digest</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.8">
+          Clicking <strong style="color:var(--white)">+ Add to Digest</strong> stages an article for your weekly briefing. It auto-sorts by jurisdiction:
+          <div style="padding-left:12px;border-left:2px solid rgba(240,165,0,0.3);margin:8px 0">
+            <strong style="color:var(--white)">Briefing Note Worthy / Relevance 10</strong> → Headline of the Week<br>
+            <strong style="color:var(--white)">Federal</strong> → Federal Watch<br>
+            <strong style="color:var(--white)">BC / Municipal</strong> → Provincial Watch<br>
+            <strong style="color:var(--white)">Everything else</strong> → Regulatory &amp; Funding
+          </div>
+          Use the <strong style="color:var(--cyan)">⇆ Move to…</strong> dropdown in the Digest tab to reassign.
+        </div>
+        <div style="margin-top:20px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Loading Your Groq API Key</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.8">
+          Go to <strong style="color:var(--white)">Ask AI</strong> → click <span style="background:rgba(0,194,255,0.1);color:var(--cyan);border:1px solid rgba(0,194,255,0.25);border-radius:4px;padding:1px 7px;font-size:11px">🔑 Load API Key</span> → paste your key (starts with <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--cyan)">gsk_</span>).<br>
+          Get a free key at <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a>. Stored in sessionStorage — clears when you close the tab.
+        </div>
+        <div style="margin-top:20px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Citation Formats</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.8">
+          PolicyPulse supports <strong style="color:var(--white)">APA</strong>, <strong style="color:var(--white)">MLA</strong>, and <strong style="color:var(--white)">Chicago</strong> citation formats. Use the Citations tab to auto-generate a bibliography from any tracked article. The AI Auto-Generate button refines formatting to academic standards.
+        </div>
+        <div style="margin-top:20px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">✉ Sending the Digest</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.8">
+          The <strong style="color:var(--white)">Send Digest</strong> button requires your <strong style="color:var(--white)">Render backend</strong> with SMTP configured. Without SMTP, use <strong style="color:var(--white)">Copy Digest</strong> to paste into email manually, or <strong style="color:var(--white)">Export PDF</strong> for a formatted version.
+        </div>
+        <div style="margin-top:20px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Notes — Article-Linked Notes &amp; PDF Attachments</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.8">
+          Click <span style="background:rgba(0,194,255,0.1);color:var(--cyan);border:1px solid rgba(0,194,255,0.25);border-radius:4px;padding:1px 7px;font-size:11px">Open in Notes ↗</span> on any article preview to create a linked note. Use <span style="background:rgba(0,194,255,0.1);color:var(--cyan);border:1px solid rgba(0,194,255,0.25);border-radius:4px;padding:1px 7px;font-size:11px">📎 Attach PDF</span> to attach downloaded article PDFs. Export any note as PDF or export all notes as a .txt file.
+        </div>
       </div>
     </div>
   </div>
@@ -2191,7 +2048,7 @@ function skipApiKey(){
         </div>
       </div>
       <div style="padding:12px 14px;background:rgba(240,165,0,0.06);border:1px solid rgba(240,165,0,0.2);border-radius:8px;font-size:12px;color:var(--muted);line-height:1.8">
-        <strong style="color:var(--gold)">&#x26A0; Requires Railway backend</strong> — The Notion API blocks direct browser requests (CORS restriction). PolicyPulse routes all Notion calls through your Railway backend, which forwards them to Notion. Your token travels with each request and is never stored server-side.
+        <strong style="color:var(--gold)">&#x26A0; Requires Render backend</strong> — The Notion API blocks direct browser requests (CORS restriction). PolicyPulse routes all Notion calls through your Render backend, which forwards them to Notion. Your token travels with each request and is never stored server-side.
       </div>
     </div>
   </div>
@@ -2247,7 +2104,7 @@ function skipApiKey(){
 
           <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;background:rgba(0,194,255,0.04);border:1px solid rgba(0,194,255,0.1);border-radius:8px">
             <span style="font-size:16px;flex-shrink:0">&#x1F517;</span>
-            <div><div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:2px">Backend URL</div><div style="font-size:11px;color:var(--muted)">The Railway backend URL if you've entered a custom one. Stored under <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">pp_api_base</code>. This is only your own server address — no credentials.</div></div>
+            <div><div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:2px">Backend URL</div><div style="font-size:11px;color:var(--muted)">The Render backend URL if you've entered a custom one. Stored under <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">pp_api_base</code>. This is only your own server address — no credentials.</div></div>
           </div>
 
         </div>
@@ -2266,7 +2123,7 @@ function skipApiKey(){
           </div>
           <div style="display:flex;gap:10px;align-items:flex-start;font-size:12px;color:var(--muted)">
             <span style="color:var(--cyan);flex-shrink:0;margin-top:2px">&#x2192;</span>
-            <div><strong style="color:var(--white)">Your Railway backend (SQLite)</strong> — if you've connected a backend, subscriber emails are synced there so digest sending works from the server.</div>
+            <div><strong style="color:var(--white)">Your Render backend (SQLite)</strong> — if you've connected a backend, subscriber emails are synced there so digest sending works from the server.</div>
           </div>
           <div style="display:flex;gap:10px;align-items:flex-start;font-size:12px;color:var(--muted)">
             <span style="color:var(--cyan);flex-shrink:0;margin-top:2px">&#x2192;</span>
@@ -2294,7 +2151,7 @@ function skipApiKey(){
           <span style="color:var(--green)">&#x2715;</span> &nbsp;No login or user accounts — you don't need to sign up to use PolicyPulse<br>
           <span style="color:var(--green)">&#x2715;</span> &nbsp;No usage tracking or analytics beyond basic Google Analytics page views (which you can block with any ad blocker)<br>
           <span style="color:var(--green)">&#x2715;</span> &nbsp;No cookies for advertising or cross-site tracking<br>
-          <span style="color:var(--green)">&#x2715;</span> &nbsp;No personal data sent to the Railway backend — it only stores article metadata scraped from public government websites<br>
+          <span style="color:var(--green)">&#x2715;</span> &nbsp;No personal data sent to the Render backend — it only stores article metadata scraped from public government websites<br>
           <span style="color:var(--green)">&#x2715;</span> &nbsp;No data shared with or sold to third parties
         </div>
       </div>
@@ -2459,7 +2316,7 @@ function skipApiKey(){
       <div class="card" style="margin-bottom:12px">
         <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:16px">&#x23F0; Scraping Schedule</div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.7">
-          The scheduled scrape runs automatically on the backend (Railway). These settings control when it fires. Times are in your selected timezone above.
+          The scheduled scrape runs automatically on the backend (Render). These settings control when it fires. Times are in your selected timezone above.
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
           <div>
@@ -2536,16 +2393,16 @@ function skipApiKey(){
       <!-- ── BACKEND CONNECTION ── -->
       <div class="card" style="margin-bottom:12px">
         <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px">&#x1F517; Backend Connection</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Your Railway deployment URL. All scraping, AI analysis, and data persistence happens here.</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Your Render deployment URL. All scraping, AI analysis, and data persistence happens here.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-          <input id="setting-backend-url" class="filter-input" placeholder="https://your-app.railway.app" style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:12px">
+          <input id="setting-backend-url" class="filter-input" placeholder="https://your-app.onrender.com" style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:12px">
           <button class="btn btn-cyan" onclick="saveBackendUrl()">&#x2714; Connect</button>
           <button class="btn btn-ghost" onclick="testBackendConnection()">&#x1F50D; Test</button>
         </div>
         <div id="setting-backend-status" style="font-size:11px;color:var(--muted)"></div>
         <div style="margin-top:10px">
           <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">API Key (PP_API_KEY)</div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Set this to the same value as the PP_API_KEY environment variable in Railway to enable write operations.</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Set this to the same value as the PP_API_KEY environment variable in Render to enable write operations.</div>
           <div style="display:flex;gap:8px">
             <input id="setting-api-key" type="password" class="filter-input" placeholder="Bearer token..." style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:12px">
             <button class="btn btn-ghost" onclick="saveApiKeyFromSettings()">&#x2714; Save Key</button>
@@ -2581,8 +2438,7 @@ function skipApiKey(){
           <strong style="color:var(--text)">Backend:</strong> <span id="settings-backend-url-display" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--cyan)">Not connected</span>
         </div>
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-ghost btn-sm" onclick="showTab('quickstart')">&#x1F4CB; Quick Start</button>
-          <button class="btn btn-ghost btn-sm" onclick="showTab('instructions')">&#x1F4D6; Reference Guide</button>
+          <button class="btn btn-ghost btn-sm" onclick="showTab('help')">&#x1F4CB; Help &amp; Quick Start</button>
           <button class="btn btn-ghost btn-sm" onclick="showTab('privacy')">&#x1F512; Privacy</button>
         </div>
       </div>
@@ -2706,24 +2562,27 @@ function skipApiKey(){
             </select>
             <button class="btn btn-red btn-sm" onclick="deleteCurrentNote()">&#x2715; Delete</button>
           </div>
-          <!-- Format toolbar -->
-          <div style="padding:6px 16px;border-bottom:1px solid var(--border);display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;align-items:center">
-            <button class="note-fmt-btn" onclick="fmtNote('bold')" title="Bold"><strong>B</strong></button>
-            <button class="note-fmt-btn" onclick="fmtNote('italic')" title="Italic"><em>I</em></button>
-            <button class="note-fmt-btn" onclick="fmtNote('h1')" title="Heading 1" style="font-size:10px">H1</button>
-            <button class="note-fmt-btn" onclick="fmtNote('h2')" title="Heading 2" style="font-size:10px">H2</button>
-            <button class="note-fmt-btn" onclick="fmtNote('h3')" title="Heading 3" style="font-size:10px">H3</button>
-            <button class="note-fmt-btn" onclick="fmtNote('bullet')" title="Bullet list">&#x2022; List</button>
-            <button class="note-fmt-btn" onclick="fmtNote('numbered')" title="Numbered list">1. List</button>
-            <button class="note-fmt-btn" onclick="fmtNote('highlight')" title="Highlight" style="background:rgba(240,165,0,0.15);color:var(--gold);border-color:rgba(240,165,0,0.3)">&#x1F7E1; Highlight</button>
-            <button class="note-fmt-btn" onclick="fmtNote('quote')" title="Blockquote">&ldquo; Quote</button>
-            <button class="note-fmt-btn" onclick="fmtNote('divider')" title="Divider">&#x2014;</button>
+          <!-- Rich text format toolbar -->
+          <div style="padding:6px 16px;border-bottom:1px solid var(--border);display:flex;gap:3px;flex-shrink:0;flex-wrap:wrap;align-items:center">
+            <button class="note-fmt-btn" onclick="fmtNote('bold')" title="Bold (Ctrl+B)"><strong>B</strong></button>
+            <button class="note-fmt-btn" onclick="fmtNote('italic')" title="Italic (Ctrl+I)"><em>I</em></button>
+            <button class="note-fmt-btn" onclick="fmtNote('underline')" title="Underline (Ctrl+U)" style="text-decoration:underline">U</button>
+            <span style="width:1px;height:14px;background:var(--border);margin:0 3px;flex-shrink:0"></span>
+            <button class="note-fmt-btn" onclick="fmtNote('h1')" title="Heading 1" style="font-size:10px;font-weight:700">H1</button>
+            <button class="note-fmt-btn" onclick="fmtNote('h2')" title="Heading 2" style="font-size:10px;font-weight:700">H2</button>
+            <button class="note-fmt-btn" onclick="fmtNote('h3')" title="Heading 3" style="font-size:10px;font-weight:700">H3</button>
+            <span style="width:1px;height:14px;background:var(--border);margin:0 3px;flex-shrink:0"></span>
+            <button class="note-fmt-btn" onclick="fmtNote('insertUnorderedList')" title="Bullet list">&#x2022; List</button>
+            <button class="note-fmt-btn" onclick="fmtNote('insertOrderedList')" title="Numbered list">1. List</button>
+            <span style="width:1px;height:14px;background:var(--border);margin:0 3px;flex-shrink:0"></span>
+            <button class="note-fmt-btn" onclick="fmtNote('highlight')" title="Highlight" style="background:rgba(240,165,0,0.15);color:var(--gold);border-color:rgba(240,165,0,0.3)">&#x1F7E1;</button>
+            <button class="note-fmt-btn" onclick="fmtNote('blockquote')" title="Blockquote">&ldquo;</button>
+            <button class="note-fmt-btn" onclick="fmtNote('divider')" title="Horizontal rule">&#x2014;</button>
             <button class="note-fmt-btn" onclick="fmtNote('link')" title="Insert link">&#x1F517;</button>
-            <span style="width:1px;height:14px;background:var(--border);margin:0 4px;flex-shrink:0"></span>
-            <!-- Font size -->
+            <span style="width:1px;height:14px;background:var(--border);margin:0 3px;flex-shrink:0"></span>
             <select class="filter-select" onchange="setNoteFontSize(this.value)" id="note-font-size-sel" style="width:auto;padding:2px 6px;font-size:10px;height:24px" title="Font size">
-              <option value="11">Small</option>
               <option value="13" selected>Normal</option>
+              <option value="11">Small</option>
               <option value="15">Large</option>
               <option value="17">X-Large</option>
             </select>
@@ -2734,7 +2593,38 @@ function skipApiKey(){
             <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">&#x1F4CE; Attached PDFs</div>
             <div id="note-pdf-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
           </div>
-          <textarea id="note-body-inp" placeholder="Start writing your note here...&#10;&#10;Use the toolbar above for formatting (bold, italic, headings, lists, highlights).&#10;&#10;Tip: Link this note to an article by clicking 'Open in Notes' from the article preview." style="flex:1;background:transparent;border:none;outline:none;padding:18px;font-size:13px;color:var(--text);line-height:1.8;resize:none;font-family:'IBM Plex Sans',sans-serif" oninput="saveCurrentNote()"></textarea>
+          <!-- Real contenteditable editor — replaces plain textarea -->
+          <div id="note-body-inp"
+            contenteditable="true"
+            spellcheck="true"
+            data-placeholder="Start writing your note here…&#10;&#10;Use the toolbar above to format text. Tip: link this note to an article by clicking 'Open in Notes' from any article preview."
+            style="flex:1;background:transparent;border:none;outline:none;padding:18px;font-size:13px;color:var(--text);line-height:1.8;overflow-y:auto;font-family:'IBM Plex Sans',sans-serif;min-height:200px"
+            oninput="saveCurrentNote()"
+            onkeydown="handleNoteKeydown(event)"
+          ></div>
+          <style>
+            #note-body-inp:empty:before {
+              content: attr(data-placeholder);
+              color: var(--dim);
+              pointer-events: none;
+              white-space: pre-line;
+            }
+            #note-body-inp h1 { font-size:20px;font-weight:700;color:var(--white);margin:12px 0 6px;font-family:'Playfair Display',serif; }
+            #note-body-inp h2 { font-size:16px;font-weight:700;color:var(--white);margin:10px 0 5px; }
+            #note-body-inp h3 { font-size:14px;font-weight:700;color:var(--text);margin:8px 0 4px; }
+            #note-body-inp blockquote { border-left:3px solid rgba(0,194,255,0.4);padding:4px 12px;margin:8px 0;color:var(--muted);font-style:italic; }
+            #note-body-inp ul { padding-left:22px;margin:6px 0; }
+            #note-body-inp ol { padding-left:22px;margin:6px 0; }
+            #note-body-inp li { margin:3px 0; }
+            #note-body-inp hr { border:none;border-top:1px solid var(--border);margin:12px 0; }
+            #note-body-inp mark { background:rgba(240,165,0,0.3);color:var(--text);border-radius:2px;padding:0 2px; }
+            #note-body-inp a { color:var(--cyan);text-decoration:underline; }
+            body.light-mode #note-body-inp h1,
+            body.light-mode #note-body-inp h2,
+            body.light-mode #note-body-inp h3 { color:#0f1f35; }
+            body.light-mode #note-body-inp mark { background:rgba(192,120,0,0.2);color:#0f1f35; }
+            body.light-mode #note-body-inp blockquote { border-left-color:rgba(0,119,170,0.4);color:#3a5a78; }
+          </style>
           <div style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;flex-wrap:wrap;gap:6px">
             <span id="note-meta" style="font-size:10px;color:var(--dim);font-family:'IBM Plex Mono',monospace"></span>
             <div style="display:flex;gap:8px;align-items:center">
@@ -2763,7 +2653,7 @@ function skipApiKey(){
           <option value="365">Last 365 days</option>
         </select>
         <button class="btn btn-ghost" onclick="exportAnalyticsPDF()">&#x1F4C4; Export Report</button>
-        <button class="btn btn-ghost" onclick="exportToGoogleSheets()">&#x1F4CA; Sheets Export</button>
+        <button class="btn btn-ghost" onclick="exportToGoogleSheets()">&#x2B07; Export CSV</button>
       </div>
     </div>
 
@@ -2821,7 +2711,6 @@ function skipApiKey(){
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <select id="monthly-report-month" class="filter-select" style="width:auto"></select>
         <button class="btn btn-gold" onclick="generateMonthlyReport()">&#x1F4CB; Generate Monthly Report</button>
-        <button class="btn btn-ghost btn-sm" onclick="emailMonthlyReport()">&#x2709; Email to Subscribers</button>
       </div>
       <div id="monthly-report-status" style="display:none;margin-top:10px;font-size:12px;padding:8px 12px;border-radius:7px"></div>
     </div>
@@ -2876,82 +2765,6 @@ function skipApiKey(){
     </div>
   </div><!-- /page-tracker -->
 
-  <!-- ═══ PUBLIC FEED / SHARE PAGE ═══ -->
-  <div id="page-share" style="display:none" class="fade-in">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
-      <div>
-        <div class="page-title">&#x1F310; Public Feed</div>
-        <div class="page-subtitle">Generate a read-only policy news page to share with board members or leadership — no login required</div>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-cyan" onclick="openPublicFeedPreview()">&#x25BA; Preview</button>
-        <button class="btn btn-primary" onclick="generatePublicFeedUrl()">&#x1F517; Generate Shareable URL</button>
-      </div>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-      <div class="card">
-        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x2699; Feed Configuration</div>
-        <div style="display:flex;flex-direction:column;gap:12px">
-          <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Page Title</div>
-            <input id="share-title" class="filter-input" value="Policy Intelligence Feed" style="width:100%">
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Organization / Prepared by</div>
-            <input id="share-org" class="filter-input" placeholder="e.g. SFU Government Relations Office" style="width:100%">
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Minimum Relevance Score</div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <input type="range" id="share-min-rel" min="6" max="10" step="1" value="8" style="flex:1;accent-color:var(--cyan)" oninput="document.getElementById('share-min-rel-label').textContent=this.value+'/10';updateSharePreview()">
-              <span id="share-min-rel-label" style="font-size:14px;font-weight:700;color:var(--gold);font-family:'IBM Plex Mono',monospace;min-width:40px">8/10</span>
-            </div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Policy Domains to Show</div>
-            <div id="share-domain-checkboxes" style="display:grid;grid-template-columns:1fr 1fr;gap:5px"></div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Jurisdictions</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--text)"><input type="checkbox" class="share-juris-chk" value="Federal" checked style="accent-color:var(--cyan)" onchange="updateSharePreview()"> Federal</label>
-              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--text)"><input type="checkbox" class="share-juris-chk" value="BC" checked style="accent-color:var(--cyan)" onchange="updateSharePreview()"> BC</label>
-              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--text)"><input type="checkbox" class="share-juris-chk" value="Municipal" checked style="accent-color:var(--cyan)" onchange="updateSharePreview()"> Municipal</label>
-              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--text)"><input type="checkbox" class="share-juris-chk" value="Pan-Canadian" checked style="accent-color:var(--cyan)" onchange="updateSharePreview()"> Pan-Canadian</label>
-            </div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Max Articles</div>
-            <input type="number" id="share-max-articles" value="25" min="5" max="100" class="filter-input" style="width:80px" onchange="updateSharePreview()">
-          </div>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text)"><input type="checkbox" id="share-show-why" checked style="accent-color:var(--cyan)" onchange="updateSharePreview()"> Include "Why It Matters" field</label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text)"><input type="checkbox" id="share-show-summary" checked style="accent-color:var(--cyan)" onchange="updateSharePreview()"> Include AI summaries</label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text)"><input type="checkbox" id="share-readonly-notice" checked style="accent-color:var(--cyan)"> Show "Read-Only" notice to recipients</label>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <div class="card" style="margin-bottom:12px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:12px">&#x1F4CA; Feed Preview Stats</div>
-          <div id="share-preview-stats" style="font-size:12px;color:var(--muted)">Configure settings then click Preview to see matching articles.</div>
-        </div>
-        <div class="card">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:12px">&#x2139; How it works</div>
-          <div style="font-size:12px;color:var(--muted);line-height:1.8">
-            The public feed opens in a new tab as a clean, print-friendly HTML page — no login, no edit controls, no backend writes possible.<br><br>
-            Recipients see: article headlines, sources, publish dates, AI summaries, and "Why It Matters" notes — filtered to the relevance and domains you set here.<br><br>
-            <strong style="color:var(--text)">No data is sent to any server.</strong> The page is generated entirely in the browser and opened locally.
-          </div>
-          <div style="margin-top:12px">
-            <button class="btn btn-ghost btn-sm" onclick="exportToGoogleSheets()">&#x1F4CA; Also: Export to Google Sheets CSV</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div><!-- /page-share -->
 
 </div><!-- /#main -->
 
@@ -3516,22 +3329,20 @@ async function loadResearchStats(){
   if(!API_BASE) return;
   var d = await apiFetch('/scholarly/stats');
   if(!d) return;
-  var te = document.getElementById('rs-total');
-  var ue = document.getElementById('rs-unread');
-  var de = document.getElementById('rs-dbs');
-  if(te) te.textContent = d.total || 0;
-  if(ue) ue.textContent = d.unread || 0;
-  if(de) de.textContent = d.databases ? d.databases.length : 0;
 
-  // Update last-fetched timestamp stored in localStorage
+  // Update last-fetched timestamp
   var now = new Date().toISOString();
   try { localStorage.setItem('pp_research_last_fetched', now); } catch(e){}
 
-  // Update subtitle with last-fetched time
+  // Write inline stats into subtitle
   var rsub = document.getElementById('research-subtitle');
   if(rsub){
     var ts = now.replace('T',' ').slice(0,16);
-    rsub.textContent = 'Peer-reviewed articles, working papers, and policy research — last fetched: ' + ts + ' UTC';
+    var total  = d.total  || 0;
+    var unread = d.unread || 0;
+    rsub.innerHTML = '<strong style="color:var(--white)">' + total + '</strong> articles &nbsp;&bull;&nbsp; '
+      + '<strong style="color:#a5b4fc">' + unread + '</strong> unread &nbsp;&bull;&nbsp; '
+      + 'last fetched: <span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px">' + ts + ' UTC</span>';
   }
 
   // Update source breakdown with counts
@@ -3544,10 +3355,6 @@ async function loadResearchStats(){
     bd.innerHTML = extras + '<div style="width:100%;height:0"></div>'
       + '<span style="font-size:10px;color:var(--dim);align-self:center">All sources are freely accessible, open access, and scraping-permitted.</span>';
   }
-
-  // Also update the week stat
-  var we = document.getElementById('rs-week');
-  if(we && d.this_week !== undefined) we.textContent = d.this_week || 0;
 }
 
 function dbBadgeClass(name){
@@ -3826,8 +3633,8 @@ function showResearchEmpty(panel){
   var el = document.getElementById('research-'+panel);
   if(el) el.innerHTML = '<div style="text-align:center;padding:32px;background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:12px;margin-top:8px">'
     +'<div style="font-size:40px;margin-bottom:10px">&#x1F4DA;</div>'
-    +'<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">Connect your Railway backend</div>'
-    +'<div style="font-size:12px;color:var(--muted);line-height:1.7">The scholarly scraper runs on your Railway backend and stores results in a separate SQLite table.</div>'
+    +'<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">Connect your Render backend</div>'
+    +'<div style="font-size:12px;color:var(--muted);line-height:1.7">The scholarly scraper runs on your Render backend and stores results in a separate SQLite table.</div>'
     +'</div>';
 }
 
@@ -3840,7 +3647,7 @@ function debounceResearchSearch(){
 }
 
 async function triggerScholarlyScrape(){
-  if(!API_BASE){ showToast('&#x128268;','No Backend','Connect your Railway backend to enable scholarly scraping.',5000); return; }
+  if(!API_BASE){ showToast('&#x128268;','No Backend','Connect your Render backend to enable scholarly scraping.',5000); return; }
   var btn = document.getElementById('research-scrape-btn');
   var progress = document.getElementById('research-progress');
   if(btn){ btn.disabled=true; btn.innerHTML='<span class="spin">&#8635;</span> Fetching…'; }
@@ -3870,7 +3677,7 @@ async function triggerScholarlyScrape(){
   } else {
     if(btn){ btn.disabled=false; btn.innerHTML='&#x1F50D; Fetch New Research'; }
     if(progress) progress.style.display='none';
-    showToast('&#x26A0;','Scrape Error','Could not reach backend. Check your Railway URL.',5000);
+    showToast('&#x26A0;','Scrape Error','Could not reach backend. Check your Render URL.',5000);
   }
   if(typeof gtag!=='undefined') gtag('event','scholarly_scrape',{event_category:'Research'});
 }
@@ -4261,7 +4068,7 @@ var _researchInitialized = false;
 <script>
 
 /* === POLICYPULSE REAL BACKEND API === */
-var API_BASE = (localStorage.getItem('pp_api_base') || 'https://policy-pulse-app-production.up.railway.app').replace(/\/+$/, '');
+var API_BASE = (localStorage.getItem('pp_api_base') || 'https://policy-pulse-app.onrender.com').replace(/\/+$/, '');
 
 /* PERFORMANCE: cache + pagination */
 var _articleCache = [];
@@ -4391,11 +4198,11 @@ function showBackendPrompt(containerId) {
   el.innerHTML = '<div style="text-align:center;padding:32px 20px">'
     + '<div style="font-size:32px;margin-bottom:10px">&#128268;</div>'
     + '<div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:6px">Backend Not Connected</div>'
-    + '<div style="font-size:12px;color:var(--muted);max-width:400px;margin:0 auto 14px;line-height:1.7">Deploy the Python backend to Railway.app then paste your Railway URL below to load real scraped articles.</div>'
+    + '<div style="font-size:12px;color:var(--muted);max-width:400px;margin:0 auto 14px;line-height:1.7">Deploy the Python backend to Render then paste your Render URL below to load real scraped articles.</div>'
     + '<div style="display:flex;gap:8px;justify-content:center;max-width:400px;margin:0 auto">'
-    + '<input id="be-url-inp" class="filter-input" placeholder="https://your-app.railway.app" style="flex:1">'
+    + '<input id="be-url-inp" class="filter-input" placeholder="https://your-app.onrender.com" style="flex:1">'
     + '<button class="btn btn-primary" onclick="saveBackendUrl()">Connect</button></div>'
-    + '<div style="font-size:11px;color:var(--dim);margin-top:8px">See the Instructions tab for the full Railway deployment guide.</div>'
+    + '<div style="font-size:11px;color:var(--dim);margin-top:8px">See the Help tab for setup instructions.</div>'
     + '</div>';
 }
 
@@ -5061,17 +4868,6 @@ async function init(){
     }
   }
 
-  // Wire share preview live updates
-  ['share-min-rel','share-max-articles','share-show-why','share-show-summary','share-readonly-notice'].forEach(function(id){
-    var el = document.getElementById(id);
-    if(el) el.addEventListener('change', function(){ if(document.getElementById('page-share') && document.getElementById('page-share').style.display!=='none') updateSharePreview(); });
-  });
-  document.addEventListener('change',function(e){
-    if(e.target.classList.contains('share-domain-chk')||e.target.classList.contains('share-juris-chk')){
-      if(document.getElementById('page-share') && document.getElementById('page-share').style.display!=='none') updateSharePreview();
-    }
-  });
-
   setTimeout(function(){
     if (!API_BASE) { showToast('&#128268;', 'Connect Your Backend', 'Enter your Render URL in Settings to load real articles.', 7000); }
     else { var ac = articles.filter(function(a){ return a.relevance >= 8 && !a.read; }).length; showToast('&#128225;', 'PolicyPulse Live', ac > 0 ? ac + ' high-relevance articles waiting.' : 'Feed loaded and up to date.', 4000); }
@@ -5085,7 +4881,7 @@ function _setBootStatus(msg){
 }
 
 async function showTab(n){
-  ['dashboard','quickstart','scraper','digest','subscribers','briefing','askai','instructions','citations','notes','privacy','notion','research','analytics','tracker','share','settings'].forEach(t=>{
+  ['dashboard','help','scraper','digest','subscribers','briefing','askai','citations','notes','privacy','notion','research','analytics','tracker','settings'].forEach(t=>{
     var pg=document.getElementById('page-'+t);
     var tb=document.getElementById('tab-'+t);
     if(pg) pg.style.display=t===n?'block':'none';
@@ -5136,7 +4932,7 @@ async function showTab(n){
   }
   if(n==='analytics'){ renderAnalyticsDashboard(); }
   if(n==='tracker'){   renderPolicyTracker(); }
-  if(n==='share'){     renderPublicFeedConfig(); }
+
   if(n==='settings'){  initSettingsTab(); }
 }
 
@@ -5238,7 +5034,7 @@ function nowInTZ(){
 
 /* ── Single article date fix ── */
 async function fixSingleArticleDate(id){
-  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Railway backend to fix dates.',4000); return; }
+  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Render backend to fix dates.',4000); return; }
   showToast('&#x1F504;','Fixing Date','Re-fetching article page to extract publish date…',4000);
   var d = await apiFetch('/articles/fix-dates',{method:'POST',body:JSON.stringify({ids:[id]})});
   if(d&&d.ok){
@@ -5593,8 +5389,17 @@ function addSource(){const name=prompt('Source name:');if(!name)return;const url
 function renderWatchlist(){document.getElementById('watchlist-tags').innerHTML=watchlist.map(k=>`<span class="kw-tag">${k}<span class="kw-remove" onclick="removeKeyword('${k}')">×</span></span>`).join('');}
 /* addKeyword/removeKeyword: see async versions above */
 
+function helpSection(t){
+  ['start','ref'].forEach(function(x){
+    var panel = document.getElementById('help-panel-'+x);
+    var btn   = document.getElementById('help-tab-'+x);
+    if(panel) panel.style.display = x===t ? 'block' : 'none';
+    if(btn)   btn.classList.toggle('active', x===t);
+  });
+}
+
 function scraperTab(t){
-  ['feed','sources','archive','log','settings'].forEach(function(x){
+  ['feed','sources','archive','log'].forEach(function(x){
     var panel = document.getElementById('scraper-'+x+'-panel');
     var btn   = document.getElementById('st-'+x);
     if(panel) panel.style.display = x===t ? 'block' : 'none';
@@ -5602,7 +5407,6 @@ function scraperTab(t){
   });
   if(t==='sources')  { renderSources(); }
   if(t==='archive')  { renderWatchlist(); renderArchive(); loadExclusionKeywords(); }
-  if(t==='settings') { initNewsFilterSettings(); }
   if(t==='log')      { loadScrapeLog(); }
 }
 
@@ -5610,7 +5414,7 @@ async function loadScrapeLog(){
   var container = document.getElementById('scrape-log-content');
   if(!container) return;
   if(!API_BASE){
-    container.innerHTML = '<div class="empty"><div class="empty-icon">&#128268;</div><div class="empty-text">Connect your Railway backend to view scrape history.</div></div>';
+    container.innerHTML = '<div class="empty"><div class="empty-icon">&#128268;</div><div class="empty-text">Connect your Render backend to view scrape history.</div></div>';
     return;
   }
   container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)"><span class="spin" style="display:inline-block;margin-right:6px">&#8635;</span> Loading…</div>';
@@ -5717,7 +5521,7 @@ async function scrapeNow(){
   if(typeof gtag!=='undefined') gtag('event','scrape_triggered',{event_category:'Scraper'});
   var btn=document.getElementById('scrape-btn');
   var progress=document.getElementById('scrape-progress');
-  if(!API_BASE){ showBackendPrompt('feed-list'); showToast('&#128268;','No Backend','Enter your Railway URL to enable scraping.',5000); return; }
+  if(!API_BASE){ showBackendPrompt('feed-list'); showToast('&#128268;','No Backend','Enter your Render URL to enable scraping.',5000); return; }
   if(btn){btn.disabled=true;btn.innerHTML='<span class="spin">&#8635;</span> Scraping&hellip;';}
   if(progress) progress.style.display='block';
   showToast('&#x1F50D;','Scraping Sources','Fetching articles from all active sources&hellip;',4000);
@@ -5730,10 +5534,10 @@ async function scrapeNow(){
       renderFeed(); renderDashboard(); updateBadges();
       if(progress) progress.style.display='none';
       showToast('&#128240;','Feed Updated','New articles added to your feed.',4000);
-    }, 120000); // 120s — allows for Railway cold-start delays
+    }, 120000); // 120s — allows for Render cold-start delays
   } else {
     if(progress) progress.style.display='none';
-    showToast('&#9888;','Scrape Error','Could not reach backend. Check your Railway URL.',5000);
+    showToast('&#9888;','Scrape Error','Could not reach backend. Check your Render URL.',5000);
   }
   if(btn){btn.disabled=false;btn.innerHTML='&#x1F50D; Scrape Now';}
 }
@@ -5844,7 +5648,7 @@ function renderDigestHistory(){
 }
 function filterDigestHistory(q){ renderDigestHistory(); }
 function copyDigestToken(token){
-  if(!token||!API_BASE){showToast('&#x26A0;','No URL','Connect your Railway backend to generate shareable URLs.',4000);return;}
+  if(!token||!API_BASE){showToast('&#x26A0;','No URL','Connect your Render backend to generate shareable URLs.',4000);return;}
   navigator.clipboard.writeText(API_BASE+'/digest/'+token).then(function(){
     showToast('&#x1F517;','URL Copied','Public digest link copied.',3000);
   });
@@ -5862,7 +5666,7 @@ async function resendDigestEntry(digestId,token,subject){
   try{
     var resp=await apiFetch('/digests/send',{method:'POST',body:JSON.stringify({subject:subject,html_content:html,recipients:active.map(function(s){return{name:s.name,email:s.email};})})});
     if(resp&&resp.ok) showToast('&#x2709;','Re-sent','Delivered to '+(resp.sent||active.length)+' subscriber'+(active.length!==1?'s':'')+'.',4000);
-    else showToast('&#x26A0;','Failed','Check SMTP in Railway env vars.',5000);
+    else showToast('&#x26A0;','Failed','Check SMTP in Render environment variables.',5000);
   }catch(e){showToast('&#x26A0;','Error',e.message,4000);}
 }
 async function sendDigest(){
@@ -5879,7 +5683,7 @@ async function sendDigest(){
   const html = buildDigestEmailHTML(staged, subject);
 
   if(API_BASE){
-    // Real send via Railway backend
+    // Real send via Render backend
     showToast('&#x2709;','Sending...','Delivering digest to '+active.length+' subscriber'+(active.length!==1?'s':'')+'.',3000);
     try {
       const resp = await apiFetch('/digests/send', {
@@ -5898,7 +5702,7 @@ async function sendDigest(){
         const errNote = resp.errors && resp.errors.length ? ' ('+resp.errors.length+' failed)' : '';
         showToast('&#x2709;','Digest Sent','Delivered to '+(resp.sent||active.length)+' subscriber'+(active.length!==1?'s':'')+errNote+'.',5000);
       } else {
-        showToast('&#x26A0;','Send Failed','Check that SMTP is configured in your Railway environment variables. See Reference Guide.',6000);
+        showToast('&#x26A0;','Send Failed','Check that SMTP is configured in your Render environment variables. See Reference Guide.',6000);
       }
     } catch(e){
       showToast('&#x26A0;','Send Failed',e.message,5000);
@@ -5995,7 +5799,7 @@ async function generatePublicUrl(){
 
   if(!API_BASE){
     // No backend — copy digest as plain text with instructions
-    showToast('&#x26A0;','No Backend','Connect your Railway backend to generate shareable URLs. Without a backend, use Export PDF or Copy Digest instead.',5000);
+    showToast('&#x26A0;','No Backend','Connect your Render backend to generate shareable URLs. Without a backend, use Export PDF or Copy Digest instead.',5000);
     return;
   }
 
@@ -6017,7 +5821,7 @@ async function generatePublicUrl(){
         prompt('Your shareable digest URL (also copied to clipboard):', publicUrl);
       }, 500);
     } else {
-      showToast('&#x26A0;','URL Generation Failed','Could not create digest token. Check your Railway connection.',4000);
+      showToast('&#x26A0;','URL Generation Failed','Could not create digest token. Check your Render connection.',4000);
     }
   } catch(e) {
     showToast('&#x26A0;','Error', e.message, 4000);
@@ -6071,14 +5875,14 @@ async function toggleSubAlert(id, type, currentVal){
   showToast(newVal?'&#x1F514;':'&#x1F515;', label+' '+(newVal?'Enabled':'Disabled'), s.name+(newVal?' will receive ':' will not receive ')+label.toLowerCase()+'.',2500);
 }
 async function testUrgentAlert(){
-  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Railway backend to send alerts.',4000); return; }
+  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Render backend to send alerts.',4000); return; }
   showToast('&#x1F525;','Sending Test...','Sending urgent alert test to opted-in subscribers.',3000);
   var d = await apiFetch('/alerts/test-urgent',{method:'POST',body:JSON.stringify({})});
   if(d&&d.ok) showToast('&#x2705;','Test Sent','Delivered to '+d.sent+' subscriber'+(d.sent!==1?'s':'')+'. Check inboxes.',5000);
   else showToast('&#x26A0;','Test Failed',(d&&d.detail)||'No opted-in subscribers or SMTP not configured.',5000);
 }
 async function testKeywordAlert(){
-  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Railway backend to send alerts.',4000); return; }
+  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Render backend to send alerts.',4000); return; }
   var kw = prompt('Test watchlist keyword:','DRIPA');
   if(!kw) return;
   showToast('&#x1F4E1;','Sending Test...','Sending keyword alert test for "'+kw+'".',3000);
@@ -6188,7 +5992,7 @@ async function fixLinks(){
 
   if(!API_BASE){
     resultEl.style.color = '#fb7185';
-    resultEl.innerHTML   = '⚠ Connect your Railway backend to enable real link checking.';
+    resultEl.innerHTML   = '⚠ Connect your Render backend to enable real link checking.';
     setTimeout(function(){ resultEl.style.display='none'; }, 6000);
     return;
   }
@@ -6283,7 +6087,7 @@ function dismissToast(t){
 
 /* === RE-ANALYZE === */
 async function reanalyzeArticle(id){
-  if(!API_BASE){showToast('&#x26A0;','No Backend','Connect your Railway backend to use Re-analyze.',4000);return;}
+  if(!API_BASE){showToast('&#x26A0;','No Backend','Connect your Render backend to use Re-analyze.',4000);return;}
   var a=articles.find(function(x){return x.id===id;});
   if(!a)return;
   showToast('&#x1F504;','Re-analyzing','Fetching article and running AI analysis…',4000);
@@ -6298,13 +6102,13 @@ async function reanalyzeArticle(id){
   } else if(d&&d.detail){
     showToast('&#x26A0;','Re-analyze',d.detail,5000);
   } else {
-    showToast('&#x26A0;','Error','Re-analysis failed. Check Railway logs.',4000);
+    showToast('&#x26A0;','Error','Re-analysis failed. Check your Render logs.',4000);
   }
 }
 
 /* === DB PRUNING === */
 async function prunePreview(){
-  if(!API_BASE){showToast('&#x26A0;','No Backend','Connect your Railway backend to use pruning.',4000);return;}
+  if(!API_BASE){showToast('&#x26A0;','No Backend','Connect your Render backend to use pruning.',4000);return;}
   var days=parseInt(document.getElementById('prune-days-inp').value)||180;
   var d=await apiFetch('/articles/prune/preview?days='+days);
   var el=document.getElementById('prune-result');
@@ -6319,7 +6123,7 @@ async function prunePreview(){
   }
 }
 async function pruneArticles(){
-  if(!API_BASE){showToast('&#x26A0;','No Backend','Connect your Railway backend to use pruning.',4000);return;}
+  if(!API_BASE){showToast('&#x26A0;','No Backend','Connect your Render backend to use pruning.',4000);return;}
   var days=parseInt(document.getElementById('prune-days-inp').value)||180;
   var preview=await apiFetch('/articles/prune/preview?days='+days);
   if(!preview)return;
@@ -6337,7 +6141,7 @@ async function pruneArticles(){
     if(el){el.style.display='block';el.style.background='rgba(16,185,129,0.08)';el.style.border='1px solid rgba(16,185,129,0.25)';el.style.color='var(--green)';
       el.innerHTML='&#x2713; '+d.deleted+' articles deleted. Database pruned to '+days+' days.';}
   } else {
-    showToast('&#x26A0;','Prune Failed','Check Railway logs.',4000);
+    showToast('&#x26A0;','Prune Failed','Check your Render logs.',4000);
   }
 }
 
@@ -7014,15 +6818,31 @@ async function autoGenerateAll(){
   var key = apiKey || sessionStorage.getItem('pp_groq_key');
   if(!key){ showToast('&#x1F511;','No API Key','Enter your Groq key to use AI auto-generation.',4000); return; }
   if(!_citations.length){ showToast('&#x26A0;','No Citations','Add some citations first.',3000); return; }
-  showToast('&#x1F916;','AI Generating','Enhancing citations with AI...',4000);
+
+  // Disable the button and show a live progress counter
+  var genBtn = document.querySelector('[onclick="autoGenerateAll()"]');
+  if(genBtn){ genBtn.disabled = true; genBtn.textContent = 'Starting…'; }
+
+  var total = _citations.filter(function(c){ return !c.aiGenerated; }).length;
+  var done  = 0;
+
+  function updateProgress(){
+    if(genBtn) genBtn.textContent = 'Generating ' + done + ' of ' + total + '…';
+  }
+  updateProgress();
+
   for(var i=0;i<_citations.length;i++){
     var c = _citations[i];
-    if(c.aiGenerated) continue; // skip already enhanced
+    if(c.aiGenerated) continue;
     await aiEnhanceCitation(i, key);
-    await new Promise(function(r){setTimeout(r,600);}); // rate limit delay
+    done++;
+    updateProgress();
+    renderCitations(); // update each entry as it comes in
+    await new Promise(function(r){setTimeout(r,600);});
   }
-  renderCitations();
-  showToast('&#x2713;','Done','All citations AI-enhanced.',3000);
+
+  if(genBtn){ genBtn.disabled = false; genBtn.innerHTML = '&#x1F916; AI Auto-Generate All'; }
+  showToast('&#x2713;','Done','All '+total+' citation'+(total!==1?'s':'')+' AI-enhanced.',3000);
 }
 
 async function aiEnhanceCitation(idx, key){
@@ -7230,7 +7050,7 @@ function enterApp(){
   document.getElementById('nav').style.display='flex';
   document.getElementById('main').style.display='block';
   // Activate dashboard
-  ['dashboard','quickstart','scraper','digest','subscribers','briefing','askai','instructions','citations','notes','privacy','notion','research','analytics','tracker','share'].forEach(function(t){
+  ['dashboard','help','scraper','digest','subscribers','briefing','askai','citations','notes','privacy','notion','research','analytics','tracker'].forEach(function(t){
     var pg = document.getElementById('page-'+t);
     var tb = document.getElementById('tab-'+t);
     if(pg) pg.style.display = t==='dashboard' ? 'block' : 'none';
@@ -7254,8 +7074,8 @@ var _tourSteps = [
   {tab:'share',icon:'&#x1F310;',title:'Public Feed',body:'Generate a clean read-only policy page to share with board members or leadership — no login required, no backend writes. Configure by relevance threshold, domain, and jurisdiction. Also exports the full database to Google Sheets CSV.'},
   {tab:'askai',icon:'&#x1F916;',title:'Ask AI',body:'Chat with Groq AI about your article database. Ask "What should go in this week\'s digest?", "Summarize reconciliation news", or "Draft a briefing note for the VP Indigenous Relations."'},
   {tab:'citations',icon:'&#x1F4DA;',title:'Citations & Bibliography',body:'Auto-generate APA, MLA, and Chicago citations for any article. The AI Auto-Generate button refines every entry to academic standards. Export as formatted PDF bibliography.'},
-  {tab:'briefing',icon:'&#x1F4CB;',title:'Briefing Note Generator',body:'Select 3–8 articles, configure audience and context, and Groq AI drafts a full structured policy brief — Executive Summary, Key Developments, Implications, and Recommended Actions — as a downloadable .docx file.'},
-  {tab:'dashboard',icon:'&#x2705;',title:'You\'re Ready!',body:'PolicyPulse is fully set up. Connect your Railway backend for live scraping. Enter a free Groq API key at console.groq.com for AI features. Use the keyboard shortcut <strong>?</strong> anywhere in the feed for navigation help.'},
+  {tab:'briefing',icon:'&#x1F4CB;',title:'Briefing Note Generator',body:'Select up to 3 articles, configure audience and context, and Groq AI drafts a full structured policy brief — Executive Summary, Key Developments, Implications, and Recommended Actions — as a downloadable .docx file.'},
+  {tab:'dashboard',icon:'&#x2705;',title:'You\'re Ready!',body:'PolicyPulse is fully set up. Connect your Render backend for live scraping. Enter a free Groq API key at console.groq.com for AI features. Use the keyboard shortcut <strong>?</strong> anywhere in the feed for navigation help.'},
 ];
 var _tourStep = 0;
 var _tourActive = false;
@@ -7331,6 +7151,13 @@ function shareArticle(id){
 
 /* ═══ DIGEST SCHEDULING ═══ */
 var _scheduleInterval = null;
+function toggleSchedulePanel(){
+  var panel = document.getElementById('schedule-panel');
+  if(!panel) return;
+  var open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+}
+
 function saveSchedule(){
   var day = document.getElementById('schedule-day').value;
   var time = document.getElementById('schedule-time').value;
@@ -7394,7 +7221,7 @@ function renderEmptyDashboard(){
   if(feedEl) feedEl.innerHTML = '<div style="text-align:center;padding:40px 24px;background:rgba(11,24,41,0.6);border:1px solid rgba(0,194,255,0.1);border-radius:12px;margin-top:8px">'
     +'<div style="font-size:48px;margin-bottom:14px">&#x1F4E1;</div>'
     +'<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:8px;font-family:\'Playfair Display\',serif">No articles yet</div>'
-    +'<div style="font-size:13px;color:#6b8aaa;line-height:1.7;max-width:380px;margin:0 auto 20px">Connect your Railway backend to start monitoring live policy news from 20+ BC and Canadian government sources.</div>'
+    +'<div style="font-size:13px;color:#6b8aaa;line-height:1.7;max-width:380px;margin:0 auto 20px">Connect your Render backend to start monitoring live policy news from 20+ BC and Canadian government sources.</div>'
     +'<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">'
     +'<button class="btn btn-primary" onclick="showTab(\'scraper\')">Go to Scraper &#x2192;</button>'
     +'<button class="btn btn-ghost" onclick="startTour()">&#x25B6; Take a Tour</button>'
@@ -7481,39 +7308,44 @@ function openNote(id){
   if(activeEl) activeEl.style.display = 'flex';
 
   // Show article banner if linked
-  var banner = document.getElementById('note-article-banner');
+  var banner   = document.getElementById('note-article-banner');
   var titleLink = document.getElementById('note-article-title-link');
-  var urlLink = document.getElementById('note-article-url-link');
+  var urlLink   = document.getElementById('note-article-url-link');
   if(banner){
     if(note.articleTitle){
-      banner.style.display='block';
+      banner.style.display = 'block';
       if(titleLink) titleLink.textContent = note.articleTitle;
-      if(urlLink){ urlLink.href = note.articleUrl||'#'; }
+      if(urlLink)   urlLink.href = note.articleUrl || '#';
     } else {
-      banner.style.display='none';
+      banner.style.display = 'none';
     }
   }
 
-  // Populate
-  var titleInp = document.getElementById('note-title-inp');
-  var bodyInp = document.getElementById('note-body-inp');
-  var tagSel = document.getElementById('note-tag-sel');
-  var metaEl = document.getElementById('note-meta');
-  var wcEl = document.getElementById('note-word-count');
-  var savedEl = document.getElementById('note-saved-indicator');
+  // Populate fields
+  var titleInp   = document.getElementById('note-title-inp');
+  var bodyInp    = document.getElementById('note-body-inp');
+  var tagSel     = document.getElementById('note-tag-sel');
+  var metaEl     = document.getElementById('note-meta');
+  var wcEl       = document.getElementById('note-word-count');
+  var savedEl    = document.getElementById('note-saved-indicator');
   var fontSizeSel = document.getElementById('note-font-size-sel');
 
   if(titleInp) titleInp.value = note.title;
-  if(bodyInp){ bodyInp.value = note.body; bodyInp.style.fontSize = (note.fontSize||13)+'px'; }
-  if(tagSel) tagSel.value = note.tag || '';
-  if(metaEl) metaEl.textContent = 'Created: ' + note.created.slice(0,10) + ' · Updated: ' + note.updated.slice(0,10);
-  if(savedEl) savedEl.textContent = '';
-  if(fontSizeSel) fontSizeSel.value = String(note.fontSize||13);
 
-  var words = (note.body || '').split(/\s+/).filter(Boolean).length;
+  // Load body into contenteditable — stored as HTML
+  if(bodyInp){
+    bodyInp.innerHTML = note.body || '';
+    bodyInp.style.fontSize = (note.fontSize || 13) + 'px';
+  }
+
+  if(tagSel)      tagSel.value = note.tag || '';
+  if(metaEl)      metaEl.textContent = 'Created: ' + note.created.slice(0,10) + ' · Updated: ' + note.updated.slice(0,10);
+  if(savedEl)     savedEl.textContent = '';
+  if(fontSizeSel) fontSizeSel.value = String(note.fontSize || 13);
+
+  var words = (bodyInp ? (bodyInp.innerText || '') : '').split(/\s+/).filter(Boolean).length;
   if(wcEl) wcEl.textContent = words + ' words';
 
-  // Show PDFs
   renderNotePdfs(note);
 }
 
@@ -7530,19 +7362,19 @@ function saveCurrentNote(){
   if(!note) return;
 
   var titleInp = document.getElementById('note-title-inp');
-  var bodyInp = document.getElementById('note-body-inp');
+  var bodyInp  = document.getElementById('note-body-inp');
   if(titleInp) note.title = titleInp.value || 'Untitled';
-  if(bodyInp) note.body = bodyInp.value;
-  note.updated = new Date().toISOString();
-  note.wordCount = (note.body || '').split(/\s+/).filter(Boolean).length;
+  // Save innerHTML so formatting is preserved
+  if(bodyInp)  note.body  = bodyInp.innerHTML;
+  note.updated   = new Date().toISOString();
+  note.wordCount = (bodyInp ? (bodyInp.innerText || '') : '').split(/\s+/).filter(Boolean).length;
 
-  // Debounced save
   clearTimeout(_noteSaveTimer);
   _noteSaveTimer = setTimeout(function(){
     saveNotesData();
     renderNotesList();
     var savedEl = document.getElementById('note-saved-indicator');
-    if(savedEl){ savedEl.textContent = '&#x2713; Saved'; setTimeout(function(){ if(savedEl) savedEl.textContent = ''; }, 2000); }
+    if(savedEl){ savedEl.innerHTML = '&#x2713; Saved'; setTimeout(function(){ if(savedEl) savedEl.textContent = ''; }, 2000); }
     var wcEl = document.getElementById('note-word-count');
     if(wcEl) wcEl.textContent = note.wordCount + ' words';
   }, 600);
@@ -7555,34 +7387,60 @@ function setNoteTag(tag){
 }
 
 function fmtNote(type){
-  var ta = document.getElementById('note-body-inp');
-  if(!ta) return;
-  var start = ta.selectionStart;
-  var end = ta.selectionEnd;
-  var selected = ta.value.slice(start, end);
-  var insert = '';
-  if(type === 'bold') insert = '**' + (selected || 'bold text') + '**';
-  else if(type === 'italic') insert = '_' + (selected || 'italic text') + '_';
-  else if(type === 'h1') insert = '\n# ' + (selected || 'Heading 1') + '\n';
-  else if(type === 'h2') insert = '\n## ' + (selected || 'Heading 2') + '\n';
-  else if(type === 'h3') insert = '\n### ' + (selected || 'Heading 3') + '\n';
-  else if(type === 'bullet') insert = '\n- ' + (selected || 'List item');
-  else if(type === 'numbered') insert = '\n1. ' + (selected || 'List item');
-  else if(type === 'highlight') insert = '==' + (selected || 'highlighted text') + '==';
-  else if(type === 'quote') insert = '\n> ' + (selected || 'Quote text');
-  else if(type === 'link') insert = '[' + (selected || 'Link text') + '](url)';
-  else if(type === 'divider') insert = '\n\n---\n\n';
-  ta.value = ta.value.slice(0, start) + insert + ta.value.slice(end);
-  ta.selectionStart = ta.selectionEnd = start + insert.length;
-  ta.focus();
+  var editor = document.getElementById('note-body-inp');
+  if(!editor) return;
+  editor.focus();
+
+  // Use execCommand for standard rich-text commands
+  var standardCmds = {
+    'bold':               function(){ document.execCommand('bold',             false, null); },
+    'italic':             function(){ document.execCommand('italic',           false, null); },
+    'underline':          function(){ document.execCommand('underline',        false, null); },
+    'insertUnorderedList':function(){ document.execCommand('insertUnorderedList', false, null); },
+    'insertOrderedList':  function(){ document.execCommand('insertOrderedList',   false, null); },
+  };
+
+  if(standardCmds[type]){
+    standardCmds[type]();
+    saveCurrentNote();
+    return;
+  }
+
+  // Custom commands using insertHTML
+  var sel = window.getSelection();
+  var selectedText = sel && sel.toString() ? sel.toString() : '';
+
+  var html = '';
+  if(type === 'h1')        html = '<h1>' + (selectedText || 'Heading 1') + '</h1>';
+  else if(type === 'h2')   html = '<h2>' + (selectedText || 'Heading 2') + '</h2>';
+  else if(type === 'h3')   html = '<h3>' + (selectedText || 'Heading 3') + '</h3>';
+  else if(type === 'highlight') html = '<mark>' + (selectedText || 'highlighted text') + '</mark>';
+  else if(type === 'blockquote') html = '<blockquote>' + (selectedText || 'Quote text') + '</blockquote>';
+  else if(type === 'divider')    html = '<hr>';
+  else if(type === 'link'){
+    var url = prompt('Enter URL:', 'https://');
+    if(!url) return;
+    html = '<a href="' + escHtml(url) + '" target="_blank">' + (selectedText || url) + '</a>';
+  }
+
+  if(html) document.execCommand('insertHTML', false, html);
   saveCurrentNote();
 }
 
+// Keyboard shortcut support inside the editor
+function handleNoteKeydown(e){
+  if(e.ctrlKey || e.metaKey){
+    if(e.key === 'b'){ e.preventDefault(); fmtNote('bold'); }
+    else if(e.key === 'i'){ e.preventDefault(); fmtNote('italic'); }
+    else if(e.key === 'u'){ e.preventDefault(); fmtNote('underline'); }
+  }
+}
+
 function setNoteFontSize(size){
-  var ta = document.getElementById('note-body-inp');
-  if(ta) ta.style.fontSize = size + 'px';
+  var editor = document.getElementById('note-body-inp');
+  if(editor) editor.style.fontSize = size + 'px';
   var note = _notes_data.find(function(n){ return n.id === _currentNoteId; });
-  if(note){ note.fontSize = size; saveNotesData(); }
+  if(note){ note.fontSize = parseInt(size); saveNotesData(); }
 }
 
 function filterNotesByType(type, el){
@@ -7592,33 +7450,40 @@ function filterNotesByType(type, el){
 }
 
 function exportCurrentNotePDF(){
-  if(!_currentNoteId){ showToast('\u26A0;','No Note','Select a note to export.',3000); return; }
+  if(!_currentNoteId){ showToast('&#x26A0;','No Note','Select a note to export.',3000); return; }
   var note = _notes_data.find(function(n){ return n.id === _currentNoteId; });
   if(!note) return;
-  // Convert markdown to basic HTML
-  var body = (note.body||'')
-    .replace(/==(.*?)==/g,'<mark style="background:#fef08a;padding:0 2px;border-radius:2px">$1</mark>')
-    .replace(/^### (.*?)$/gm,'<h3 style="font-size:15px;color:#003366;margin:14px 0 6px">$1</h3>')
-    .replace(/^## (.*?)$/gm,'<h2 style="font-size:18px;color:#003366;margin:16px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px">$1</h2>')
-    .replace(/^# (.*?)$/gm,'<h1 style="font-size:22px;color:#003366;margin:20px 0 10px">$1</h1>')
-    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
-    .replace(/_(.*?)_/g,'<em>$1</em>')
-    .replace(/^> (.*?)$/gm,'<blockquote style="border-left:3px solid #ccc;margin:8px 0;padding:4px 12px;color:#666;font-style:italic">$1</blockquote>')
-    .replace(/^- (.*?)$/gm,'<li style="margin:4px 0">$1</li>')
-    .replace(/^1\. (.*?)$/gm,'<li style="margin:4px 0">$1</li>')
-    .replace(/^---$/gm,'<hr style="border:none;border-top:1px solid #ddd;margin:16px 0">')
-    .replace(/\n/g,'<br>');
-  var articleBanner = note.articleTitle ? '<div style="background:#f0f7ff;border:1px solid #bcd;border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:12px"><strong style="color:#003366">&#x1F4F0; Linked Article:</strong> ' + escHtml(note.articleTitle) + (note.articleUrl ? ' — <a href="'+note.articleUrl+'" style="color:#0077aa">'+note.articleUrl+'</a>' : '') + '</div>' : '';
-  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Georgia,serif;max-width:700px;margin:40px auto;color:#1a2b42;font-size:14px;line-height:1.8}h1{font-size:24px;color:#003366;border-bottom:2px solid #003366;padding-bottom:8px}p{margin-bottom:12px}.footer{margin-top:40px;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px}mark{background:#fef08a}@media print{body{margin:0}}</style></head><body>'
-    +'<h1>'+escHtml(note.title)+'</h1>'
-    +'<div style="font-size:11px;color:#666;margin-bottom:20px">Created: '+note.created.slice(0,10)+' &bull; Updated: '+note.updated.slice(0,10)+(note.tag?' &bull; '+note.tag:'')+'</div>'
-    +articleBanner
-    +'<div>'+body+'</div>'
-    +'<div class="footer">PolicyPulse Notes &bull; Exported '+new Date().toLocaleDateString('en-CA')+'</div>'
-    +'</body></html>';
-  var win = window.open('','_blank','width=800,height=900');
-  if(win){ win.document.write(html); win.document.close(); setTimeout(function(){win.print();},500); }
-  showToast('📄','PDF Export','Print dialog opened. Choose "Save as PDF".',4000);
+  // body is already HTML from contenteditable — use directly
+  var body = note.body || '';
+  var articleBanner = note.articleTitle
+    ? '<div style="background:#f0f7ff;border:1px solid #bcd;border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:12px"><strong style="color:#003366">&#x1F4F0; Linked Article:</strong> '
+      + escHtml(note.articleTitle)
+      + (note.articleUrl ? ' — <a href="'+note.articleUrl+'" style="color:#0077aa">'+note.articleUrl+'</a>' : '')
+      + '</div>'
+    : '';
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'
+    + 'body{font-family:Georgia,serif;max-width:700px;margin:40px auto;color:#1a2b42;font-size:14px;line-height:1.8}'
+    + 'h1{font-size:24px;color:#003366;border-bottom:2px solid #003366;padding-bottom:8px;margin-bottom:6px}'
+    + 'h2{font-size:18px;color:#003366;margin:16px 0 8px}'
+    + 'h3{font-size:15px;color:#003366;margin:14px 0 6px}'
+    + 'blockquote{border-left:3px solid #ccc;margin:8px 0;padding:4px 12px;color:#666;font-style:italic}'
+    + 'mark{background:#fef08a;padding:0 2px;border-radius:2px}'
+    + 'ul,ol{padding-left:22px} li{margin:4px 0}'
+    + 'hr{border:none;border-top:1px solid #ddd;margin:16px 0}'
+    + 'a{color:#0077aa}'
+    + '.footer{margin-top:40px;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px}'
+    + '@media print{body{margin:0}}'
+    + '</style></head><body>'
+    + '<h1>' + escHtml(note.title) + '</h1>'
+    + '<div style="font-size:11px;color:#666;margin-bottom:20px">Created: ' + note.created.slice(0,10)
+    + ' &bull; Updated: ' + note.updated.slice(0,10) + (note.tag ? ' &bull; ' + note.tag : '') + '</div>'
+    + articleBanner
+    + '<div>' + body + '</div>'
+    + '<div class="footer">PolicyPulse Notes &bull; Exported ' + new Date().toLocaleDateString('en-CA') + '</div>'
+    + '</body></html>';
+  var win = window.open('', '_blank', 'width=800,height=900');
+  if(win){ win.document.write(html); win.document.close(); setTimeout(function(){ win.print(); }, 500); }
+  showToast('&#x1F4C4;','PDF Export','Print dialog opened. Choose "Save as PDF".',4000);
 }
 
 function handlePdfUpload(input){
@@ -7807,7 +7672,7 @@ function clearPrivacyData(type){
 
 /* ═══════════════════════════════════════════════════
    NOTION INTEGRATION
-   All calls proxied through Railway: POST /notion/push
+   All calls proxied through Render: POST /notion/push
    Token stored in localStorage, never server-side.
 ═══════════════════════════════════════════════════ */
 
@@ -7864,7 +7729,7 @@ function updateNotionStatusBar(state, detail){
     disconnected: ['&#x26AA;','Not connected — paste your integration token and click Save & Test', 'var(--muted)'],
     testing:      ['&#x1F7E1;','Testing connection to Notion...', 'var(--muted)'],
     connected:    ['&#x1F7E2;','Connected to Notion'+(detail?' — '+detail:''), 'var(--green)'],
-    'no-backend': ['&#x1F7E0;','Railway backend required — connect your backend first', '#fb923c'],
+    'no-backend': ['&#x1F7E0;','Render backend required — connect your backend first', '#fb923c'],
     error:        ['&#x1F534;','Connection failed: '+(detail||'unknown error'), '#f87171'],
   };
   var m = states[state] || states.disconnected;
@@ -7882,7 +7747,7 @@ function updateNotionButtons(){
 }
 
 async function notionProxy(endpoint, payload){
-  if(!API_BASE)     throw new Error('Railway backend not connected — connect your backend first');
+  if(!API_BASE)     throw new Error('Render backend not connected — connect your backend first');
   if(!notionToken)  throw new Error('Notion token not set — go to the Notion tab to connect');
   var res = await apiFetch('/notion/push', {
     method: 'POST',
@@ -8401,7 +8266,7 @@ document.addEventListener('click',function(e){
 ═══════════════════════════════════════════════════════════════════ */
 
 var _briefingSelected = new Set(); // article ids (news) selected for brief
-var _briefingMax = 8;
+var _briefingMax = 3;
 
 function renderBriefingTab(){
   _briefingSelected = new Set();
@@ -9079,19 +8944,6 @@ function generateMonthlyReport(){
   if(stEl){ stEl.style.display='block'; stEl.style.background='rgba(16,185,129,0.1)'; stEl.style.border='1px solid rgba(16,185,129,0.25)'; stEl.style.color='var(--green)'; stEl.textContent='&#x2713; Report opened for '+label; setTimeout(function(){if(stEl)stEl.style.display='none';},4000); }
 }
 
-async function emailMonthlyReport(){
-  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Railway backend to send emails.',4000); return; }
-  var sel = document.getElementById('monthly-report-month');
-  var month = sel ? sel.value : '';
-  if(!month){ showToast('&#x26A0;','No Month','Select a month first.',3000); return; }
-  var active = subscribers.filter(function(s){return s.active;});
-  if(!active.length){ showToast('&#x26A0;','No Subscribers','Add active subscribers first.',3000); return; }
-  if(!confirm('Email the '+month+' monthly report to '+active.length+' subscriber'+(active.length!==1?'s':'')+'?')) return;
-  // Re-use generateMonthlyReport but capture HTML first
-  showToast('&#x2709;','Sending Monthly Report','Building and sending…',4000);
-  // For now: toast success — full server-side send can be wired to /digests/send
-  showToast('&#x1F4CB;','Use PDF Export','Open the report, then forward the PDF to your subscribers.',5000);
-}
 
 function exportAnalyticsPDF(){
   renderAnalyticsDashboard();
@@ -9555,7 +9407,20 @@ async function aiCompareChanges(){
   var topic = _trackerTopics.find(function(t){return t.id===_currentTopicId;});
   if(!topic) return;
   var key = apiKey || sessionStorage.getItem('pp_groq_key');
-  if(!key){ showToast('&#x1F511;','No API Key','Enter your Groq key in Ask AI to use this feature.',4000); return; }
+  if(!key){
+    var aiEl = document.getElementById('tracker-ai-comparison');
+    if(aiEl){
+      aiEl.style.display = 'block';
+      aiEl.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:4px 0">'
+        +'<span style="font-size:18px">&#x1F511;</span>'
+        +'<div>'
+        +'<div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:3px">Groq API key required</div>'
+        +'<div style="font-size:11px;color:var(--muted)">Go to the <button onclick="showTab(\'askai\')" style="background:none;border:none;color:var(--cyan);cursor:pointer;font-size:11px;padding:0;font-family:inherit;text-decoration:underline">Ask AI tab</button> and click <strong style="color:var(--text)">Load API Key</strong> to enable AI features. Get a free key at <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a>.</div>'
+        +'</div>'
+        +'</div>';
+    }
+    return;
+  }
 
   var linkedArts = (topic.linkedArticleIds||[]).map(function(aid){
     return articles.find(function(a){return a.id===aid;});
@@ -9922,14 +9787,14 @@ function saveApiKeyFromSettings(){
 async function testBackendConnection(){
   var inp = document.getElementById('setting-backend-url');
   var url = (inp&&inp.value||'').trim() || API_BASE;
-  if(!url){ showToast('&#x26A0;','No URL','Enter your Railway URL first.',3000); return; }
+  if(!url){ showToast('&#x26A0;','No URL','Enter your Render URL first.',3000); return; }
   var stat = document.getElementById('setting-backend-status');
   if(stat) stat.textContent = 'Testing…';
   try {
     var r = await fetch(url.replace(/\/+$/,'')+'/health', {signal: AbortSignal.timeout(6000)});
     if(r.ok){
       if(stat) stat.innerHTML = '<span style="color:var(--green)">&#x2713; Connected — backend is healthy</span>';
-      showToast('&#x2705;','Backend OK','Railway backend is reachable.',3000);
+      showToast('&#x2705;','Backend OK','Render backend is reachable.',3000);
     } else {
       if(stat) stat.innerHTML = '<span style="color:var(--red)">&#x2715; HTTP '+r.status+'</span>';
     }
@@ -9966,7 +9831,7 @@ async function previewFixDates(){
 }
 
 async function runFixDates(kind){
-  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Railway backend to fix dates.',4000); return; }
+  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Render backend to fix dates.',4000); return; }
   var btn    = document.getElementById(kind==='scholarly'?'fix-research-dates-btn':'fix-news-dates-btn');
   var statEl = document.getElementById('fix-dates-status');
   if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spin">&#8635;</span> Running…'; }
