@@ -4220,11 +4220,45 @@ function showBackendPrompt(containerId) {
 }
 
 function saveBackendUrl() {
-  var el = document.getElementById('be-url-inp');
-  if (!el || !el.value.trim()) return;
-  localStorage.setItem('pp_api_base', el.value.trim().replace(/\/+$/, ''));
-  showToast('OK', 'Backend Saved', 'Reloading...', 2000);
-  setTimeout(function(){ location.reload(); }, 1500);
+  // Read from Settings tab input first, fall back to inline dashboard prompt input
+  var settingsInp = document.getElementById('setting-backend-url');
+  var inlineInp   = document.getElementById('be-url-inp');
+  var rawVal = (settingsInp && settingsInp.value.trim())
+             || (inlineInp  && inlineInp.value.trim())
+             || '';
+  if (!rawVal) {
+    showToast('&#x26A0;', 'No URL', 'Enter your Render backend URL first.', 3000);
+    return;
+  }
+  var cleanUrl = rawVal.replace(/\/+$/, '');
+
+  // Persist to localStorage
+  localStorage.setItem('pp_api_base', cleanUrl);
+
+  // Update the live global so every subsequent apiFetch/scrapeNow call
+  // uses the new URL without requiring a page reload
+  API_BASE = cleanUrl;
+  _PP_API_KEY = localStorage.getItem('pp_api_key') || _PP_API_KEY;
+
+  // Keep the Settings UI in sync
+  if (settingsInp) settingsInp.value = cleanUrl;
+  var beDisp = document.getElementById('settings-backend-url-display');
+  if (beDisp) beDisp.textContent = cleanUrl;
+  var beStat = document.getElementById('setting-backend-status');
+  if (beStat) beStat.innerHTML = '<span style="color:var(--green)">&#x2713; Connected to: ' + cleanUrl + '</span>';
+
+  showToast('&#x2705;', 'Backend Connected', 'URL saved — live scraping is now active.', 3500);
+
+  // Reload article data immediately so the dashboard populates without a page refresh
+  if (typeof init === 'function' && !_appInitialized) {
+    init();
+  } else if (typeof apiLoadArticles === 'function') {
+    apiLoadArticles({ limit: 100, force: true }).then(function() {
+      apiLoadStats();
+      renderDashboard();
+      updateBadges();
+    });
+  }
 }
 
 /* === END API HELPERS === */
