@@ -2,6 +2,19 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>
+// Prevent flash of wrong theme — runs synchronously before body renders
+(function(){
+  var t = localStorage.getItem('pp_theme');
+  // Default to dark; only apply light if user explicitly chose it
+  if(t !== 'light'){
+    if(!t) localStorage.setItem('pp_theme','dark');
+    // body has no class = dark mode (default CSS state)
+  } else {
+    document.documentElement.style.background='#f4f7fb';
+  }
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PolicyPulse — Policy Intelligence Platform</title>
 <!-- Google Analytics -->
@@ -4075,7 +4088,7 @@ var _articleCache = [];
 var _cacheTime = 0;
 var _cacheMaxAge = 5 * 60 * 1000; // 5 minutes
 var _page = 0;
-var _pageSize = parseInt(_appSettings.articles_per_page||'20') || 20;
+var _pageSize = 20; // updated from _appSettings in init()
 var _totalArticles = 0;
 
 function isCacheValid(){ return _articleCache.length > 0 && (Date.now() - _cacheTime) < _cacheMaxAge; }
@@ -4814,6 +4827,8 @@ async function init(){
 
   try {
     applyTheme();
+    // Sync page size from saved settings (can't do at declaration time — _appSettings declared later)
+    _pageSize = parseInt(_appSettings.articles_per_page || '20') || 20;
     populateSavedSearches();
     loadScheduleUI();
 
@@ -5102,8 +5117,8 @@ function buildCard(a,expanded){
         <button class="hbtn" onclick="event.stopPropagation();deleteArticle(${a.id})" title="Delete article permanently" style="color:#f87171">&#x1F5D1; Delete</button>
         ${notionToken&&notionArticleDbId?'<button class="hbtn hbtn-notion" onclick="event.stopPropagation();saveArticleToNotion('+a.id+')" title="Save to Notion">&#x1F5D2; Notion</button>':''}
       </div>
-      <div class="article-title-link" onclick="openPreview(${a.id},event)" style="cursor:pointer" title="Click to preview">${a.title}</div
-      </div> class="article-url-row">
+      <div class="article-title-link" onclick="openPreview(${a.id},event)" style="cursor:pointer" title="Click to preview">${a.title}</div>
+      <div class="article-url-row">
         <span class="article-url-label">🔗</span>
         <span class="article-url-text" id="url-${a.id}">${a.url}</span>
         <button class="btn-copy-url btn-sm" onclick="copyUrl(${a.id})" title="Copy link">⎘</button>
@@ -5521,7 +5536,12 @@ async function scrapeNow(){
   if(typeof gtag!=='undefined') gtag('event','scrape_triggered',{event_category:'Scraper'});
   var btn=document.getElementById('scrape-btn');
   var progress=document.getElementById('scrape-progress');
-  if(!API_BASE){ showBackendPrompt('feed-list'); showToast('&#128268;','No Backend','Enter your Render URL to enable scraping.',5000); return; }
+  if(!API_BASE){
+    showToast('&#128268;','No Backend Connected','Enter your Render URL in Settings → Backend Connection, then try again.',7000);
+    showTab('settings');
+    setTimeout(function(){ var beInp=document.getElementById('setting-backend-url'); if(beInp) beInp.focus(); }, 400);
+    return;
+  }
   if(btn){btn.disabled=true;btn.innerHTML='<span class="spin">&#8635;</span> Scraping&hellip;';}
   if(progress) progress.style.display='block';
   showToast('&#x1F50D;','Scraping Sources','Fetching articles from all active sources&hellip;',4000);
@@ -7229,9 +7249,23 @@ function renderEmptyDashboard(){
   if(alertEl) alertEl.innerHTML = '<div style="font-size:12px;color:#334d6b;padding:8px 0">No alerts yet. Connect your backend and run a scrape to start receiving policy intelligence.</div>';
 }
 
-/* ═══ INIT BOOT SEQUENCE ═══ */
-// app.html always loads directly — landing page is index.html
+/* INIT BOOT SEQUENCE */
+// app.html always loads directly - landing page is index.html
 (function(){
+  // Apply dark/light theme immediately to prevent flash of wrong mode.
+  // Default is always dark; only switch to light if user explicitly saved it.
+  var _savedTheme = localStorage.getItem('pp_theme');
+  if(_savedTheme === 'light'){
+    document.body.classList.add('light-mode');
+    _isDark = false;
+  } else {
+    document.body.classList.remove('light-mode');
+    _isDark = true;
+    if(!_savedTheme) localStorage.setItem('pp_theme', 'dark');
+  }
+  var _themeBtn = document.getElementById('theme-toggle');
+  if(_themeBtn) _themeBtn.innerHTML = _isDark ? '&#x1F319;' : '&#x2600;&#xFE0F;';
+
   var lp = document.getElementById('landing-page');
   if(lp) lp.style.display = 'none';
   document.getElementById('banner').style.display = 'flex';
