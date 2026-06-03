@@ -535,15 +535,7 @@ body.light-mode .research-card.flagged{border-color:rgba(239,68,68,0.25)}
 .toast-close{position:absolute;top:8px;right:10px;background:none;border:none;color:var(--dim);font-size:14px;cursor:pointer;line-height:1;padding:2px}
 .toast-progress{position:absolute;bottom:0;left:0;height:2px;background:rgba(0,194,255,0.4);animation:toastprog linear forwards}
 @keyframes toastprog{from{width:100%}to{width:0%}}
-#api-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:999;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
-#api-modal.show{display:flex}
-#api-modal-box{background:linear-gradient(135deg,#0b1829,#0f2040);border:1px solid rgba(0,194,255,0.2);border-radius:14px;padding:32px;max-width:460px;width:90%;box-shadow:0 24px 80px rgba(0,0,0,.6);position:relative;overflow:hidden}
-#api-modal-box::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),var(--gold),var(--cyan),transparent)}
-#api-modal-box h2{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--white);margin-bottom:8px}
-#api-modal-box p{font-size:12px;color:var(--muted);line-height:1.65;margin-bottom:18px}
-#api-key-input{width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border2);border-radius:8px;padding:11px 14px;font-size:13px;color:var(--text);margin-bottom:12px;font-family:'IBM Plex Mono',monospace}
-#api-key-input:focus{border-color:rgba(0,194,255,0.4);outline:none}
-.modal-note{font-size:11px;color:var(--dim);margin-top:10px;line-height:1.65;padding:10px;background:rgba(0,0,0,.2);border-radius:7px}
+/* api-modal removed — Groq key lives in Render as GROQ_API_KEY env var */
 @keyframes fadeInUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .fade-in{animation:fadeInUp .22s ease}
 /* Dashboard dual-feed responsive */
@@ -838,37 +830,9 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
   </style>
 </div>
 
-<div id="api-modal" class="show">
-  <div id="api-modal-box">
-    <h2>Welcome to PolicyPulse</h2>
-    <p>PolicyPulse uses <strong style='color:var(--cyan)'>Groq AI</strong> (free, no credit card) to power Ask AI. Get a free key at <a href='https://console.groq.com' target='_blank' style='color:var(--cyan)'>console.groq.com</a> in 2 minutes — or skip to explore the dashboard.</p>
-    <input id="api-key-input" type="password" placeholder="gsk_..." autocomplete="off">
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-primary" style="flex:1;padding:11px;font-size:13px" onclick="saveApiKey()">🚀 Launch PolicyPulse</button>
-      <button class="btn btn-ghost" style="padding:11px 16px;font-size:13px" onclick="skipApiKey()">Skip</button>
-    </div>
-    <div class="modal-note">🔒 Stored in <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--cyan)">sessionStorage</span> — cleared when you close the tab.<br>Get a <strong style="color:var(--green)">free</strong> Groq key (starts with <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--cyan)">gsk_</span>) at <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a></div>
-  </div>
-</div>
-
 <script>
-/* API key modal handlers — defined early so onclick works before main scripts load */
-function saveApiKey(){
-  var k = document.getElementById('api-key-input').value.trim();
-  if(!k){ alert('Please enter a valid API key.'); return; }
-  apiKey = k;
-  sessionStorage.setItem('pp_groq_key', k);
-  document.getElementById('api-modal').classList.remove('show');
-  if(typeof _appInitialized !== 'undefined' && !_appInitialized) init();
-  else if(typeof init === 'function') init();
-}
-function skipApiKey(){
-  document.getElementById('api-modal').classList.remove('show');
-  var sb = document.getElementById('askai-status');
-  if(sb) sb.textContent = 'Ask AI disabled — get a free Groq key at console.groq.com to enable.';
-  if(typeof _appInitialized !== 'undefined' && !_appInitialized) init();
-  else if(typeof init === 'function') init();
-}
+/* Groq API key is now stored in Render (GROQ_API_KEY env var) and proxied
+   through POST /ai/chat. No browser-side key needed. Boot goes straight to init(). */
 </script>
 
 <div id="banner">
@@ -4827,8 +4791,7 @@ async function previewRemoveTag(tag){
 }
 
 async function previewAsk(){
-  var geminiKey = apiKey || sessionStorage.getItem('pp_groq_key');
-  if(!geminiKey){ showToast('🔑','No API Key','Enter your Gemini key to use Ask AI.',4000); return; }
+  if(!API_BASE){ showToast('🔑','No Backend','Connect your Render backend to use Ask AI.',4000); return; }
   var inp = document.getElementById('preview-chat-inp');
   var question = (inp.value||'').trim();
   if(!question) return;
@@ -4850,24 +4813,15 @@ async function previewAsk(){
 
   var context = 'Article: "'+a.title+'" ('+a.source+', '+a.domain+', '+a.jurisdiction+') | Summary: '+(a.summary||'')+' | Why it matters: '+(a.why_it_matters||a.whyItMatters||'');
   var sysPr = 'You are a senior policy analyst. Answer questions about this specific article concisely. Article context: '+context;
-  var msgs = _previewChatHistory.map(function(m,i){
-    return {role:m.role==='assistant'?'model':'user', parts:[{text:i===0&&m.role==='user'?sysPr+'\n\nQuestion: '+m.content:m.content}]};
-  });
+  var groqMsgs = [{role:'system',content:sysPr}].concat(
+    _previewChatHistory.slice(0,-1).map(function(m){return {role:m.role==='assistant'?'assistant':'user',content:m.content};}),
+    [{role:'user',content:question}]
+  );
 
   try{
-    // Build OpenAI-compatible messages for Groq
-    var groqMsgs = [{role:'system',content:sysPr}].concat(
-      _previewChatHistory.slice(0,-1).map(function(m){return {role:m.role==='assistant'?'assistant':'user',content:m.content};}),
-      [{role:'user',content:question}]
-    );
-    var resp = await fetch('https://api.groq.com/openai/v1/chat/completions',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+geminiKey},
-      body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:groqMsgs,max_tokens:500,temperature:0.2})
-    });
-    var data = await resp.json();
-    if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
-    var reply = data.choices&&data.choices[0]?data.choices[0].message.content:'No response.';
+    var d = await apiFetch('/ai/chat',{method:'POST',body:JSON.stringify({messages:groqMsgs,max_tokens:500})});
+    if(!d||!d.ok) throw new Error((d&&d.detail)||'No response from server');
+    var reply = d.content||'No response.';
     typingDiv.remove();
     var aiDiv = document.createElement('div');
     aiDiv.className = 'msg-ai'; aiDiv.style.cssText='font-size:11px;padding:6px 10px';
@@ -6196,34 +6150,25 @@ function clearChat(){
   showToast('&#x1F9F9;','Chat Cleared','Conversation history cleared.',2000);
 }
 async function sendChat(){
-  const key=apiKey||sessionStorage.getItem('pp_groq_key');
-  if(!key){alert('No API key. Reload the page and enter your free Groq key.');return;}
+  if(!API_BASE){appendMsg('Connect your Render backend to use Ask AI.','msg-ai');return;}
   const inp=document.getElementById('chat-input');const msg=inp.value.trim();if(!msg)return;
   inp.value='';appendMsg(msg,'msg-user');
-  // Cap history at last 10 exchanges (20 messages) to stay within token limits
   if(chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
   chatHistory.push({role:'user',content:msg});
   const typing=appendMsg('Thinking…','msg-ai-typing');
-  // Cap context: 25 most recent articles sorted by relevance then date
-  // This keeps the prompt under ~8,000 tokens even with 300+ articles in the DB
   const contextArticles = [...articles]
     .sort(function(a,b){ return (b.relevance||0)-(a.relevance||0) || new Date(b.pubDate||0)-new Date(a.pubDate||0); })
     .slice(0,25);
   const context=contextArticles.map(a=>`[${a.pubDate}] ${a.title} (${a.domain}, ${a.jurisdiction}, relevance ${a.relevance}/10, ${a.sentiment}): ${a.summary}`).join('\n');
   const contextNote = articles.length > 25
-    ? `\n\n[Showing top 25 of ${articles.length} articles by relevance. Ask about a specific domain or date range to narrow results.]`
+    ? `\n\n[Showing top 25 of ${articles.length} articles by relevance.]`
     : '';
-  const sysPr=`You are PolicyPulse AI — a senior policy analyst for a government relations professional in BC/Canada. You have a database of tracked policy articles. Answer concisely and strategically. Cite article titles when recommending. Be direct and action-oriented.\n\nARTICLE DATABASE (top ${contextArticles.length} by relevance):\n${context}${contextNote}`;
+  const sysPr=`You are PolicyPulse AI — a senior policy analyst for a government relations professional in BC/Canada. Answer concisely and strategically. Cite article titles when recommending.\n\nARTICLE DATABASE (top ${contextArticles.length} by relevance):\n${context}${contextNote}`;
+  const groqMessages=[{role:'system',content:sysPr},...chatHistory.slice(0,-1).map(m=>({role:m.role==='assistant'?'assistant':'user',content:m.content})),{role:'user',content:msg}];
   try{
-    const groqMessages=[{role:'system',content:sysPr},...chatHistory.slice(0,-1).map(m=>({role:m.role==='assistant'?'assistant':'user',content:m.content})),{role:'user',content:msg}];
-    const resp=await fetch('https://api.groq.com/openai/v1/chat/completions',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:groqMessages,max_tokens:1000,temperature:0.2})
-    });
-    const data=await resp.json();
-    if(data.error)throw new Error(data.error.message||JSON.stringify(data.error));
-    const reply=data.choices?.[0]?.message?.content||'No response received.';
+    const d=await apiFetch('/ai/chat',{method:'POST',body:JSON.stringify({messages:groqMessages,max_tokens:1000})});
+    if(!d||!d.ok) throw new Error((d&&d.detail)||'No response from server');
+    const reply=d.content||'No response.';
     typing.remove();appendMsg(reply,'msg-ai');chatHistory.push({role:'assistant',content:reply});
   }catch(e){typing.remove();appendMsg('Error: '+e.message,'msg-ai');}
 }
@@ -6409,10 +6354,9 @@ function toggleTheme(){
 
 /* === AI READ ARTICLE === */
 async function aiReadArticle(){
+  if(!API_BASE){showToast('&#x26A0;','No Backend','Connect your Render backend to use AI features.',4000);return;}
   var a = articles.find(x=>x.id===_previewArticleId);
   if(!a) return;
-  var key = apiKey || sessionStorage.getItem('pp_groq_key');
-  if(!key){ showToast('&#x1F511;','No API Key','Enter your Groq key to use AI features.',4000); return; }
   var btn = document.getElementById('preview-ai-read-btn');
   var section = document.getElementById('preview-ai-read-section');
   var contentEl = document.getElementById('preview-ai-read-content');
@@ -6437,14 +6381,15 @@ async function aiReadArticle(){
     ? 'Read this article and provide: 1) A detailed 3-4 sentence policy summary 2) Key implications for BC/Canadian post-secondary institutions 3) Relevant policy frameworks (TRC, DRIPA, UNDRIP, OCAP if applicable) 4) Recommended action for a government relations professional.\n\nARTICLE:\n' + articleText
     : 'Based on the title and summary, provide detailed policy analysis including implications and recommended actions.\n\nTitle: ' + a.title + '\nSource: ' + a.source + '\nSummary: ' + (a.summary||'');
   try {
-    var resp = await fetch('https://api.groq.com/openai/v1/chat/completions',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'system',content:'You are a senior Canadian policy analyst. Provide structured, actionable analysis.'},{role:'user',content:prompt}],max_tokens:800,temperature:0.2})
-    });
-    var data = await resp.json();
-    if(data.error) throw new Error(data.error.message||'Groq error');
-    if(contentEl) contentEl.textContent = data.choices&&data.choices[0]?data.choices[0].message.content:'No response.';
+    var d = await apiFetch('/ai/chat',{method:'POST',body:JSON.stringify({
+      messages:[
+        {role:'system',content:'You are a senior Canadian policy analyst. Provide structured, actionable analysis.'},
+        {role:'user',content:prompt}
+      ],
+      max_tokens:800
+    })});
+    if(!d||!d.ok) throw new Error((d&&d.detail)||'No response');
+    if(contentEl) contentEl.textContent = d.content||'No response.';
     showToast('&#x1F916;','Analysis Complete','Full article has been read and analyzed.',3000);
   } catch(e){ if(contentEl) contentEl.textContent = 'Error: '+e.message; }
   if(btn){ btn.disabled=false; btn.textContent='&#x1F916; AI Read & Summarize'; }
@@ -8353,8 +8298,8 @@ function renderNewsMustContainTags(){
 /* Research filter settings live at the top of the JS (lines ~2530+). */
 /* _researchFilterSettings, initResearchFilterSettings, etc. are defined there. */
 
-const storedKey=sessionStorage.getItem('pp_groq_key');
-if(storedKey){apiKey=storedKey;document.getElementById('api-modal').classList.remove('show');init();}
+// Groq key now lives in Render — boot goes straight to init()
+init();
 
 /* ══════════════════════════════════════════════════════════════
    FIX 3 — EXCLUSION KEYWORDS
