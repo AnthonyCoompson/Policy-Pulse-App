@@ -491,6 +491,71 @@ def _parse_gemini_response(text: str, title: str, source_name: str) -> dict | No
     }
 
 
+# ── GROQ FALLBACK ─────────────────────────────────────────────────────────────
+
+def _analyze_with_groq(title: str, url: str, source_name: str = "",
+                        article_text: str = "") -> dict | None:
+    """Try Groq (llama-3.3-70b-versatile) as a fallback when GEMINI_API_KEY
+    is absent.  Uses the same prompt structure and JSON schema as the Gemini
+    path so _parse_gemini_response() can handle the output directly.
+
+    Returns None (not a fallback dict) if GROQ_API_KEY is also missing or
+    on any error, so the caller can chain to _default_analysis().
+    """
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    if not groq_key:
+        return None
+
+    cfg           = _load_prompt_config()
+    system_prompt = _build_system_prompt(cfg)
+    full_template, title_only_template = _build_analysis_prompts(cfg)
+
+    has_text = bool(article_text and len(article_text.strip()) > 150)
+    if has_text:
+        trimmed = article_text.strip()[:6000]
+        prompt  = (full_template
+                   .replace("<TITLE>", title)
+                   .replace("<SOURCE>", source_name)
+                   .replace("<URL>", url)
+                   .replace("<ARTICLE_TEXT>", trimmed))
+    else:
+        prompt  = (title_only_template
+                   .replace("<TITLE>", title)
+                   .replace("<SOURCE>", source_name)
+                   .replace("<URL>", url))
+
+    payload = {
+        "model":    "llama-3.3-70b-versatile",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user",   "content": prompt},
+        ],
+        "max_tokens":  500,
+        "temperature": 0.1,
+    }
+
+    try:
+        resp = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {groq_key}",
+                "Content-Type":  "application/json",
+            },
+            timeout=30,
+        )
+        if resp.status_code == 429:
+            log.warning("Groq rate limit (429) — falling back to keyword classifier")
+            return None
+        resp.raise_for_status()
+        data = resp.json()
+        text = data["choices"][0]["message"]["content"]
+        return _parse_gemini_response(text, title, source_name)
+    except Exception as e:
+        log.warning(f"Groq fallback error: {e}")
+        return None
+
+
 # ── SYNCHRONOUS — original function, kept intact for backward compatibility ───
 
 def analyze_article(title: str, url: str, source_name: str = "",
@@ -515,7 +580,10 @@ def analyze_article(title: str, url: str, source_name: str = "",
         or None if relevance < 6 or on unrecoverable error.
     """
     if not GEMINI_API_KEY:
-        log.warning("GEMINI_API_KEY not set — skipping AI analysis, using defaults")
+        log.warning("GEMINI_API_KEY not set — trying Groq fallback, then keyword defaults")
+        groq_result = _analyze_with_groq(title, url, source_name, article_text)
+        if groq_result is not None:
+            return groq_result
         return _default_analysis(title, source_name)
 
     payload = _build_payload(title, url, source_name, article_text)

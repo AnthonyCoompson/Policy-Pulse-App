@@ -14,7 +14,6 @@ import logging
 import os
 import re
 import time
-from dataclasses import dataclass, field
 from datetime import datetime
 from urllib.parse import urljoin, quote_plus
 
@@ -35,14 +34,13 @@ log = logging.getLogger(__name__)
 
 # ── CONSTANTS ─────────────────────────────────────────────────────────────────
 
-REQUEST_TIMEOUT         = 20   # raised from 15 — BC/federal gov sites are slow
-ARTICLE_FETCH_TIMEOUT   = 18   # raised from 12 — reduces title-only fallbacks
-DELAY_BETWEEN_SOURCES   = 1.5
-DELAY_BETWEEN_ARTICLES  = 0.4
-FUZZY_DEDUP_THRESHOLD   = 88   # token_set_ratio >= this → duplicate
-QUICK_FILTER_THRESHOLD  = 1    # quick_relevance_score must be > 0 to proceed to AI
-                               # (score 0 = a noise keyword hit with zero policy hits)
-MAX_ARTICLES_PER_SOURCE = 15   # raised from 12
+REQUEST_TIMEOUT       = 15
+ARTICLE_FETCH_TIMEOUT = 12
+DELAY_BETWEEN_SOURCES = 1.5
+DELAY_BETWEEN_ARTICLES = 0.4
+FUZZY_DEDUP_THRESHOLD  = 88   # token_set_ratio >= this → duplicate
+QUICK_FILTER_THRESHOLD = 1    # quick_relevance_score must be > 0 to proceed to AI
+                              # (score 0 = a noise keyword hit with zero policy hits)
 
 # ── USER-AGENT ROTATION ───────────────────────────────────────────────────────
 
@@ -66,49 +64,30 @@ HEADERS = {
     "Accept-Language": "en-CA,en;q=0.9",
 }
 
-# ── PER-RUN DEDUP STATE ───────────────────────────────────────────────────────
-
-@dataclass
-class ScrapeRunState:
-    """Mutable dedup state scoped to one run_scrape() call.
-    Passed explicitly through the call stack — no module-level globals,
-    no concurrent-call race conditions if background tasks ever overlap."""
-    fingerprints: dict[str, str] = field(default_factory=dict)
-    # Maps 8-char title fingerprint → first title seen with that fingerprint.
-    # On a hash collision, rapidfuzz confirms whether it's a true duplicate.
-
-
-def _title_fingerprint(title: str) -> str:
-    """Cheap 8-char hash from the first 6 sorted words of a lowercased title.
-    Order-independent: 'Budget cuts research funding' and
-    'Research funding budget cuts' land in the same bucket."""
-    words = re.sub(r"[^a-z0-9 ]", "", title.lower()).split()
-    key   = " ".join(sorted(words[:6]))
-    return hashlib.md5(key.encode()).hexdigest()[:8]
-
-
-def _register_title(title: str, state: ScrapeRunState) -> None:
-    """Add title to the run's dedup state (no-op if fingerprint already present)."""
-    fp = _title_fingerprint(title)
-    if fp not in state.fingerprints:
-        state.fingerprints[fp] = title
+# ── MODULE-LEVEL DEDUP STATE ──────────────────────────────────────────────────
+_seen_titles: set[str] = set()
 
 
 # ── FUZZY DEDUPLICATION ───────────────────────────────────────────────────────
 
-def is_duplicate_title(new_title: str, state: ScrapeRunState) -> bool:
-    """O(1) fingerprint check eliminates ~95% of comparisons.
-    rapidfuzz only runs on a fingerprint collision — titles sharing the
-    same top-6 sorted words.  In a 500-article run this cuts comparisons
-    from ~125,000 (O(n²)) to under 1,000.
+def is_duplicate_title(new_title: str, seen: set) -> bool:
     """
-    fp = _title_fingerprint(new_title)
-    if fp not in state.fingerprints:
+    Return True if new_title is semantically similar to any title in seen.
+    Uses rapidfuzz token_set_ratio — handles word-order differences and
+    syndication patterns like:
+      "Federal Budget Cuts Research Funding"
+      "Federal Budget: Research Funding Cuts Announced"
+    Threshold 88 catches near-duplicates, misses genuinely different stories.
+    """
+    if not seen:
         return False
-    existing = state.fingerprints[fp]
-    score = fuzz.token_set_ratio(new_title.lower(), existing.lower())
-    log.debug(f"  [dedup] '{new_title[:50]}' score={score} vs '{existing[:50]}'")
-    return score >= FUZZY_DEDUP_THRESHOLD
+    new_lower = new_title.lower()
+    for existing in seen:
+        score = fuzz.token_set_ratio(new_lower, existing.lower())
+        if score >= FUZZY_DEDUP_THRESHOLD:
+            log.debug(f"  [dedup] '{new_title[:55]}' score={score} vs '{existing[:55]}'")
+            return True
+    return False
 
 
 # ── ARTICLE BODY + PUBLISH DATE EXTRACTION ───────────────────────────────────
@@ -134,8 +113,6 @@ def fetch_article_details(url: str) -> tuple[str, str | None]:
                 ("meta", {"name": "pubdate"}),
                 ("meta", {"name": "publishdate"}),
                 ("meta", {"name": "date"}),
-                ("meta", {"name": "DC.date"}),
-                ("meta", {"name": "dc.date"}),
                 ("meta", {"itemprop": "datePublished"}),
                 ("meta", {"property": "og:updated_time"}),
             ]
@@ -150,34 +127,17 @@ def fetch_article_details(url: str) -> tuple[str, str | None]:
                     pub_date = _parse_date(time_el["datetime"])
                     if pub_date:
                         break
-            if not pub_date:
-                import json as _json
-                for script in soup.find_all("script", type="application/ld+json"):
-                    try:
-                        ld = _json.loads(script.string or "")
-                        raw_ld = ld.get("datePublished") or ld.get("dateModified") or ""
-                        if raw_ld:
-                            pub_date = _parse_date(raw_ld)
-                            if pub_date:
-                                break
-                    except Exception:
-                        continue
 
             # ── 2. Extract article body text ─────────────────────────────────
             for tag in soup(["script", "style", "nav", "footer", "header",
                              "aside", "figure", "form", "noscript", "iframe",
                              "advertisement", "banner"]):
                 tag.decompose()
-            # Remove common noise CSS classes (cookie banners, share widgets, etc.)
-            for noise_cls in ["cookie-banner", "social-share", "related-articles",
-                              "newsletter-signup", "ad-container", "sidebar"]:
-                for el in soup.find_all(class_=noise_cls):
-                    el.decompose()
 
             article_text = ""
             for selector in ["article", "main", ".article-body", ".entry-content",
                              ".post-content", ".story-body", "#content", ".content",
-                             '[role="main"]', ".field-items", ".views-row", ".page-content"]:
+                             '[role="main"]', ".field-items"]:
                 container = soup.select_one(selector)
                 if container:
                     article_text = container.get_text(separator=" ", strip=True)
@@ -187,7 +147,7 @@ def fetch_article_details(url: str) -> tuple[str, str | None]:
                 article_text = soup.get_text(separator=" ", strip=True)
 
             article_text = re.sub(r"\s{2,}", " ", article_text).strip()
-            return article_text[:6000], pub_date
+            return article_text[:5000], pub_date
 
         except requests.RequestException as e:
             log.warning(f"fetch_article_details attempt {attempt+1}/3 [{url[:60]}]: {e}")
@@ -222,7 +182,7 @@ async def fetch_article_details_async(
                  fetch_all_article_bodies() so connections are reused.
 
     Returns:
-        (article_text[:6000], pub_date_str) — same contract as the sync version.
+        (article_text[:5000], pub_date_str) — same contract as the sync version.
     """
     for attempt in range(3):
         headers = {**HEADERS, "User-Agent": USER_AGENTS[attempt % len(USER_AGENTS)]}
@@ -239,8 +199,6 @@ async def fetch_article_details_async(
                 ("meta", {"name": "pubdate"}),
                 ("meta", {"name": "publishdate"}),
                 ("meta", {"name": "date"}),
-                ("meta", {"name": "DC.date"}),
-                ("meta", {"name": "dc.date"}),
                 ("meta", {"itemprop": "datePublished"}),
                 ("meta", {"property": "og:updated_time"}),
             ]
@@ -255,33 +213,17 @@ async def fetch_article_details_async(
                     pub_date = _parse_date(time_el["datetime"])
                     if pub_date:
                         break
-            if not pub_date:
-                import json as _json
-                for script in soup.find_all("script", type="application/ld+json"):
-                    try:
-                        ld = _json.loads(script.string or "")
-                        raw_ld = ld.get("datePublished") or ld.get("dateModified") or ""
-                        if raw_ld:
-                            pub_date = _parse_date(raw_ld)
-                            if pub_date:
-                                break
-                    except Exception:
-                        continue
 
             # ── 2. Extract article body text (same logic as sync version) ─────
             for tag in soup(["script", "style", "nav", "footer", "header",
                              "aside", "figure", "form", "noscript", "iframe",
                              "advertisement", "banner"]):
                 tag.decompose()
-            for noise_cls in ["cookie-banner", "social-share", "related-articles",
-                              "newsletter-signup", "ad-container", "sidebar"]:
-                for el in soup.find_all(class_=noise_cls):
-                    el.decompose()
 
             article_text = ""
             for selector in ["article", "main", ".article-body", ".entry-content",
                              ".post-content", ".story-body", "#content", ".content",
-                             '[role="main"]', ".field-items", ".views-row", ".page-content"]:
+                             '[role="main"]', ".field-items"]:
                 container = soup.select_one(selector)
                 if container:
                     article_text = container.get_text(separator=" ", strip=True)
@@ -291,7 +233,7 @@ async def fetch_article_details_async(
                 article_text = soup.get_text(separator=" ", strip=True)
 
             article_text = re.sub(r"\s{2,}", " ", article_text).strip()
-            return article_text[:6000], pub_date
+            return article_text[:5000], pub_date
 
         except httpx.HTTPStatusError as e:
             log.warning(f"fetch_async HTTP {e.response.status_code} attempt {attempt+1}/3 [{url[:60]}]")
@@ -476,11 +418,9 @@ def scrape_generic(url, source_name, base_url=None):
                 # articles to show today's date as their "published" date.
                 articles.append({"title": title, "url": href,
                                  "pub_date": None})
-        if len(articles) >= MAX_ARTICLES_PER_SOURCE:
+        if len(articles) >= 12:
             break
-    if not articles:
-        log.warning(f"scrape_generic [{source_name}]: 0 articles found — markup may have changed")
-    return articles[:MAX_ARTICLES_PER_SOURCE]
+    return articles[:12]
 
 
 # ── GOOGLE NEWS ───────────────────────────────────────────────────────────────
@@ -493,30 +433,17 @@ def build_google_news_url(keyword, region="CA", lang="en"):
 def scrape_google_news_keywords(keywords):
     all_articles = []
     seen_urls = set()
-    consecutive_empty = 0
-    for i, kw in enumerate(keywords):
+    for kw in keywords:
         if not kw or len(kw) < 2:
             continue
         url = build_google_news_url(kw)
-        log.info(f"  Google News [{i+1}/{len(keywords)}]: '{kw}'")
+        log.info(f"  Google News: '{kw}'")
         results = scrape_rss(url, f"Google News: {kw}", extra_tag=kw)
-        if results:
-            consecutive_empty = 0
-            for art in results:
-                if art["url"] not in seen_urls:
-                    seen_urls.add(art["url"])
-                    all_articles.append(art)
-        else:
-            consecutive_empty += 1
-            if consecutive_empty >= 3:
-                # 3+ consecutive empty results often indicates rate-limiting
-                backoff = 15 * (consecutive_empty - 2)
-                log.warning(
-                    f"  Google News: {consecutive_empty} consecutive empty results — "
-                    f"backing off {backoff}s (possible 429)"
-                )
-                time.sleep(backoff)
-        time.sleep(1.5)   # raised from 0.8 — Google enforces ~1 req/s sustained
+        for art in results:
+            if art["url"] not in seen_urls:
+                seen_urls.add(art["url"])
+                all_articles.append(art)
+        time.sleep(0.8)
     log.info(f"  Google News total: {len(all_articles)} articles from {len(keywords)} keywords")
     return all_articles
 
@@ -524,7 +451,8 @@ def scrape_google_news_keywords(keywords):
 # ── MAIN SCRAPE ───────────────────────────────────────────────────────────────
 
 def run_scrape():
-    state = ScrapeRunState()   # fresh dedup state, scoped to this run
+    global _seen_titles
+    _seen_titles = set()   # reset dedup state for this run
 
     log.info("=== PolicyPulse scrape started ===")
     # Load exclusion list once per run — lowercase already stored in DB
@@ -545,7 +473,7 @@ def run_scrape():
                 raw = scrape_rss(url, name)
             else:
                 raw = scrape_generic(url, name, base_url=_base_url(url))
-            added, new_arts = _process_and_save(raw, source, exclusions=exclusions, state=state)
+            added, new_arts = _process_and_save(raw, source, exclusions=exclusions)
             total_added += added
             all_new_articles.extend(new_arts)
             update_source_scraped(name, added)
@@ -561,7 +489,7 @@ def run_scrape():
             log.info(f"Google News keywords: {keywords}")
             gn_raw = scrape_google_news_keywords(keywords)
             gn_source = {"name": "Google News (Keyword Feed)", "jurisdiction": "Pan-Canadian"}
-            added, new_arts = _process_and_save(gn_raw, gn_source, relevance_boost=1, exclusions=exclusions, state=state)
+            added, new_arts = _process_and_save(gn_raw, gn_source, relevance_boost=1, exclusions=exclusions)
             total_added += added
             all_new_articles.extend(new_arts)
             log.info(f"  -> {added} new articles from Google News keywords")
@@ -588,7 +516,7 @@ def _base_url(url: str) -> str:
 
 # ── PROCESS AND SAVE ──────────────────────────────────────────────────────────
 
-def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None, state: ScrapeRunState | None = None):
+def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
     """
     Phase 1 — validate, fuzzy-dedup, parallel-fetch all article bodies at once
     Phase 2 — AI analysis: batch async if > 3 articles, else serial sync
@@ -596,8 +524,6 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None, 
     """
     source_name  = source["name"]
     jurisdiction = source.get("jurisdiction", "Unknown")
-    if state is None:
-        state = ScrapeRunState()   # safety fallback for direct callers
 
     # ── Phase 1a — validate and dedup ─────────────────────────────────────────
     # Collect all articles that pass validation and dedup into a candidates
@@ -632,9 +558,9 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None, 
                 continue
 
         # Fuzzy dedup — still runs before any network call
-        if is_duplicate_title(title, state):
+        if is_duplicate_title(title, _seen_titles):
             continue
-        _register_title(title, state)
+        _seen_titles.add(title)
 
         candidates.append({
             "title":      title,
@@ -648,23 +574,24 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None, 
         return 0, []
 
     # ── Phase 1b — parallel body fetch ────────────────────────────────────────
-    # All article pages for this source are fetched concurrently in one call.
-    # asyncio.gather preserves order so body_results[i] matches candidates[i].
-    # Falls back to sequential requests if asyncio.run() is unavailable
-    # (e.g. when called from inside an already-running event loop).
+    # Uses ThreadPoolExecutor so this is safe to call from FastAPI's
+    # BackgroundTasks (which runs in a thread inside uvicorn's event loop).
+    # asyncio.run() inside a running event loop raises RuntimeError, so we
+    # use threads instead — same net concurrency, no event-loop conflict.
     urls = [c["url"] for c in candidates]
-    log.info(f"  Fetching {len(urls)} article bodies in parallel")
+    log.info(f"  Fetching {len(urls)} article bodies in parallel (threads)")
 
-    try:
-        body_results = asyncio.run(fetch_all_article_bodies(urls))
-    except RuntimeError:
-        # Already inside a running event loop (e.g. called from a test or
-        # an async FastAPI route) — fall back to sequential sync fetching.
-        log.warning("  asyncio.run() unavailable — falling back to sequential body fetch")
-        body_results = []
-        for url in urls:
-            body_results.append(fetch_article_details(url))
-            time.sleep(DELAY_BETWEEN_ARTICLES)
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    body_results = [("", None)] * len(urls)
+    with ThreadPoolExecutor(max_workers=min(8, len(urls))) as executor:
+        future_to_idx = {executor.submit(fetch_article_details, u): i for i, u in enumerate(urls)}
+        for future in as_completed(future_to_idx):
+            idx = future_to_idx[future]
+            try:
+                body_results[idx] = future.result()
+            except Exception as exc:
+                log.warning(f"  body fetch error [{urls[idx][:60]}]: {exc}")
+                body_results[idx] = ("", None)
 
     # ── Phase 1c — assemble batch and meta arrays ──────────────────────────────
     batch = []
@@ -693,28 +620,18 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None, 
         return 0, []
 
     # ── Phase 2 — AI ──────────────────────────────────────────────────────────
-    if len(batch) > 3:
-        log.info(f"  Batch AI: {len(batch)} articles")
-        try:
-            ai_results = asyncio.run(analyze_articles_batch(batch))
-        except RuntimeError:
-            # Fallback if already inside a running event loop
-            log.warning("  asyncio.run() unavailable — falling back to serial AI")
-            ai_results = [
-                analyze_article(
-                    title=b["title"], url=b["url"],
-                    source_name=b["source_name"], article_text=b["article_text"],
-                )
-                for b in batch
-            ]
-    else:
-        ai_results = [
-            analyze_article(
-                title=b["title"], url=b["url"],
-                source_name=b["source_name"], article_text=b["article_text"],
-            )
-            for b in batch
-        ]
+    # Always use serial synchronous calls. analyze_article() is already the
+    # correct sync entry point and works safely from any thread context.
+    # The async batch path used asyncio.run() which crashes inside FastAPI's
+    # BackgroundTasks thread (RuntimeError: This event loop is already running).
+    log.info(f"  AI analysis: {len(batch)} articles (serial sync)")
+    ai_results = [
+        analyze_article(
+            title=b["title"], url=b["url"],
+            source_name=b["source_name"], article_text=b["article_text"],
+        )
+        for b in batch
+    ]
 
     # ── Phase 3 — save ────────────────────────────────────────────────────────
     added = 0
