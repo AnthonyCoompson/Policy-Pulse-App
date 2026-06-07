@@ -4188,10 +4188,18 @@ var _PP_API_KEY = localStorage.getItem('pp_api_key') || '';
 
 async function apiFetch(path, opts) {
   if (!API_BASE) return null;
+  // Timeout: 15s for article/data fetches, 45s for POST mutations (scrape, send digest).
+  // Render free tier cold-starts take ~30s — without a timeout, any await on apiFetch
+  // would hang the entire UI (skeletons stay, renderFeed never runs).
+  var isWrite = opts && opts.method && opts.method !== 'GET';
+  var timeoutMs = isWrite ? 45000 : 15000;
+  var controller = new AbortController();
+  var timer = setTimeout(function(){ controller.abort(); }, timeoutMs);
   try {
     var headers = { 'Content-Type': 'application/json' };
     if (_PP_API_KEY) headers['Authorization'] = 'Bearer ' + _PP_API_KEY;
-    var r = await fetch(API_BASE + path, Object.assign({ headers: headers }, opts || {}));
+    var r = await fetch(API_BASE + path, Object.assign({ headers: headers, signal: controller.signal }, opts || {}));
+    clearTimeout(timer);
     if (!r.ok) {
       // For Notion routes, return error body so caller gets real detail
       if(path.startsWith('/notion')){
@@ -4202,7 +4210,15 @@ async function apiFetch(path, opts) {
       throw new Error('HTTP ' + r.status);
     }
     return await r.json();
-  } catch(e) { console.warn('API', path, e.message); return null; }
+  } catch(e) {
+    clearTimeout(timer);
+    if(e.name === 'AbortError'){
+      console.warn('API timeout', path, timeoutMs+'ms');
+    } else {
+      console.warn('API', path, e.message);
+    }
+    return null;
+  }
 }
 
 function normaliseArticle(a) {
@@ -5030,14 +5046,27 @@ async function showTab(n){
     }
     renderDashboard();
   }
+
   if(n==='scraper'){
-    if(API_BASE){
+    // Render immediately with whatever is already cached — never leave the
+    // feed blank behind skeletons while waiting for a slow backend response.
+    if(articles.length > 0){
+      renderFeed();
+    } else {
       showSkeletons('feed-list', 5);
-      await apiLoadArticles({limit:100});
-      await apiLoadSources();
-      await apiSyncWatchlist();
     }
-    renderFeed();renderSources();renderWatchlist();renderArchive();loadExclusionKeywords();
+    renderSources(); renderWatchlist(); renderArchive(); loadExclusionKeywords();
+    if(API_BASE){
+      // Fire all fetches in parallel; re-render once they resolve.
+      // This is non-blocking: the feed is already visible above.
+      Promise.all([
+        apiLoadArticles({limit:100}),
+        apiLoadSources(),
+        apiSyncWatchlist()
+      ]).then(function(){
+        renderFeed(); renderSources(); renderWatchlist(); populateSourceFilter();
+      }).catch(function(e){ console.warn('scraper tab refresh:', e); });
+    }
   }
   if(n==='digest'){ if(API_BASE){ await apiLoadDigests(); } renderDigest();renderDigestHistory(); }
   if(n==='subscribers') renderSubscribers();
@@ -5729,19 +5758,38 @@ async function scrapeNow(){
   showToast('&#x1F50D;','Scraping Sources','Fetching articles from all active sources&hellip;',4000);
   var data = await apiFetch('/scrape',{method:'POST'});
   if(data){
-    showToast('&#10003;','Scrape Started','Articles are being AI-processed. Feed refreshes in ~120s.',7000);
-    setTimeout(async function(){
-      await apiLoadArticles({limit:100, force:true}); await apiLoadStats();
-      _articleCache=[]; _cacheTime=0; // invalidate cache
-      renderFeed(); renderDashboard(); updateBadges();
-      if(progress) progress.style.display='none';
-      showToast('&#128240;','Feed Updated','New articles added to your feed.',4000);
-    }, 120000); // 120s — allows for Render cold-start delays
+    showToast('&#10003;','Scrape Started','Articles are being fetched and AI-processed. Feed will refresh automatically.',5000);
+    // Poll every 15s for up to 3 minutes. Re-render the feed as soon as the
+    // article count increases — no need to wait the full 120s every time.
+    var _scrapeStartCount = articles.length;
+    var _scrapePolls = 0;
+    var _scrapeMaxPolls = 12; // 12 × 15s = 3 minutes max
+    var _scrapePoller = setInterval(async function(){
+      _scrapePolls++;
+      _articleCache=[]; _cacheTime=0;
+      await apiLoadArticles({limit:100, force:true});
+      await apiLoadStats();
+      var _newCount = articles.length;
+      var currentPage = document.getElementById('page-scraper');
+      var feedVisible = currentPage && currentPage.style.display !== 'none';
+      if(_newCount > _scrapeStartCount || _scrapePolls >= _scrapeMaxPolls){
+        clearInterval(_scrapePoller);
+        if(progress) progress.style.display='none';
+        if(btn){btn.disabled=false;btn.innerHTML='&#x1F50D; Scrape Now';}
+        renderFeed(); renderDashboard(); updateBadges();
+        var added = _newCount - _scrapeStartCount;
+        if(added > 0){
+          showToast('&#128240;','Feed Updated',added+' new article'+(added!==1?'s':'')+' added.',4000);
+        } else {
+          showToast('&#x2713;','Scrape Complete','No new articles found this run.',3500);
+        }
+      }
+    }, 15000);
   } else {
     if(progress) progress.style.display='none';
+    if(btn){btn.disabled=false;btn.innerHTML='&#x1F50D; Scrape Now';}
     showToast('&#9888;','Scrape Error','Could not reach backend. Check your Render URL.',5000);
   }
-  if(btn){btn.disabled=false;btn.innerHTML='&#x1F50D; Scrape Now';}
 }
 async function clearDashboard(){
   var unread = articles.filter(function(a){ return !a.read; }).length;
