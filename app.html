@@ -1834,7 +1834,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="briefingClearAll()">&#x2715; Clear</button>
-        <button class="btn btn-cyan" id="briefing-generate-btn" onclick="generateBriefingNote()" disabled>&#x1F916; Generate Briefing Note</button>
+        <button class="btn btn-cyan" id="briefing-generate-btn" onclick="generateBriefingNote()" disabled>&#x1F9E0; Generate Briefing Note (PDF)</button>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
@@ -1893,7 +1893,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
         </div>
         <button class="btn btn-primary" id="briefing-generate-btn2" onclick="generateBriefingNote()" disabled
           style="width:100%;padding:12px;font-size:13px;font-weight:700;justify-content:center">
-          &#x1F916; Generate &amp; Download Briefing Note (.docx)
+          &#x1F9E0; Generate Briefing Note (PDF)
         </button>
         <div id="briefing-status" style="display:none;margin-top:10px;padding:10px 14px;border-radius:7px;font-size:12px"></div>
       </div>
@@ -5391,7 +5391,7 @@ function buildAlertItems(alerts){
       <div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:3px">
         <a href="${a.url}" target="_blank" style="color:var(--white)" onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--white)'">${a.title} ↗</a>
       </div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:5px">${a.summary.substring(0,120)}…</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:5px">${(a.summary||'').substring(0,120)}…</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${(a.domain||'').split(',').map(d=>{d=d.trim();return d?'<span class="tag tag-domain">'+d+'</span>':''}).join('')}<span style="font-size:10px;color:var(--dim);font-family:'IBM Plex Mono',monospace">${a.pubDate}</span><span class="relevance-badge">${rEmoji(a.relevance)} ${a.relevance}/10</span></div>
     </div>
     <button class="btn btn-gold btn-sm" onclick="toggleStage(${a.id});refreshAlerts()" style="flex-shrink:0">+ Stage</button>
@@ -5450,7 +5450,7 @@ function renderFeedPage(){
     if(dom){var _doms=(a.domain||'').split(',').map(function(d){return d.trim().toLowerCase();});if(!_doms.some(function(d){return d===dom.toLowerCase();}))return false;}
     if(jur&&a.jurisdiction!==jur)return false;
     if(sent&&a.sentiment!==sent)return false;
-    if(q&&!a.title.toLowerCase().includes(q)&&!a.summary.toLowerCase().includes(q)&&!a.source.toLowerCase().includes(q))return false;
+    if(q&&!(a.title||'').toLowerCase().includes(q)&&!(a.summary||'').toLowerCase().includes(q)&&!(a.source||'').toLowerCase().includes(q))return false;
     var _src=document.getElementById('filter-source')?document.getElementById('filter-source').value:'';
     if(_src&&a.source!==_src)return false;
     if(_showFlaggedOnly&&!a.flagged)return false;
@@ -8650,15 +8650,17 @@ function _briefingStatus(msg, type){
 async function generateBriefingNote(){
   var key = apiKey || sessionStorage.getItem('pp_groq_key');
   if(!key){
-    showToast('&#x1F511;','No API Key','Enter your Groq key in the Ask AI tab first.',4000);
+    showToast('🔑','No API Key','Enter your Groq key in the Ask AI tab first.',4000);
     return;
   }
   if(!_briefingSelected.size){
-    showToast('&#x26A0;','No Articles','Select at least one article.',3000);
+    showToast('⚠️','No Articles','Select at least one article.',3000);
     return;
   }
 
-  var selected = Array.from(_briefingSelected).map(function(id){ return articles.find(function(x){return x.id===id;}); }).filter(Boolean);
+  var selected = Array.from(_briefingSelected)
+    .map(function(id){ return articles.find(function(x){return x.id===id;}); })
+    .filter(Boolean);
   var title     = (document.getElementById('briefing-title')||{}).value     || 'Policy Intelligence Brief';
   var recipient = (document.getElementById('briefing-recipient')||{}).value || '';
   var author    = (document.getElementById('briefing-author')||{}).value    || 'PolicyPulse';
@@ -8669,11 +8671,10 @@ async function generateBriefingNote(){
 
   ['briefing-generate-btn','briefing-generate-btn2'].forEach(function(id){
     var btn = document.getElementById(id);
-    if(btn){ btn.disabled=true; btn.innerHTML='<span class="spin">&#8635;</span> Generating&hellip;'; }
+    if(btn){ btn.disabled=true; btn.innerHTML='<span class="spin">⟳</span> Generating…'; }
   });
-  _briefingStatus('<span class="spin" style="display:inline-block;margin-right:6px">&#8635;</span> Asking Groq AI to draft the briefing note&hellip; (15&ndash;30 seconds)', 'info');
+  _briefingStatus('<span class="spin" style="display:inline-block;margin-right:6px">⟳</span> Asking Groq AI to draft the briefing note… (15–30 seconds)', 'info');
 
-  // Build article context for the AI prompt
   var articleContext = selected.map(function(a, i){
     return (i+1)+'. TITLE: '+(a.title||'')
       +'\n   SOURCE: '+(a.source||'')+' | DOMAIN: '+(a.domain||'')+' | JURISDICTION: '+(a.jurisdiction||'')
@@ -8685,26 +8686,26 @@ async function generateBriefingNote(){
 
   var systemPrompt = 'You are a senior government relations analyst at a Canadian post-secondary institution. '
     +'Write structured policy briefing notes in professional Canadian government relations style. '
-    +'Be concrete, action-oriented, and specific. Use the exact article details provided. '
-    +'Never write generic filler sentences. Every sentence must contain specific policy content.';
+    +'Be concrete, action-oriented, and specific. Use the exact article details provided.';
 
-  var userPrompt = 'Write a structured policy briefing note with the following sections. '
-    +'Return plain text only — no markdown, no asterisks, no bullet dashes, just clean prose and section headers in ALL CAPS.\n\n'
-    +'BRIEFING TITLE: '+title+'\n'
-    +(recipient ? 'PREPARED FOR: '+recipient+'\n' : '')
-    +(author    ? 'PREPARED BY: '+author+'\n'    : '')
-    +'DATE: '+new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'})+'\n'
-    +(context   ? 'PURPOSE: '+context+'\n'       : '')
-    +'\n'
-    +'ARTICLES TO BRIEF ON ('+selected.length+' total):\n'+articleContext+'\n\n'
-    +'Write the following sections:\n'
-    +'1. EXECUTIVE SUMMARY (3-4 sentences covering the overall policy landscape this week)\n'
-    +'2. BACKGROUND (2-3 sentences of relevant context for a BC post-secondary government relations audience)\n'
-    +'3. KEY DEVELOPMENTS (one focused paragraph per article — name the specific policy, bill, funding amount, or decision; do not repeat the title)\n'
-    +'4. IMPLICATIONS FOR THE INSTITUTION (concrete implications for government relations, board obligations, funding, or compliance — be specific)\n'
-    +'5. RECOMMENDED ACTIONS (3-5 numbered concrete action items with owners and timelines where possible)\n'
-    +(inclRefs ? '6. REFERENCES (list each article title, source, and URL)\n' : '')
-    +'\nTone: professional, direct, senior-executive audience. No hedging language.';
+  var userPrompt = 'Write a structured policy briefing note. '
+    +'Use these exact section headers on their own lines, followed by the content:\n\n'
+    +'EXECUTIVE SUMMARY\n'
+    +'BACKGROUND\n'
+    +'KEY DEVELOPMENTS\n'
+    +'IMPLICATIONS FOR THE INSTITUTION\n'
+    +'RECOMMENDED ACTIONS\n'
+    +(inclRefs ? 'REFERENCES\n' : '')
+    +'\nBRIEFING DETAILS:\n'
+    +'Title: '+title+'\n'
+    +(recipient ? 'Prepared for: '+recipient+'\n' : '')
+    +(author    ? 'Prepared by: '+author+'\n'    : '')
+    +(context   ? 'Purpose: '+context+'\n'       : '')
+    +'\nARTICLES ('+selected.length+'):\n'+articleContext+'\n\n'
+    +'Write each section with substantive content. For RECOMMENDED ACTIONS, use numbered items. '
+    +'For KEY DEVELOPMENTS, one focused paragraph per article naming the specific policy, bill, or funding amount. '
+    +(inclRefs ? 'For REFERENCES, list each article as: Title — Source — URL\n' : '')
+    +'Tone: professional, senior-executive audience. Be concrete, never generic.';
 
   var aiText = '';
   try {
@@ -8713,7 +8714,10 @@ async function generateBriefingNote(){
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
       body:JSON.stringify({
         model:'llama-3.3-70b-versatile',
-        messages:[{role:'system',content:systemPrompt},{role:'user',content:userPrompt}],
+        messages:[
+          {role:'system',content:systemPrompt},
+          {role:'user',content:userPrompt}
+        ],
         max_tokens:2500,
         temperature:0.25,
       })
@@ -8721,187 +8725,156 @@ async function generateBriefingNote(){
     var data = await resp.json();
     if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
     aiText = data.choices&&data.choices[0] ? data.choices[0].message.content.trim() : '';
-    if(!aiText) throw new Error('Empty response from AI');
+    if(!aiText) throw new Error('Empty response from Groq');
   } catch(e){
-    _briefingStatus('&#x26A0; AI error: '+escHtml(e.message)+'. Check your Groq API key in the Ask AI tab.', 'error');
+    _briefingStatus('⚠ AI error: '+escHtml(e.message), 'error');
     ['briefing-generate-btn','briefing-generate-btn2'].forEach(function(id){
-      var btn=document.getElementById(id); if(btn){btn.disabled=false;btn.innerHTML='&#x1F916; Generate &amp; Download Briefing Note (.docx)';}
+      var btn=document.getElementById(id);
+      if(btn){btn.disabled=false;btn.innerHTML='🧠 Generate Briefing Note (PDF)';}
     });
     return;
   }
 
-  _briefingStatus('&#x2728; AI draft complete &mdash; building Word document&hellip;', 'info');
-
-  // Build and download the .docx using docx.js (loaded from CDN)
-  try {
-    await _briefingDownloadDocx(aiText, title, recipient, author, selected, inclRefs);
-    _briefingStatus('&#x2705; Briefing note downloaded successfully!', 'success');
-    if(typeof gtag!=='undefined') gtag('event','briefing_generated',{event_category:'Briefing',event_label:title.slice(0,60)});
-  } catch(e){
-    _briefingStatus('&#x26A0; Word export failed: '+escHtml(e.message), 'error');
-  }
+  _briefingStatus('✨ AI draft complete — opening print view…', 'info');
+  _briefingOpenPrintWindow(aiText, title, recipient, author, selected, inclRefs);
 
   ['briefing-generate-btn','briefing-generate-btn2'].forEach(function(id){
-    var btn=document.getElementById(id); if(btn){btn.disabled=false;btn.innerHTML='&#x1F916; Generate &amp; Download Briefing Note (.docx)';}
+    var btn=document.getElementById(id);
+    if(btn){btn.disabled=false;btn.innerHTML='🧠 Generate Briefing Note (PDF)';}
   });
+  _briefingStatus('✅ Briefing note opened — use Ctrl+P / Cmd+P to save as PDF.', 'success');
+  if(typeof gtag!=='undefined') gtag('event','briefing_generated',{event_category:'Briefing',event_label:title.slice(0,60)});
 }
 
-async function _briefingDownloadDocx(aiText, title, recipient, author, articles_list, inclRefs){
-  // Dynamically load docx.js from CDN if not already loaded
-  if(typeof docx === 'undefined'){
-    await new Promise(function(resolve, reject){
-      var script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.js';
-      script.onload = resolve;
-      script.onerror = function(){ reject(new Error('Could not load docx.js from CDN. Check internet connection.')); };
-      document.head.appendChild(script);
-    });
-  }
-
+function _briefingOpenPrintWindow(aiText, title, recipient, author, articles_list, inclRefs){
   var dateStr = new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
 
-  // Parse the AI text into sections (split on ALL-CAPS section headers)
-  function parseSection(text, heading){
-    var pattern = new RegExp(heading+'[:\\s]*([\\s\\S]*?)(?=\\n[A-Z]{2}[A-Z\\s]+:|$)', 'i');
-    var m = text.match(pattern);
-    return m ? m[1].trim() : '';
-  }
-
-  // Helper: create a styled paragraph
-  function para(text, opts){
-    opts = opts || {};
-    return new docx.Paragraph({
-      children: [new docx.TextRun({
-        text: text,
-        bold:   !!opts.bold,
-        size:   opts.size || 22,
-        color:  opts.color || '1a2b42',
-        font:   'Georgia',
-      })],
-      spacing: { before: opts.spaceBefore||0, after: opts.spaceAfter||120 },
-      alignment: opts.align || docx.AlignmentType.LEFT,
-    });
-  }
-
-  function heading1(text){
-    return new docx.Paragraph({
-      children:[new docx.TextRun({text:text, bold:true, size:32, color:'003366', font:'Georgia'})],
-      spacing:{before:0, after:200},
-      border:{ bottom:{ color:'003366', size:6, space:4, style:'single' } },
-    });
-  }
-
-  function sectionHeader(text){
-    return new docx.Paragraph({
-      children:[new docx.TextRun({text:text, bold:true, size:24, color:'1d4ed8', font:'Georgia', allCaps:true})],
-      spacing:{before:340, after:100},
-    });
-  }
-
-  function bodyPara(text){
-    return new docx.Paragraph({
-      children:[new docx.TextRun({text:text, size:22, color:'1a2b42', font:'Georgia'})],
-      spacing:{before:0, after:140},
-      alignment: docx.AlignmentType.JUSTIFIED,
-    });
-  }
-
-  function hrLine(){
-    return new docx.Paragraph({
-      children:[new docx.TextRun({text:''})],
-      border:{ bottom:{ color:'c8d4e8', size:4, space:2, style:'single' } },
-      spacing:{before:160, after:160},
-    });
-  }
-
-  // Split the AI text into paragraphs, emit as body paragraphs
-  function textBlock(rawText){
-    var paras = rawText.split(/\n+/).map(function(t){return t.trim();}).filter(Boolean);
-    return paras.map(function(t){ return bodyPara(t); });
-  }
-
-  // Build children array
-  var children = [];
-
-  // Cover block
-  children.push(heading1(title));
-  if(recipient) children.push(para('Prepared for: '+recipient, {bold:true, size:22}));
-  if(author)    children.push(para('Prepared by: '+author,     {size:22}));
-  children.push(para('Date: '+dateStr, {size:22}));
-  children.push(hrLine());
-
-  // Split AI text by the numbered section headers the AI was instructed to use
-  var sectionSplits = aiText.split(/\n(?=\d+\.\s+[A-Z][A-Z\s]+)/);
-
-  if(sectionSplits.length > 1){
-    // AI produced numbered sections — render each
-    sectionSplits.forEach(function(block){
-      block = block.trim();
-      if(!block) return;
-      // First line is the section header; rest is body
-      var lines = block.split('\n');
-      var hdr = lines[0].replace(/^\d+\.\s+/, '').trim();
-      var body = lines.slice(1).join('\n').trim();
-      children.push(sectionHeader(hdr));
-      if(body) textBlock(body).forEach(function(p){ children.push(p); });
-    });
-  } else {
-    // Fallback: split on ALL-CAPS lines
-    var rawLines = aiText.split('\n');
-    var currentBody = [];
-    rawLines.forEach(function(line){
+  function parseSections(text){
+    var sectionNames = [
+      'EXECUTIVE SUMMARY','BACKGROUND','KEY DEVELOPMENTS',
+      'IMPLICATIONS FOR THE INSTITUTION','RECOMMENDED ACTIONS','REFERENCES'
+    ];
+    var result = [];
+    var lines = text.split('\n');
+    var current = null;
+    lines.forEach(function(line){
       var trimmed = line.trim();
-      if(/^[A-Z][A-Z\s]{3,}:?$/.test(trimmed) && trimmed.length < 60){
-        if(currentBody.length){ textBlock(currentBody.join('\n')).forEach(function(p){ children.push(p); }); currentBody=[]; }
-        children.push(sectionHeader(trimmed.replace(/:$/,'')));
+      var matched = sectionNames.find(function(s){ return trimmed.toUpperCase() === s; });
+      if(matched){
+        if(current) result.push(current);
+        current = {heading: matched, lines: []};
+      } else if(current){
+        current.lines.push(line);
       } else {
-        currentBody.push(trimmed);
+        if(!result.length) result.push({heading: null, lines: []});
+        result[0].lines.push(line);
       }
     });
-    if(currentBody.length) textBlock(currentBody.join('\n')).forEach(function(p){ children.push(p); });
+    if(current) result.push(current);
+    return result;
   }
 
-  // Source articles table if references requested
-  if(inclRefs && articles_list && articles_list.length){
-    children.push(hrLine());
-    children.push(sectionHeader('SOURCE ARTICLES'));
-    articles_list.forEach(function(a, i){
-      children.push(new docx.Paragraph({
-        children:[new docx.TextRun({text:(i+1)+'. '+(a.title||''), bold:true, size:20, color:'1a2b42', font:'Georgia'})],
-        spacing:{before:120, after:40},
-      }));
-      children.push(new docx.Paragraph({
-        children:[new docx.TextRun({text:(a.source||'')+' | '+(a.pub_date||a.pubDate||'')+'  |  '+(a.url||''), size:18, color:'6b8aaa', font:'Georgia'})],
-        spacing:{before:0, after:100},
-      }));
-    });
+  function renderSection(sec){
+    if(!sec.heading){
+      var content = sec.lines.join('\n').trim();
+      return content ? '<p class="intro">'+escHtml(content)+'</p>' : '';
+    }
+    var body = sec.lines.join('\n').trim();
+    if(!body) return '';
+    var isNumbered = /^\d+\./.test(body.trim());
+    var html = '<div class="section"><h2>'+escHtml(sec.heading)+'</h2>';
+    if(isNumbered){
+      var items = body.split(/\n(?=\d+\.)/).map(function(s){return s.trim();}).filter(Boolean);
+      html += '<ol>'+items.map(function(item){
+        return '<li>'+escHtml(item.replace(/^\d+\.\s*/,''))+'</li>';
+      }).join('')+'</ol>';
+    } else {
+      var paras = body.split(/\n{2,}/).map(function(p){return p.trim();}).filter(Boolean);
+      html += paras.map(function(p){
+        return '<p>'+escHtml(p.replace(/\n/g,' '))+'</p>';
+      }).join('');
+    }
+    return html + '</div>';
   }
 
-  // Footer note
-  children.push(hrLine());
-  children.push(para('Generated by PolicyPulse Intelligence Platform on '+dateStr, {size:18, color:'94a3b8', align: docx.AlignmentType.CENTER}));
+  var sections = parseSections(aiText);
+  var sectionsHTML = sections.map(renderSection).join('');
 
-  var doc = new docx.Document({
-    creator: author||'PolicyPulse',
-    title: title,
-    description: 'AI-generated policy briefing note',
-    sections:[{
-      properties:{
-        page:{
-          margin:{ top:1080, right:1080, bottom:1080, left:1080 },
-        },
-      },
-      children: children,
-    }],
-  });
+  var css = [
+    "@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');",
+    "*{box-sizing:border-box;margin:0;padding:0}",
+    "body{font-family:'IBM Plex Sans',Georgia,serif;color:#1a2b42;font-size:13.5px;line-height:1.75;background:#fff}",
+    ".cover{background:linear-gradient(135deg,#003366 0%,#1d4ed8 100%);padding:40px 52px 32px;color:#fff;page-break-inside:avoid}",
+    ".cover h1{font-family:'Playfair Display',Georgia,serif;font-size:26px;font-weight:700;margin-bottom:10px;line-height:1.25}",
+    ".cover-meta{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin-top:16px;font-size:12px;color:rgba(255,255,255,0.8)}",
+    ".cover-meta strong{color:#fff;font-weight:600}",
+    ".confidential{display:inline-block;margin-top:14px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:4px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}",
+    ".body{padding:40px 52px}",
+    ".intro{font-size:13px;color:#334d6b;font-style:italic;margin-bottom:28px;padding-bottom:18px;border-bottom:1px solid #e2e8f0}",
+    ".section{margin-bottom:28px;page-break-inside:avoid}",
+    ".section h2{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#003366;margin-bottom:10px;padding-bottom:5px;border-bottom:2px solid #003366}",
+    ".section p{margin-bottom:10px;color:#1a2b42;text-align:justify}",
+    ".section ol{padding-left:22px;margin-top:4px}",
+    ".section ol li{margin-bottom:8px;color:#1a2b42}",
+    ".source-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}",
+    ".source-table th{text-align:left;padding:6px 10px;background:#f0f4f8;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#6b8aaa;border-bottom:2px solid #003366}",
+    ".source-table td{padding:8px 10px;border-bottom:1px solid #eef2f7;vertical-align:top}",
+    ".source-table tr:last-child td{border-bottom:none}",
+    ".source-table a{color:#1d4ed8;text-decoration:none;word-break:break-all}",
+    ".rel-badge{display:inline-block;font-weight:700;font-size:11px;padding:1px 7px;border-radius:3px;background:#fef3c7;color:#92400e}",
+    ".footer{margin:28px 0 0;padding:14px 52px;background:#f8faff;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;display:flex;justify-content:space-between}",
+    "@media print{body{font-size:12px}.cover{-webkit-print-color-adjust:exact;print-color-adjust:exact}.section{page-break-inside:avoid}.no-print{display:none!important}}"
+  ].join('');
 
-  var blob = await docx.Packer.toBlob(doc);
-  var url  = URL.createObjectURL(blob);
-  var link = document.createElement('a');
-  link.href = url;
-  link.download = (title||'PolicyPulse-Brief').replace(/[^a-z0-9\-_ ]/gi,'').replace(/\s+/g,'-').slice(0,60)+'-'+dateStr+'.docx';
-  link.click();
-  setTimeout(function(){ URL.revokeObjectURL(url); }, 10000);
+  var sourceRows = articles_list.map(function(a,i){
+    return '<tr>'
+      +'<td style="color:#6b8aaa;font-weight:600">'+(i+1)+'</td>'
+      +'<td><a href="'+escHtml(a.url||'')+'" target="_blank">'+escHtml(a.title||'')+'</a></td>'
+      +'<td style="color:#6b8aaa">'+escHtml(a.source||'')+'</td>'
+      +'<td style="color:#6b8aaa;white-space:nowrap;font-family:monospace;font-size:11px">'+(a.pub_date||a.pubDate||'')+'</td>'
+      +'<td><span class="rel-badge">'+(a.relevance||0)+'/10</span></td>'
+      +'</tr>';
+  }).join('');
+
+  var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'+escHtml(title)+'</title>'
+    +'<style>'+css+'</style></head><body>'
+    +'<div class="no-print" style="background:#003366;padding:10px 24px;display:flex;align-items:center;justify-content:space-between">'
+    +'<span style="color:rgba(255,255,255,0.8);font-size:12px">PolicyPulse Briefing Note &mdash; Press <strong style="color:#fff">Ctrl+P</strong> / <strong style="color:#fff">Cmd+P</strong> to save as PDF</span>'
+    +'<button onclick="window.print()" style="background:#fff;color:#003366;border:none;border-radius:6px;padding:7px 18px;font-size:12px;font-weight:700;cursor:pointer">&#x1F5A8; Print / Save PDF</button>'
+    +'</div>'
+    +'<div class="cover">'
+    +'<div style="font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.6);margin-bottom:8px">PolicyPulse Intelligence</div>'
+    +'<h1>'+escHtml(title)+'</h1>'
+    +'<div class="cover-meta">'
+    +(recipient?'<strong>Prepared for:</strong><span>'+escHtml(recipient)+'</span>':'')
+    +(author   ?'<strong>Prepared by:</strong><span>'+escHtml(author)+'</span>':'')
+    +'<strong>Date:</strong><span>'+dateStr+'</span>'
+    +'<strong>Articles:</strong><span>'+articles_list.length+' source article'+(articles_list.length!==1?'s':'')+'</span>'
+    +'</div>'
+    +'<div class="confidential">Confidential &mdash; For Internal Use</div>'
+    +'</div>'
+    +'<div class="body">'+sectionsHTML
+    +'<div class="section" style="margin-top:32px"><h2>Source Articles</h2>'
+    +'<table class="source-table"><thead><tr><th>#</th><th>Title</th><th>Source</th><th>Date</th><th>Score</th></tr></thead>'
+    +'<tbody>'+sourceRows+'</tbody></table></div>'
+    +'</div>'
+    +'<div class="footer"><span>PolicyPulse Intelligence Platform</span><span>Generated: '+dateStr+'</span></div>'
+    +'</body></html>';
+
+  var win = window.open('','_blank','width=960,height=860');
+  if(win){
+    win.document.write(html);
+    win.document.close();
+  } else {
+    var blob = new Blob([html],{type:'text/html;charset=utf-8'});
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = (title||'PolicyPulse-Brief').replace(/[^a-z0-9\-_ ]/gi,'').replace(/\s+/g,'-').slice(0,60)+'-'+dateStr+'.html';
+    link.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); },8000);
+    showToast('&#x2B07;','Downloaded','Popup blocked &mdash; HTML file downloaded instead.',4000);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
