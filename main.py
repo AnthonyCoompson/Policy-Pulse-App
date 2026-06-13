@@ -1,12 +1,7 @@
 """
 PolicyPulse Backend — FastAPI + SQLite + Gemini AI
-Deployed on Railway.app
-
-v5: Security hardening
-    - CORS locked to ALLOWED_ORIGINS env var (no more wildcard)
-    - API key authentication on all write/mutating endpoints
-    - scraper_config functions added to database.py (were missing, caused 500s)
-    - SQLite backup endpoint added
+v6: Added POST /ai/chat — proxies Groq Llama calls so no browser-side key is needed.
+    Add GROQ_API_KEY to your Render environment variables (free at console.groq.com).
 """
 
 from fastapi import FastAPI, BackgroundTasks, Query, HTTPException, Depends, Request
@@ -22,27 +17,18 @@ from database import (
     get_watchlist_keywords, add_watchlist_keyword, remove_watchlist_keyword,
     add_article_tag, remove_article_tag, update_article_sentiment,
     update_article_content,
-    # Source CRUD
     add_source, toggle_source, delete_source, update_source,
-    # Research source CRUD
     get_research_sources, add_research_source, toggle_research_source,
     delete_research_source, update_research_source,
-    # Scholarly keywords
     get_scholarly_keywords, add_scholarly_keyword,
     delete_scholarly_keyword, toggle_scholarly_keyword,
-    # Subscribers
     get_subscribers, add_subscriber, toggle_subscriber,
     delete_subscriber, update_subscriber,
-    # Alert helpers
     get_alert_subscribers, update_subscriber_alerts,
-    # Scholarly article lookup
     get_scholarly_article_by_id,
-    # Scraper config — now defined in database.py
     get_scraper_config, set_scraper_config, get_all_scraper_config,
-    # Date fix helpers
     get_articles_missing_pub_date, update_article_pub_date,
     get_scholarly_articles_missing_pub_date, update_scholarly_pub_date,
-    # App settings
     get_app_setting, set_app_setting, get_all_app_settings,
 )
 from scraper import run_scrape
@@ -56,18 +42,13 @@ async def lifespan(app: FastAPI):
     start_scheduler()
     yield
 
-app = FastAPI(title="PolicyPulse API", version="5.0.0", lifespan=lifespan)
+app = FastAPI(title="PolicyPulse API", version="6.0.0", lifespan=lifespan)
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-# Set ALLOWED_ORIGINS in Railway env vars as a comma-separated list, e.g.:
-#   https://policypulse.netlify.app,https://policypulse.ca
-# Falls back to wildcard only if env var is not set, so local dev still works.
-
 _raw_origins = os.environ.get("ALLOWED_ORIGINS", "")
 ALLOWED_ORIGINS = (
     [o.strip() for o in _raw_origins.split(",") if o.strip()]
-    if _raw_origins
-    else ["*"]
+    if _raw_origins else ["*"]
 )
 
 app.add_middleware(
@@ -78,35 +59,88 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── API KEY AUTHENTICATION ────────────────────────────────────────────────────
-# Set PP_API_KEY in Railway env vars to any long random string, e.g.:
-#   openssl rand -hex 32
-# The frontend sends this as:  Authorization: Bearer <key>
-# GET /articles, GET /stats, GET /health are public (read-only, safe).
-# All POST / PATCH / DELETE endpoints require the key.
-
+# ── API KEY AUTH ──────────────────────────────────────────────────────────────
 _API_KEY = os.environ.get("PP_API_KEY", "")
 
 def verify_api_key(request: Request) -> bool:
-    """
-    Returns True if the request is authorised.
-    - If PP_API_KEY is not set in env, auth is skipped (backward-compatible
-      for local dev / first deploy before key is configured).
-    - If set, the Authorization header must be: Bearer <PP_API_KEY>
-    """
     if not _API_KEY:
-        return True  # No key configured — open access (dev mode)
+        return True
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer ") and auth[7:] == _API_KEY:
         return True
     return False
 
 def require_auth(request: Request):
-    """FastAPI dependency — raises 401 if key is wrong."""
     if not verify_api_key(request):
         raise HTTPException(
             status_code=401,
-            detail="Unauthorised. Set PP_API_KEY in Railway and pass it as: Authorization: Bearer <key>"
+            detail="Unauthorised. Set PP_API_KEY in Render and pass it as: Authorization: Bearer <key>"
+        )
+
+
+# ── AI CHAT PROXY ─────────────────────────────────────────────────────────────
+
+@app.post("/ai/chat")
+async def ai_chat(body: dict):
+    """
+    Proxy Groq Llama chat completions through the backend so no
+    browser-side API key is ever needed.
+
+    Body:    { "messages": [...], "max_tokens": 1000 }
+    Returns: { "ok": true, "content": "..." }
+
+    Requires GROQ_API_KEY in Render environment variables.
+    Get a free key at https://console.groq.com
+    """
+    import httpx
+
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    if not groq_key:
+        raise HTTPException(
+            status_code=503,
+            detail="GROQ_API_KEY not set in Render environment variables. "
+                   "Get a free key at https://console.groq.com and add it to Render."
+        )
+
+    messages   = body.get("messages", [])
+    max_tokens = int(body.get("max_tokens", 1000))
+
+    if not messages:
+        raise HTTPException(status_code=400, detail="messages required")
+
+    payload = {
+        "model":       "llama-3.3-70b-versatile",
+        "messages":    messages,
+        "max_tokens":  max_tokens,
+        "temperature": 0.2,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=45) as client:
+            resp = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {groq_key}",
+                    "Content-Type":  "application/json",
+                },
+            )
+            if resp.status_code == 429:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Groq rate limit — please wait a moment and try again."
+                )
+            resp.raise_for_status()
+            data    = resp.json()
+            content = data["choices"][0]["message"]["content"]
+            return {"ok": True, "content": content}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI proxy error: {str(e)[:200]}"
         )
 
 
@@ -194,7 +228,6 @@ def remove_tag(article_id: int, tag: str, _=Depends(require_auth)):
 
 @app.delete("/articles/{article_id}")
 def delete_article(article_id: int, _=Depends(require_auth)):
-    """Permanently delete an article from the database."""
     from database import get_conn
     conn = get_conn()
     conn.execute("DELETE FROM articles WHERE id = ?", (article_id,))
@@ -325,7 +358,6 @@ def trigger_scrape(background_tasks: BackgroundTasks, body: dict = None, _=Depen
 
 
 def _scrape_and_alert():
-    """Run the full scrape then fire urgent + keyword alert emails."""
     result = run_scrape()
     new_articles = result.get("new_articles", [])
     if not new_articles:
@@ -340,7 +372,7 @@ def scrape_status():
     return {"last_scraped": get_last_scrape_time()}
 
 
-# ── SOURCES — full CRUD ───────────────────────────────────────────────────────
+# ── SOURCES ───────────────────────────────────────────────────────────────────
 
 @app.get("/sources")
 def list_sources():
@@ -383,7 +415,7 @@ def remove_source(source_id: int, _=Depends(require_auth)):
     return {"ok": True}
 
 
-# ── RESEARCH SOURCES — full CRUD ──────────────────────────────────────────────
+# ── RESEARCH SOURCES ──────────────────────────────────────────────────────────
 
 @app.get("/research-sources")
 def list_research_sources():
@@ -499,6 +531,38 @@ def remove_exclusion_keyword_endpoint(keyword_id: int, _=Depends(require_auth)):
     delete_exclusion_keyword_by_id(keyword_id)
     return {"ok": True}
 
+
+# ── SCHOLARLY EXCLUSION ───────────────────────────────────────────────────────
+
+@app.get("/scholarly-exclusion-keywords")
+def list_scholarly_exclusion_keywords():
+    from database import get_scholarly_exclusion_keywords, get_conn
+    conn = get_conn()
+    rows = conn.execute("SELECT id, keyword FROM scholarly_exclusion_keywords ORDER BY id").fetchall()
+    conn.close()
+    return {"keywords": [dict(r) for r in rows]}
+
+
+@app.post("/scholarly-exclusion-keywords")
+def create_scholarly_exclusion_keyword(body: dict, _=Depends(require_auth)):
+    from database import add_scholarly_exclusion_keyword
+    kw = (body.get("keyword") or "").strip()
+    if not kw:
+        raise HTTPException(status_code=400, detail="keyword required")
+    added = add_scholarly_exclusion_keyword(kw)
+    return {"ok": True, "added": added}
+
+
+@app.delete("/scholarly-exclusion-keywords/{keyword_id}")
+def remove_scholarly_exclusion_keyword_endpoint(keyword_id: int, _=Depends(require_auth)):
+    from database import get_conn
+    conn = get_conn()
+    conn.execute("DELETE FROM scholarly_exclusion_keywords WHERE id = ?", (keyword_id,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
 # ── SUBSCRIBERS ───────────────────────────────────────────────────────────────
 
 @app.get("/subscribers")
@@ -544,6 +608,7 @@ def remove_subscriber_endpoint(subscriber_id: int, _=Depends(require_auth)):
     delete_subscriber(subscriber_id)
     return {"ok": True}
 
+
 # ── STATS ─────────────────────────────────────────────────────────────────────
 
 @app.get("/stats")
@@ -585,7 +650,7 @@ def send_digest_email(body: dict, _=Depends(require_auth)):
     smtp_from = os.environ.get("SMTP_FROM", smtp_user)
 
     if not all([smtp_host, smtp_user, smtp_pass]):
-        raise HTTPException(status_code=503, detail="SMTP not configured in Railway env vars.")
+        raise HTTPException(status_code=503, detail="SMTP not configured in Render env vars.")
 
     subject      = body.get("subject","PolicyPulse Weekly Digest")
     html_content = body.get("html_content","")
@@ -661,7 +726,7 @@ async def notion_push(body: dict):
     except Exception as e: raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── SCHOLARLY / RESEARCH ──────────────────────────────────────────────────────
+# ── SCHOLARLY ─────────────────────────────────────────────────────────────────
 
 @app.get("/scholarly")
 def list_scholarly(
@@ -745,27 +810,19 @@ def get_scholarly_article(article_id: int):
     return article
 
 
-# ── SCHOLARLY TAGS ────────────────────────────────────────────────────────────
-
 @app.post("/scholarly/{article_id}/tags")
 def add_scholarly_tag(article_id: int, body: dict, _=Depends(require_auth)):
-    """Add a tag to a scholarly article."""
     tag = body.get("tag", "").strip()
     if not tag:
         raise HTTPException(status_code=400, detail="tag required")
     from database import get_conn
     conn = get_conn()
-    row = conn.execute(
-        "SELECT tags FROM scholarly_articles WHERE id = ?", (article_id,)
-    ).fetchone()
+    row = conn.execute("SELECT tags FROM scholarly_articles WHERE id = ?", (article_id,)).fetchone()
     if row:
         existing = [t.strip() for t in (row["tags"] or "").split(",") if t.strip()]
         if tag not in existing:
             existing.append(tag)
-        conn.execute(
-            "UPDATE scholarly_articles SET tags = ? WHERE id = ?",
-            (",".join(existing), article_id)
-        )
+        conn.execute("UPDATE scholarly_articles SET tags = ? WHERE id = ?", (",".join(existing), article_id))
         conn.commit()
     conn.close()
     return {"ok": True}
@@ -773,18 +830,12 @@ def add_scholarly_tag(article_id: int, body: dict, _=Depends(require_auth)):
 
 @app.delete("/scholarly/{article_id}/tags/{tag}")
 def remove_scholarly_tag(article_id: int, tag: str, _=Depends(require_auth)):
-    """Remove a tag from a scholarly article."""
     from database import get_conn
     conn = get_conn()
-    row = conn.execute(
-        "SELECT tags FROM scholarly_articles WHERE id = ?", (article_id,)
-    ).fetchone()
+    row = conn.execute("SELECT tags FROM scholarly_articles WHERE id = ?", (article_id,)).fetchone()
     if row:
         existing = [t.strip() for t in (row["tags"] or "").split(",") if t.strip() and t.strip() != tag]
-        conn.execute(
-            "UPDATE scholarly_articles SET tags = ? WHERE id = ?",
-            (",".join(existing), article_id)
-        )
+        conn.execute("UPDATE scholarly_articles SET tags = ? WHERE id = ?", (",".join(existing), article_id))
         conn.commit()
     conn.close()
     return {"ok": True}
@@ -801,13 +852,11 @@ def health():
 
 @app.get("/scraper-config")
 def get_scraper_config_endpoint():
-    """Return all saved scraper filter config values."""
     return {"config": get_all_scraper_config()}
 
 
 @app.post("/scraper-config")
 def set_scraper_config_endpoint(body: dict, _=Depends(require_auth)):
-    """Save one or more config key-value pairs."""
     import json
     for key, value in body.items():
         if isinstance(value, (dict, list)):
@@ -818,7 +867,6 @@ def set_scraper_config_endpoint(body: dict, _=Depends(require_auth)):
 
 @app.delete("/scraper-config/{key}")
 def delete_scraper_config_endpoint(key: str, _=Depends(require_auth)):
-    """Delete a single config key."""
     from database import get_conn
     conn = get_conn()
     conn.execute("DELETE FROM scraper_config WHERE key = ?", (key,))
@@ -831,17 +879,6 @@ def delete_scraper_config_endpoint(key: str, _=Depends(require_auth)):
 
 @app.get("/backup/download")
 def download_backup(_=Depends(require_auth)):
-    """
-    Stream the live SQLite database as a downloadable file.
-    Uses SQLite's built-in backup API so the copy is always consistent
-    even if a scrape is running concurrently.
-
-    Usage:  GET /backup/download
-            Authorization: Bearer <PP_API_KEY>
-
-    Save the file as policypulse-backup-YYYY-MM-DD.db and keep it safe.
-    To restore: replace policypulse.db on Railway with this file and redeploy.
-    """
     import io
     import sqlite3 as _sqlite3
     from fastapi.responses import StreamingResponse
@@ -852,22 +889,11 @@ def download_backup(_=Depends(require_auth)):
 
     buf = io.BytesIO()
     try:
-        src  = _sqlite3.connect(db_path)
-        dest = _sqlite3.connect(":memory:")
-        src.backup(dest)
-        src.close()
-        # Serialise in-memory DB to bytes
-        for chunk in dest.iterdump():
-            pass  # iterdump is text-only; use serialize instead
-        dest.close()
-
-        # Re-open and use the serialize API (Python 3.11+) or file copy
         src2 = _sqlite3.connect(db_path)
         try:
-            data = src2.serialize()   # returns bytes of the whole DB
+            data = src2.serialize()
             buf.write(data)
         except AttributeError:
-            # Fallback for Python < 3.11: direct file read after WAL checkpoint
             src2.execute("PRAGMA wal_checkpoint(FULL)")
             src2.close()
             with open(db_path, "rb") as f:
@@ -888,7 +914,6 @@ def download_backup(_=Depends(require_auth)):
 
 @app.get("/backup/stats")
 def backup_stats(_=Depends(require_auth)):
-    """Return database size and table row counts — useful for monitoring."""
     from database import get_conn
     db_path = os.environ.get("DB_PATH", "policypulse.db")
     size_bytes = os.path.getsize(db_path) if os.path.exists(db_path) else 0
@@ -912,21 +937,15 @@ def backup_stats(_=Depends(require_auth)):
 
 @app.get("/digest/{token}")
 def view_public_digest(token: str):
-    """
-    Serve a saved digest as a public HTML page — no auth required.
-    This is the URL generated by the 'Public URL' button in the Digest tab.
-    """
     from fastapi.responses import HTMLResponse
     from database import get_conn
     conn = get_conn()
     row = conn.execute(
-        "SELECT subject, html_content, sent_date FROM digests WHERE token = ?",
-        (token,)
+        "SELECT subject, html_content, sent_date FROM digests WHERE token = ?", (token,)
     ).fetchone()
     conn.close()
     if not row or not row["html_content"]:
         raise HTTPException(status_code=404, detail="Digest not found or has expired.")
-    # Inject a small read-only banner into the digest HTML
     banner = (
         '<div style="background:#003366;color:#fff;text-align:center;padding:8px 16px;'
         'font-family:Georgia,serif;font-size:12px">'
@@ -938,43 +957,30 @@ def view_public_digest(token: str):
     return HTMLResponse(content=html, status_code=200)
 
 
-# ── NEWS SCRAPE LOG ────────────────────────────────────────────────────────────────
+# ── SCRAPE LOG ────────────────────────────────────────────────────────────────
 
 @app.get("/scrape/log")
 def get_scrape_log(limit: int = Query(20)):
-    """Return the last N scrape log entries for display in the UI."""
     from database import get_conn
     conn = get_conn()
-    rows = conn.execute(
-        "SELECT * FROM scrape_log ORDER BY id DESC LIMIT ?", (limit,)
-    ).fetchall()
+    rows = conn.execute("SELECT * FROM scrape_log ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
     conn.close()
     return {"log": [dict(r) for r in rows]}
 
-
-# ── RESEARCH SCRAPE LOG ────────────────────────────────────────────────────────────────
 
 @app.get("/scholarly/scrape/log")
 def get_scholarly_scrape_log(limit: int = Query(20)):
     from database import get_conn
     conn = get_conn()
-    # scholarly scrapes are identified by the 'scholarly' keyword in errors
-    # or you can add a 'scrape_type' column — for now return all logs
-    rows = conn.execute(
-        "SELECT * FROM scrape_log ORDER BY id DESC LIMIT ?", (limit,)
-    ).fetchall()
+    rows = conn.execute("SELECT * FROM scrape_log ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
     conn.close()
     return {"log": [dict(r) for r in rows]}
 
-# ── SOURCE REACHABILITY CHECK ─────────────────────────────────────────────────
+
+# ── SOURCE REACHABILITY ───────────────────────────────────────────────────────
 
 @app.get("/sources/{source_id}/check")
 def check_source_reachability(source_id: int):
-    """
-    HEAD-request a source URL and return whether it's reachable.
-    Called by the Fix Links button in the Sources tab.
-    Times out after 8 seconds per source.
-    """
     import requests as req_lib
     from database import get_conn
     conn = get_conn()
@@ -984,12 +990,8 @@ def check_source_reachability(source_id: int):
         raise HTTPException(status_code=404, detail="Source not found")
     url = row["url"]
     try:
-        r = req_lib.head(
-            url,
-            timeout=8,
-            allow_redirects=True,
-            headers={"User-Agent": "PolicyPulse/1.0 link-checker"}
-        )
+        r = req_lib.head(url, timeout=8, allow_redirects=True,
+                         headers={"User-Agent": "PolicyPulse/1.0 link-checker"})
         reachable = r.status_code < 400
         return {"reachable": reachable, "status": r.status_code, "url": url}
     except req_lib.exceptions.Timeout:
@@ -998,7 +1000,7 @@ def check_source_reachability(source_id: int):
         return {"reachable": False, "status": str(e)[:80], "url": url}
 
 
-# ── ARTICLE PRUNING / ARCHIVING ───────────────────────────────────────────────
+# ── ARTICLE PRUNING ───────────────────────────────────────────────────────────
 
 @app.delete("/articles/prune")
 def prune_old_articles(
@@ -1006,31 +1008,18 @@ def prune_old_articles(
     dry_run: bool = Query(False),
     _=Depends(require_auth),
 ):
-    """
-    Delete news articles older than `days` days (default 180).
-    Staged articles are never deleted regardless of age.
-    Pass dry_run=true to see the count without deleting.
-
-    Example:  DELETE /articles/prune?days=180
-              DELETE /articles/prune?days=90&dry_run=true
-    """
     from database import get_conn
     conn = get_conn()
     cutoff = (datetime.utcnow() - __import__("datetime").timedelta(days=days)).date().isoformat()
     count_row = conn.execute(
-        "SELECT COUNT(*) FROM articles WHERE pub_date < ? AND staged = 0",
-        (cutoff,)
+        "SELECT COUNT(*) FROM articles WHERE pub_date < ? AND staged = 0", (cutoff,)
     ).fetchone()[0]
     if not dry_run:
-        conn.execute(
-            "DELETE FROM articles WHERE pub_date < ? AND staged = 0",
-            (cutoff,)
-        )
+        conn.execute("DELETE FROM articles WHERE pub_date < ? AND staged = 0", (cutoff,))
         conn.commit()
     conn.close()
     return {
-        "ok":      True,
-        "dry_run": dry_run,
+        "ok": True, "dry_run": dry_run,
         "deleted": 0 if dry_run else count_row,
         "would_delete": count_row,
         "cutoff_date": cutoff,
@@ -1039,17 +1028,12 @@ def prune_old_articles(
 
 
 @app.get("/articles/prune/preview")
-def prune_preview(
-    days: int = Query(180, ge=30, le=3650),
-    _=Depends(require_auth),
-):
-    """Return how many articles would be deleted by a prune with the given days cutoff."""
+def prune_preview(days: int = Query(180, ge=30, le=3650), _=Depends(require_auth)):
     from database import get_conn
     conn = get_conn()
     cutoff = (datetime.utcnow() - __import__("datetime").timedelta(days=days)).date().isoformat()
     count = conn.execute(
-        "SELECT COUNT(*) FROM articles WHERE pub_date < ? AND staged = 0",
-        (cutoff,)
+        "SELECT COUNT(*) FROM articles WHERE pub_date < ? AND staged = 0", (cutoff,)
     ).fetchone()[0]
     total = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
     conn.close()
@@ -1060,12 +1044,6 @@ def prune_preview(
 
 @app.post("/articles/{article_id}/reanalyze")
 def reanalyze_article(article_id: int, _=Depends(require_auth)):
-    """
-    Re-run Gemini AI analysis on a single existing article and update the DB.
-    Useful after prompt improvements — the article's summary, why_it_matters,
-    domain, jurisdiction, sentiment, relevance, and tags are all refreshed.
-    The article URL is re-fetched to get fresh body text.
-    """
     from database import get_conn, get_article_by_id
     from scraper import fetch_article_details
     from ai_processor import analyze_article
@@ -1074,20 +1052,13 @@ def reanalyze_article(article_id: int, _=Depends(require_auth)):
     if not a:
         raise HTTPException(status_code=404, detail="Article not found")
 
-    # Re-fetch body text — best effort, fall back to empty string
     article_text, _ = fetch_article_details(a["url"])
-
     result = analyze_article(
-        title=a["title"],
-        url=a["url"],
-        source_name=a["source"],
-        article_text=article_text or "",
+        title=a["title"], url=a["url"],
+        source_name=a["source"], article_text=article_text or "",
     )
     if not result:
-        raise HTTPException(
-            status_code=422,
-            detail="AI scored this article below 6 — it would be filtered out if re-scraped."
-        )
+        raise HTTPException(status_code=422, detail="AI scored this article below 6.")
 
     conn = get_conn()
     conn.execute(
@@ -1095,12 +1066,9 @@ def reanalyze_article(article_id: int, _=Depends(require_auth)):
            SET domain=?, jurisdiction=?, relevance=?, sentiment=?,
                summary=?, why_it_matters=?, tags=?
            WHERE id=?""",
-        (
-            result["domain"], result["jurisdiction"], result["relevance"],
-            result["sentiment"], result["summary"], result["why_it_matters"],
-            ",".join(result.get("tags", [])),
-            article_id,
-        )
+        (result["domain"], result["jurisdiction"], result["relevance"],
+         result["sentiment"], result["summary"], result["why_it_matters"],
+         ",".join(result.get("tags", [])), article_id)
     )
     conn.commit()
     conn.close()
@@ -1108,20 +1076,11 @@ def reanalyze_article(article_id: int, _=Depends(require_auth)):
 
 
 @app.post("/articles/reanalyze-bulk")
-def reanalyze_bulk(
-    body: dict,
-    background_tasks: BackgroundTasks,
-    _=Depends(require_auth),
-):
-    """
-    Re-analyze multiple articles in the background.
-    Body: {"ids": [1, 2, 3]} or {"all_unread": true} or {"days": 7}
-    """
+def reanalyze_bulk(body: dict, background_tasks: BackgroundTasks, _=Depends(require_auth)):
     from database import get_conn
-
     conn = get_conn()
     if "ids" in body and body["ids"]:
-        ids = [int(i) for i in body["ids"][:50]]  # cap at 50
+        ids = [int(i) for i in body["ids"][:50]]
     elif body.get("all_unread"):
         rows = conn.execute(
             "SELECT id FROM articles WHERE read=0 ORDER BY relevance DESC LIMIT 50"
@@ -1137,13 +1096,11 @@ def reanalyze_bulk(
         conn.close()
         raise HTTPException(status_code=400, detail="Provide ids, all_unread, or days")
     conn.close()
-
     background_tasks.add_task(_reanalyze_batch_bg, ids)
     return {"ok": True, "queued": len(ids), "ids": ids}
 
 
 def _reanalyze_batch_bg(ids: list):
-    """Background task: re-analyze a batch of articles sequentially."""
     import time as _time
     from database import get_article_by_id, get_conn
     from scraper import fetch_article_details
@@ -1162,7 +1119,6 @@ def _reanalyze_batch_bg(ids: list):
                 source_name=a["source"], article_text=article_text or "",
             )
             if not result:
-                log.info(f"  [reanalyze] id={article_id} scored <6, skipping update")
                 continue
             conn = get_conn()
             conn.execute(
@@ -1176,26 +1132,18 @@ def _reanalyze_batch_bg(ids: list):
             )
             conn.commit()
             conn.close()
-            log.info(f"  [reanalyze] id={article_id} updated (rel={result['relevance']})")
         except Exception as e:
             log.warning(f"  [reanalyze] id={article_id} error: {e}")
-        _time.sleep(0.5)  # gentle rate-limiting between Gemini calls
+        _time.sleep(0.5)
 
 
 # ── EMAIL HELPER ──────────────────────────────────────────────────────────────
 
 def _smtp_send(recipients: list[dict], subject: str, html: str) -> dict:
-    """
-    Send an HTML email to a list of recipients using Railway SMTP env vars.
-    recipients: [{"name": "...", "email": "..."}, ...]
-    Returns {"sent": int, "errors": list[str]}
-    """
     import smtplib
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
     from re import sub as re_sub
-    import logging as _log
-    log = _log.getLogger(__name__)
 
     smtp_host = os.environ.get("SMTP_HOST", "")
     smtp_port = int(os.environ.get("SMTP_PORT", 587))
@@ -1204,15 +1152,12 @@ def _smtp_send(recipients: list[dict], subject: str, html: str) -> dict:
     smtp_from = os.environ.get("SMTP_FROM", smtp_user)
 
     if not all([smtp_host, smtp_user, smtp_pass]):
-        log.warning("_smtp_send: SMTP not configured — skipping")
         return {"sent": 0, "errors": ["SMTP not configured"]}
 
     sent, errors = 0, []
     try:
         server = smtplib.SMTP(smtp_host, smtp_port)
-        server.ehlo()
-        server.starttls()
-        server.login(smtp_user, smtp_pass)
+        server.ehlo(); server.starttls(); server.login(smtp_user, smtp_pass)
         for r in recipients:
             try:
                 msg = MIMEMultipart("alternative")
@@ -1220,7 +1165,6 @@ def _smtp_send(recipients: list[dict], subject: str, html: str) -> dict:
                 msg["From"]    = smtp_from
                 msg["To"]      = r["email"]
                 plain = re_sub(r"<[^>]+>", "", html.replace("<br>", "\n").replace("</p>", "\n\n"))
-
                 msg.attach(MIMEText(plain, "plain"))
                 msg.attach(MIMEText(html,  "html"))
                 server.sendmail(smtp_user, r["email"], msg.as_string())
@@ -1236,7 +1180,6 @@ def _smtp_send(recipients: list[dict], subject: str, html: str) -> dict:
 # ── ALERT DISPATCH ────────────────────────────────────────────────────────────
 
 def _build_article_card_html(a: dict, accent: str = "#c41e3a") -> str:
-    """Build a single article HTML block for use in alert emails."""
     rel   = a.get("relevance", 0)
     emoji = "🔥" if rel >= 9 else "⭐" if rel >= 7 else "📌"
     sent  = a.get("sentiment", "Neutral")
@@ -1267,7 +1210,6 @@ def _build_article_card_html(a: dict, accent: str = "#c41e3a") -> str:
 
 
 def _email_wrapper(title: str, subtitle: str, body_html: str, badge_color: str = "#c41e3a") -> str:
-    """Wrap article cards in a branded email shell."""
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
 <body style="font-family:Georgia,serif;background:#f2f5fa;margin:0;padding:20px">
 <div style="max-width:620px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;
@@ -1283,73 +1225,51 @@ def _email_wrapper(title: str, subtitle: str, body_html: str, badge_color: str =
   <div style="padding:24px 28px">{body_html}</div>
   <div style="background:#f8faff;padding:16px 28px;border-top:1px solid #e8eef4;
               font-size:11px;color:#6b8aaa;text-align:center">
-    PolicyPulse Intelligence Platform &bull; You are receiving this because you opted into
-    policy alerts. To unsubscribe, contact your PolicyPulse administrator.
+    PolicyPulse Intelligence Platform
   </div>
 </div></body></html>"""
 
 
 def _dispatch_urgent_alerts(new_articles: list[dict]):
-    """Send immediate email for any newly-scraped article scoring 9–10."""
     import logging as _log
     log = _log.getLogger(__name__)
-
     urgent = [a for a in new_articles if a.get("relevance", 0) >= 9]
     if not urgent:
         return
-
     recipients = get_alert_subscribers("urgent")
     if not recipients:
-        log.info(f"[alert] {len(urgent)} urgent articles — no urgent-alert subscribers")
         return
-
     cards = "".join(_build_article_card_html(a, "#c41e3a") for a in urgent)
     html  = _email_wrapper(
         title=f"🔥 {len(urgent)} Urgent Policy Alert{'s' if len(urgent)>1 else ''}",
         subtitle=f"Critical relevance articles scraped {datetime.utcnow().strftime('%B %d, %Y')}",
-        body_html=cards,
-        badge_color="#c41e3a",
+        body_html=cards, badge_color="#c41e3a",
     )
     result = _smtp_send(recipients, f"🔥 PolicyPulse Urgent Alert — {len(urgent)} critical article(s)", html)
     log.info(f"[alert] urgent dispatch: sent={result['sent']} errors={result['errors']}")
 
 
 def _dispatch_keyword_alerts(new_articles: list[dict]):
-    """
-    For each watchlist keyword, if any newly-scraped article is tagged with it
-    (via forced_tag from Google News feed) send a targeted keyword alert email.
-    """
     import logging as _log
     log = _log.getLogger(__name__)
-
     recipients = get_alert_subscribers("keyword")
     if not recipients:
         return
-
-    # Group articles by their watchlist keyword tag
     keyword_hits: dict[str, list[dict]] = {}
     for a in new_articles:
         tag = a.get("forced_tag")
         if tag:
             keyword_hits.setdefault(tag, []).append(a)
-
     if not keyword_hits:
         return
-
     for keyword, arts in keyword_hits.items():
         cards = "".join(_build_article_card_html(a, "#1d4ed8") for a in arts)
         html  = _email_wrapper(
             title=f'📡 Watchlist Alert: "{keyword}"',
-            subtitle=(f"{len(arts)} new article{'s' if len(arts)>1 else ''} matched your watchlist "
-                      f"keyword on {datetime.utcnow().strftime('%B %d, %Y')}"),
-            body_html=cards,
-            badge_color="#1d4ed8",
+            subtitle=f"{len(arts)} new article{'s' if len(arts)>1 else ''} on {datetime.utcnow().strftime('%B %d, %Y')}",
+            body_html=cards, badge_color="#1d4ed8",
         )
-        result = _smtp_send(
-            recipients,
-            f'📡 PolicyPulse Watchlist Alert: "{keyword}" — {len(arts)} new article(s)',
-            html,
-        )
+        result = _smtp_send(recipients, f'📡 PolicyPulse Watchlist Alert: "{keyword}" — {len(arts)} new article(s)', html)
         log.info(f"[alert] keyword '{keyword}': sent={result['sent']} errors={result['errors']}")
 
 
@@ -1357,10 +1277,6 @@ def _dispatch_keyword_alerts(new_articles: list[dict]):
 
 @app.patch("/subscribers/{subscriber_id}/alerts")
 def update_subscriber_alert_prefs(subscriber_id: int, body: dict, _=Depends(require_auth)):
-    """
-    Toggle urgent_alerts and keyword_alerts opt-in for a subscriber.
-    Body: {"urgent_alerts": 0|1, "keyword_alerts": 0|1}
-    """
     urgent  = int(body.get("urgent_alerts",  0))
     keyword = int(body.get("keyword_alerts", 0))
     update_subscriber_alerts(subscriber_id, urgent, keyword)
@@ -1369,56 +1285,41 @@ def update_subscriber_alert_prefs(subscriber_id: int, body: dict, _=Depends(requ
 
 @app.post("/alerts/test-urgent")
 def test_urgent_alert(body: dict, _=Depends(require_auth)):
-    """
-    Send a test urgent-alert email to all opted-in subscribers.
-    Useful for verifying SMTP is configured correctly.
-    """
     recipients = get_alert_subscribers("urgent")
     if not recipients:
         return {"ok": False, "detail": "No subscribers have opted into urgent alerts."}
     test_article = {
-        "title":          "TEST: PolicyPulse Urgent Alert — Configuration Check",
-        "url":            "https://policypulse.ca",
-        "source":         "PolicyPulse System",
-        "jurisdiction":   "Test",
-        "domain":         "Configuration",
-        "relevance":      10,
-        "sentiment":      "Neutral",
-        "summary":        "This is a test alert sent from the PolicyPulse admin panel to verify that urgent alerts are configured correctly.",
-        "why_it_matters": "If you received this email, urgent alert delivery is working correctly for your account.",
-        "pub_date":       datetime.utcnow().date().isoformat(),
-        "tags":           ["Test"],
-        "forced_tag":     None,
+        "title": "TEST: PolicyPulse Urgent Alert — Configuration Check",
+        "url": "https://policypulse.ca", "source": "PolicyPulse System",
+        "jurisdiction": "Test", "domain": "Configuration", "relevance": 10,
+        "sentiment": "Neutral",
+        "summary": "This is a test alert sent from the PolicyPulse admin panel.",
+        "why_it_matters": "If you received this email, urgent alerts are working correctly.",
+        "pub_date": datetime.utcnow().date().isoformat(),
     }
     cards = _build_article_card_html(test_article, "#c41e3a")
-    html  = _email_wrapper("🔥 TEST: Urgent Alert", "This is a configuration test — not a real alert.", cards, "#c41e3a")
+    html  = _email_wrapper("🔥 TEST: Urgent Alert", "Configuration test — not a real alert.", cards, "#c41e3a")
     result = _smtp_send(recipients, "TEST: PolicyPulse Urgent Alert", html)
     return {"ok": True, **result}
 
 
 @app.post("/alerts/test-keyword")
 def test_keyword_alert(body: dict, _=Depends(require_auth)):
-    """Send a test keyword-alert email to all opted-in subscribers."""
     recipients = get_alert_subscribers("keyword")
     if not recipients:
         return {"ok": False, "detail": "No subscribers have opted into keyword alerts."}
     keyword = body.get("keyword", "DRIPA")
     test_article = {
-        "title":          f"TEST: PolicyPulse Keyword Alert for '{keyword}'",
-        "url":            "https://policypulse.ca",
-        "source":         "PolicyPulse System",
-        "jurisdiction":   "Test",
-        "domain":         "Configuration",
-        "relevance":      8,
-        "sentiment":      "Neutral",
-        "summary":        f"This is a test alert for the watchlist keyword '{keyword}'.",
-        "why_it_matters": "If you received this email, keyword alert delivery is working correctly.",
-        "pub_date":       datetime.utcnow().date().isoformat(),
-        "tags":           [keyword],
-        "forced_tag":     keyword,
+        "title": f"TEST: PolicyPulse Keyword Alert for '{keyword}'",
+        "url": "https://policypulse.ca", "source": "PolicyPulse System",
+        "jurisdiction": "Test", "domain": "Configuration", "relevance": 8,
+        "sentiment": "Neutral",
+        "summary": f"This is a test alert for the watchlist keyword '{keyword}'.",
+        "why_it_matters": "If you received this, keyword alert delivery is working correctly.",
+        "pub_date": datetime.utcnow().date().isoformat(),
     }
     cards = _build_article_card_html(test_article, "#1d4ed8")
-    html  = _email_wrapper(f'📡 TEST: Keyword Alert "{keyword}"', "This is a configuration test.", cards, "#1d4ed8")
+    html  = _email_wrapper(f'📡 TEST: Keyword Alert "{keyword}"', "Configuration test.", cards, "#1d4ed8")
     result = _smtp_send(recipients, f"TEST: PolicyPulse Keyword Alert — '{keyword}'", html)
     return {"ok": True, **result}
 
@@ -1426,33 +1327,16 @@ def test_keyword_alert(body: dict, _=Depends(require_auth)):
 # ── FIX DATES ─────────────────────────────────────────────────────────────────
 
 @app.post("/articles/fix-dates")
-def fix_article_dates(
-    background_tasks: BackgroundTasks,
-    body: dict = None,
-    _=Depends(require_auth),
-):
-    """
-    Re-fetch URLs for articles with missing or wrong publish dates and update
-    the pub_date field in the database with the real date from the article page.
-
-    Optional body:
-        {"limit": 100}          — max articles to fix (default 200)
-        {"ids": [1, 2, 3]}      — fix specific article IDs only
-    """
+def fix_article_dates(background_tasks: BackgroundTasks, body: dict = None, _=Depends(require_auth)):
     body = body or {}
     specific_ids = body.get("ids", [])
     limit = int(body.get("limit", 200))
     background_tasks.add_task(_fix_dates_bg, specific_ids, limit, "news")
-    return {"ok": True, "message": "Date fix started in background. Check scrape log for progress."}
+    return {"ok": True, "message": "Date fix started in background."}
 
 
 @app.post("/scholarly/fix-dates")
-def fix_scholarly_dates(
-    background_tasks: BackgroundTasks,
-    body: dict = None,
-    _=Depends(require_auth),
-):
-    """Re-fetch URLs for research articles with missing publish dates."""
+def fix_scholarly_dates(background_tasks: BackgroundTasks, body: dict = None, _=Depends(require_auth)):
     body = body or {}
     limit = int(body.get("limit", 100))
     background_tasks.add_task(_fix_dates_bg, [], limit, "scholarly")
@@ -1461,7 +1345,6 @@ def fix_scholarly_dates(
 
 @app.get("/articles/fix-dates/preview")
 def preview_articles_needing_date_fix(limit: int = Query(200)):
-    """Return count of articles that have missing or scrape-date pub_dates."""
     rows = get_articles_missing_pub_date(limit=limit)
     return {
         "count": len(rows),
@@ -1471,7 +1354,6 @@ def preview_articles_needing_date_fix(limit: int = Query(200)):
 
 
 def _fix_dates_bg(specific_ids: list, limit: int, kind: str):
-    """Background task: re-fetch article pages and extract real publish dates."""
     import time as _time
     import logging as _log
     from scraper import fetch_article_details
@@ -1486,8 +1368,7 @@ def _fix_dates_bg(specific_ids: list, limit: int, kind: str):
             rows = []
             for aid in specific_ids[:limit]:
                 r = conn.execute(
-                    "SELECT id, url, pub_date, processed_date FROM articles WHERE id=?",
-                    (aid,)
+                    "SELECT id, url, pub_date, processed_date FROM articles WHERE id=?", (aid,)
                 ).fetchone()
                 if r:
                     rows.append(dict(r))
@@ -1495,10 +1376,7 @@ def _fix_dates_bg(specific_ids: list, limit: int, kind: str):
         else:
             rows = get_articles_missing_pub_date(limit=limit)
 
-    log.info(f"[fix-dates] Starting {kind} fix for {len(rows)} articles")
-    fixed = 0
-    skipped = 0
-
+    fixed = skipped = 0
     for row in rows:
         try:
             _, extracted_date = fetch_article_details(row["url"])
@@ -1508,48 +1386,31 @@ def _fix_dates_bg(specific_ids: list, limit: int, kind: str):
                 else:
                     update_article_pub_date(row["id"], extracted_date)
                 fixed += 1
-                log.info(f"  [fix-dates] id={row['id']} → {extracted_date}")
             else:
                 skipped += 1
-                log.debug(f"  [fix-dates] id={row['id']} — no date found on page")
         except Exception as e:
             skipped += 1
             log.warning(f"  [fix-dates] id={row['id']} error: {e}")
-        _time.sleep(0.5)  # gentle rate-limiting
+        _time.sleep(0.5)
 
     log.info(f"[fix-dates] Done. Fixed={fixed}, Skipped={skipped}")
 
 
-# ── APP SETTINGS / PREFERENCES ────────────────────────────────────────────────
+# ── APP SETTINGS ──────────────────────────────────────────────────────────────
 
 @app.get("/settings")
 def get_settings():
-    """Return all app settings/preferences."""
     return {"settings": get_all_app_settings()}
 
 
 @app.post("/settings")
 def save_settings(body: dict, _=Depends(require_auth)):
-    """Save one or more app settings.  Body: {"key": "value", ...}"""
     allowed_keys = {
-        "timezone",
-        "date_format",
-        "scrape_time",
-        "scrape_days",
-        "default_relevance_threshold",
-        "digest_day",
-        "digest_time",
-        "show_pub_date_unknown_label",
-        "articles_per_page",
-        "default_sort",
-        "theme",
-        "compact_cards",
-        "show_why_it_matters",
-        "show_summary",
-        "keyboard_shortcuts",
-        "auto_mark_read_on_open",
-        "alert_min_relevance",
-        "feed_refresh_interval",
+        "timezone","date_format","scrape_time","scrape_days",
+        "default_relevance_threshold","digest_day","digest_time",
+        "show_pub_date_unknown_label","articles_per_page","default_sort",
+        "theme","compact_cards","show_why_it_matters","keyboard_shortcuts",
+        "auto_mark_read_on_open","alert_min_relevance","feed_refresh_interval",
     }
     saved = []
     for key, value in body.items():
@@ -1561,7 +1422,6 @@ def save_settings(body: dict, _=Depends(require_auth)):
 
 @app.delete("/settings/{key}")
 def delete_setting(key: str, _=Depends(require_auth)):
-    """Delete a single setting key."""
     from database import get_conn
     conn = get_conn()
     conn.execute("DELETE FROM scraper_config WHERE key = ?", ("setting:" + key,))

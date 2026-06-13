@@ -555,7 +555,14 @@ body.light-mode .research-card.flagged{border-color:rgba(239,68,68,0.25)}
 .research-card .hover-actions{background:rgba(6,15,30,0.95);border-color:rgba(139,92,246,0.25)}
 /* Research abstract compact for dashboard */
 .research-abstract-compact{-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}
-@media(max-width:640px){.stat-grid{grid-template-columns:repeat(2,1fr)}#banner-center{display:none}.filters{flex-direction:column}.filter-input{min-width:100%}#main{padding:14px}#alert-tray{width:300px;right:-10px}}
+.nav-more-wrap{position:relative;display:flex;align-items:stretch}
+#nav-more-menu .nav-btn{border-bottom:1px solid var(--border);border-radius:0;padding:11px 18px}
+#nav-more-menu .nav-btn:last-child{border-bottom:none;border-radius:0 0 10px 10px}
+#nav-more-menu .nav-btn.active{color:var(--cyan)}
+@media(max-width:640px){
+  #nav{padding:0 6px}
+  .nav-btn{padding:10px 8px;font-size:10.5px}
+}
 
 /* CITATIONS */
 .cite-style-btn{padding:6px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;transition:all .18s;border:1px solid var(--border);color:var(--muted);background:transparent;letter-spacing:.05em;font-family:'IBM Plex Sans',sans-serif}
@@ -981,23 +988,29 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
 </div>
 
 <div id="nav">
-   <button class="nav-btn" onclick="window.location.href='index.html'" id="tab-home" title="Back to landing page">🏠 Home</button>
+  <button class="nav-btn" onclick="window.location.href='index.html'" id="tab-home" title="Back to landing page">🏠 Home</button>
   <button class="nav-btn active" onclick="showTab('dashboard')" id="tab-dashboard">📊 Dashboard</button>
   <button class="nav-btn" onclick="showTab('scraper')" id="tab-scraper">📰 News &amp; Articles <span class="nav-badge" id="scraper-badge" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showTab('research')" id="tab-research">&#x1F4DA; Research <span class="nav-badge" id="research-badge" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showTab('digest')" id="tab-digest">🗞️ Digest <span class="nav-badge" id="digest-badge" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showTab('analytics')" id="tab-analytics">&#x1F4CA; Analytics</button>
   <button class="nav-btn" onclick="showTab('tracker')" id="tab-tracker">&#x1F4CD; Policy Tracker</button>
-
-  <button class="nav-btn" onclick="showTab('notes')" id="tab-notes">&#x1F4DD; Notes</button>
-  <button class="nav-btn" onclick="showTab('notion')" id="tab-notion">📒 Notion</button>
   <button class="nav-btn" onclick="showTab('briefing')" id="tab-briefing">📋 Briefing Note</button>
   <button class="nav-btn" onclick="showTab('askai')" id="tab-askai">🧠 Ask AI</button>
   <button class="nav-btn" onclick="showTab('citations')" id="tab-citations">🔖 Citations</button>
-  <button class="nav-btn" onclick="showTab('help')" id="tab-help">❓ Help</button>
-  <button class="nav-btn" onclick="showTab('subscribers')" id="tab-subscribers">👥 Subscribers</button>
-  <button class="nav-btn" onclick="showTab('privacy')" id="tab-privacy">&#x1F512; Privacy</button>
   <button class="nav-btn" onclick="showTab('settings')" id="tab-settings">&#x2699;&#xFE0F; Settings</button>
+  <!-- More dropdown -->
+  <div class="nav-more-wrap" id="nav-more-wrap">
+    <button class="nav-btn" onclick="toggleMoreMenu(event)" id="tab-more">More &#x25BE;</button>
+    <div id="nav-more-menu" style="display:none;position:absolute;top:100%;right:0;background:var(--bg2);border:1px solid var(--border);border-radius:0 0 10px 10px;min-width:160px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4)">
+      <button class="nav-btn" style="display:block;width:100%;text-align:left;border-bottom:1px solid var(--border)" onclick="showTab('notes');toggleMoreMenu()" id="tab-notes">&#x1F4DD; Notes</button>
+      <button class="nav-btn" style="display:block;width:100%;text-align:left;border-bottom:1px solid var(--border)" onclick="showTab('subscribers');toggleMoreMenu()" id="tab-subscribers">👥 Subscribers</button>
+      <button class="nav-btn" style="display:block;width:100%;text-align:left;border-bottom:1px solid var(--border)" onclick="showTab('help');toggleMoreMenu()" id="tab-help">❓ Help</button>
+      <button class="nav-btn" style="display:block;width:100%;text-align:left" onclick="showTab('privacy');toggleMoreMenu()" id="tab-privacy">&#x1F512; Privacy</button>
+    </div>
+  </div>
+  <!-- hidden tabs for backward compat (notion stays in settings panel) -->
+  <button id="tab-notion" style="display:none"></button>
 </div>
 <div id="main">
 
@@ -1064,6 +1077,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
       <div><div class="page-title">News &amp; Articles</div><div class="page-subtitle" id="scraper-count">Loading news &amp; articles…</div></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="exportNewsCSV()" title="Export filtered articles as CSV">&#x2B07; CSV</button>
         <button id="scrape-btn" onclick="scrapeNow()">&#x1F50D; Scrape Now</button>
       </div>
     </div>
@@ -1905,28 +1919,11 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
       <div>
         <div class="page-title">Ask AI</div>
-        <div class="page-subtitle" id="askai-status">Query your policy database using Groq AI (Llama 3) — fast, free, grounded in your tracked articles</div>
+        <div class="page-subtitle" id="askai-status">Query your policy database using Groq AI — grounded in your tracked articles</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-cyan btn-sm" onclick="showApiKeyPanel()" id="api-key-load-btn" title="Load or update your Groq API key">&#x1F511; Load API Key</button>
         <button class="btn btn-ghost btn-sm" onclick="clearChat()" title="Clear conversation history">&#x1F9F9; Clear Chat</button>
       </div>
-    </div>
-    <!-- API Key Panel (collapsible) -->
-    <div id="api-key-panel" style="display:none;background:rgba(0,194,255,0.05);border:1px solid rgba(0,194,255,0.2);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px">
-      <div style="font-size:11px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">&#x1F511; Groq API Key</div>
-      <p style="font-size:12px;color:var(--muted);line-height:1.65;margin-bottom:10px">To enable Ask AI, enter your free <strong style="color:var(--white)">Groq API Key</strong>:<br>
-        1. Go to <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a> and sign in (Google or email)<br>
-        2. Click <strong style="color:var(--white)">API Keys</strong> → <strong style="color:var(--white)">Create API Key</strong><br>
-        3. Copy the key (starts with <span style="font-family:'IBM Plex Mono',monospace;color:var(--cyan);font-size:11px">gsk_</span>) and paste it below<br>
-        4. Free tier — no credit card required.
-      </p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <input id="askai-key-inp" class="filter-input" type="password" placeholder="gsk_..." style="flex:1;min-width:200px;font-family:'IBM Plex Mono',monospace;font-size:12px">
-        <button class="btn btn-primary" onclick="loadAskAiKey()">&#x2714; Save Key</button>
-        <button class="btn btn-ghost btn-sm" onclick="hideApiKeyPanel()">Cancel</button>
-      </div>
-      <div id="askai-key-status" style="font-size:11px;color:var(--dim);margin-top:8px"></div>
     </div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px">
       <button class="btn btn-ghost btn-sm" onclick="askSuggestion(this)">What happened on reconciliation this month?</button>
@@ -1960,31 +1957,28 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
     <div id="help-panel-start">
       <div class="card">
         <div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:16px;text-transform:uppercase;letter-spacing:.12em">Quick Start Guide</div>
-        <!-- AI Setup box -->
-        <div style="margin-bottom:16px;padding:14px 16px;background:rgba(240,165,0,0.07);border:1px solid rgba(240,165,0,0.25);border-radius:10px;position:relative;overflow:hidden">
-          <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--gold),transparent)"></div>
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:10px">&#x26A0; PolicyPulse uses TWO separate AI services — both are free</div>
+        <div style="margin-bottom:16px;padding:14px 16px;background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.2);border-radius:10px;position:relative;overflow:hidden">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:10px">&#x2139; PolicyPulse uses TWO AI services — both keys go in Render, not the browser</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;color:var(--muted);line-height:1.7">
             <div style="background:rgba(0,0,0,.2);border-radius:8px;padding:10px 12px">
-              <div style="font-size:11px;font-weight:700;color:var(--white);margin-bottom:4px">&#x1F916; Groq AI (frontend)</div>
-              Used for: <strong style="color:var(--text)">Ask AI</strong>, article-level <strong style="color:var(--text)">Generate</strong> button, citation refining.<br>
-              Key goes into the <strong style="color:var(--text)">app on your browser</strong> (never sent to the server).<br>
-              Get it free at <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a>.
+              <div style="font-size:11px;font-weight:700;color:var(--white);margin-bottom:4px">&#x1F4E1; Gemini AI</div>
+              Used for: automatic article analysis during every scrape — relevance scoring, domain tagging, "Why It Matters" summaries.<br>
+              Render env var: <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">GEMINI_API_KEY</code><br>
+              Get free at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--cyan)">aistudio.google.com/apikey</a>.
             </div>
             <div style="background:rgba(0,0,0,.2);border-radius:8px;padding:10px 12px">
-              <div style="font-size:11px;font-weight:700;color:var(--white);margin-bottom:4px">&#x1F4E1; Gemini AI (backend scraper)</div>
-              Used for: <strong style="color:var(--text)">automatic article analysis</strong> during every scrape run — relevance scoring, domain tagging, "Why It Matters" summaries.<br>
-              Key goes into <strong style="color:var(--text)">Render environment variables</strong> as <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">GEMINI_API_KEY</code>.<br>
-              Get it free at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--cyan)">aistudio.google.com/apikey</a>.
+              <div style="font-size:11px;font-weight:700;color:var(--white);margin-bottom:4px">&#x1F916; Groq AI (Llama 3)</div>
+              Used for: Ask AI, Briefing Note, Citation AI refine, Policy Tracker evolution.<br>
+              Render env var: <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">GROQ_API_KEY</code><br>
+              Get free at <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a>.
             </div>
           </div>
           <div style="font-size:11px;color:var(--dim);margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">
-            &#x2139; If you only set up Groq: Ask AI works, but scraped articles will use keyword-based fallback analysis instead of Gemini.<br>
-            If you only set up Gemini in Render: scraped articles get full AI analysis, but Ask AI won't work until you enter a Groq key.
+            &#x2139; Both keys live in your Render environment variables — no browser key entry needed anywhere in the app.
           </div>
         </div>
         <div class="inst-step"><div class="step-num">1</div><div class="step-content"><h4>Set Up Gemini AI Key in Render (for article analysis)</h4><p>Go to your Render service &rarr; <strong style="color:var(--white)">Environment</strong> &rarr; add <code style="font-size:11px;background:rgba(0,0,0,.3);padding:1px 6px;border-radius:3px">GEMINI_API_KEY</code> with a free key from <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--cyan)">aistudio.google.com/apikey</a>. This powers automatic relevance scoring, tagging, and "Why It Matters" summaries on every article scraped.</p></div></div>
-        <div class="inst-step"><div class="step-num">2</div><div class="step-content"><h4>Get Your Free Groq API Key (for Ask AI)</h4><p>Visit <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a> &rarr; sign up &rarr; API Keys &rarr; Create Key. Free, no credit card. Paste it when PolicyPulse loads to enable the Ask AI tab, the Generate button on articles, and AI citation refining.</p></div></div>
+        <div class="inst-step"><div class="step-num">2</div><div class="step-content"><h4>Set Up Groq AI Key in Render (for Ask AI &amp; Briefing Notes)</h4><p>Go to your Render service &rarr; <strong style="color:var(--white)">Environment</strong> &rarr; add <code style="font-size:11px;background:rgba(0,0,0,.3);padding:1px 6px;border-radius:3px">GROQ_API_KEY</code> with a free key from <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a>. This powers Ask AI, Briefing Note generation, Citation AI refine, and the Policy Tracker evolution feature — all proxied securely through your backend.</p></div></div>
         <div class="inst-step"><div class="step-num">3</div><div class="step-content"><h4>Connect Your Backend</h4><p>Go to <strong style="color:var(--white)">Settings → Backend Connection</strong> and paste your Render URL (e.g. <code style="font-size:11px;background:rgba(0,0,0,.3);padding:1px 6px;border-radius:3px">https://your-app.onrender.com</code>). Click <strong style="color:var(--white)">Connect</strong>. This is required for live scraping and real article data.</p></div></div>
         <div class="inst-step"><div class="step-num">4</div><div class="step-content"><h4>Configure Your Sources</h4><p>Go to <strong style="color:var(--white)">News &amp; Articles → Sources</strong> to add or remove government/policy news sources. Click <kbd class="kbd">Scrape Now</kbd> to fetch new articles on demand.</p></div></div>
         <div class="inst-step"><div class="step-num">5</div><div class="step-content"><h4>Set Up Your Keyword Watchlist</h4><p>In <strong style="color:var(--white)">News &amp; Articles → Search &amp; Archive</strong>, add keywords like "pharmacare", "TRC", "DRIPA". Articles matching your keywords are surfaced automatically in the Dashboard.</p></div></div>
@@ -2054,10 +2048,9 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
           </div>
           Use the <strong style="color:var(--cyan)">⇆ Move to…</strong> dropdown in the Digest tab to reassign.
         </div>
-        <div style="margin-top:20px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Loading Your Groq API Key</div>
+        <div style="margin-top:20px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Groq AI (Ask AI, Briefing Notes, Citations)</div>
         <div style="font-size:12px;color:var(--muted);line-height:1.8">
-          Go to <strong style="color:var(--white)">Ask AI</strong> → click <span style="background:rgba(0,194,255,0.1);color:var(--cyan);border:1px solid rgba(0,194,255,0.25);border-radius:4px;padding:1px 7px;font-size:11px">🔑 Load API Key</span> → paste your key (starts with <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--cyan)">gsk_</span>).<br>
-          Get a free key at <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a>. Stored in sessionStorage — clears when you close the tab.
+          All AI features are powered by Groq Llama 3 through your Render backend. Add <code style="font-size:10px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px">GROQ_API_KEY</code> to your Render environment variables — get a free key at <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a>. No browser key entry needed.
         </div>
         <div style="margin-top:20px;font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Citation Formats</div>
         <div style="font-size:12px;color:var(--muted);line-height:1.8">
@@ -2540,6 +2533,49 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
           <button class="btn btn-ghost btn-sm" onclick="showTab('help')">&#x1F4CB; Help &amp; Quick Start</button>
           <button class="btn btn-ghost btn-sm" onclick="showTab('privacy')">&#x1F512; Privacy</button>
         </div>
+      </div>
+
+      <!-- ── DATABASE MANAGEMENT ── -->
+      <div class="card" style="margin-bottom:12px;border-color:rgba(244,63,94,0.2)">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#fb7185;margin-bottom:12px">&#x1F5D1; Database Management</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.7">Remove old news articles to keep the database lean. Staged articles are never deleted.</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+          <label style="font-size:12px;color:var(--text)">Delete articles older than</label>
+          <input type="number" id="prune-days-inp" value="180" min="30" max="3650"
+            style="width:70px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--text);text-align:center">
+          <span style="font-size:12px;color:var(--muted)">days</span>
+          <button class="btn btn-ghost btn-sm" onclick="prunePreview()">&#x1F50D; Preview</button>
+          <button class="btn btn-red btn-sm" onclick="pruneArticles()">&#x1F5D1; Prune Now</button>
+        </div>
+        <div id="prune-result" style="display:none;padding:10px 14px;border-radius:8px;font-size:12px"></div>
+      </div>
+
+      <!-- ── NOTION INTEGRATION (panel) ── -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a78bfa;margin-bottom:12px">&#x1F5D2; Notion Integration</div>
+        <div id="notion-status-bar-s" style="margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">
+          <span id="notion-status-icon-s">&#x26AA;</span>
+          <span id="notion-status-text-s" style="color:var(--muted)">Not connected</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Integration Token</div>
+            <div style="display:flex;gap:8px">
+              <input id="notion-token-inp" type="password" class="filter-input" placeholder="ntn_xxxxxxxxxxxx" style="flex:1;font-family:monospace;font-size:12px">
+              <button class="btn btn-ghost btn-sm" style="color:#a78bfa;border-color:rgba(167,139,250,.3)" onclick="saveNotionSettings()">Save &amp; Test</button>
+              <button class="btn btn-ghost btn-sm" onclick="clearNotionSettings()">Disconnect</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Articles Database ID</div>
+            <input id="notion-article-db-inp" class="filter-input" placeholder="32-character database ID" style="width:100%;font-family:monospace;font-size:12px">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Notes Database ID <span style="opacity:.6">(optional)</span></div>
+            <input id="notion-notes-db-inp" class="filter-input" placeholder="32-character database ID" style="width:100%;font-family:monospace;font-size:12px">
+          </div>
+        </div>
+        <div id="notion-test-result" style="margin-top:8px;font-size:12px;display:none"></div>
       </div>
 
     </div>
@@ -3548,6 +3584,7 @@ function buildResearchCard(a, forDashboard){
     +'<span class="article-url-text">'+escHtml(a.url||'')+'</span>'
     +(a.url?'<a href="'+escHtml(a.url)+'" target="_blank" rel="noopener" class="btn-copy-url btn-sm" onclick="event.stopPropagation()" title="Open in new tab" style="text-decoration:none">&#x2197; Open</a>':'')
     +(a.doi?'<a href="https://doi.org/'+encodeURIComponent((a.doi||'').replace('https://doi.org/',''))+'" target="_blank" rel="noopener" class="btn-copy-url btn-sm" style="color:var(--cyan);text-decoration:none" title="DOI link" onclick="event.stopPropagation()">DOI &#x2197;</a>':'')
+    +(a.doi?'<button class="btn-copy-url btn-sm" style="background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.3);color:#10b981" id="upw-'+a.id+'" onclick="event.stopPropagation();checkUnpaywall(\''+escHtml(a.doi||'')+'\',this)" title="Find free legal PDF via Unpaywall">&#x1F513; Free PDF</button>':'')
     +'</div>'
     // authors
     +(a.authors?'<div style="font-size:11px;color:var(--dim);margin-bottom:5px;font-family:\'IBM Plex Mono\',monospace">&#x270D; '+escHtml(a.authors)+'</div>':'')
@@ -4449,7 +4486,7 @@ let digestSections=DS_DEF.map(s=>({...s,items:[]}));
 let watchlist=["Indigenous","DRIPA","TRC","SSHRC","budget","pharmacare"];
 let showUnreadOnly=true;
 let chatHistory=[];
-let apiKey='';
+var apiKey='';//legacy stub — key now lives in Render env var GROQ_API_KEY
 let notionToken = localStorage.getItem('pp_notion_token') || '';
 let notionArticleDbId = localStorage.getItem('pp_notion_article_db') || '';
 let notionNotesDbId = localStorage.getItem('pp_notion_notes_db') || '';
@@ -4908,33 +4945,23 @@ function filterTag(tag, el){
   renderFeed();
 }
 
-function showApiKeyPanel(){
-  var panel = document.getElementById('api-key-panel');
-  if(panel){ panel.style.display = panel.style.display==='none'?'block':'none'; }
-  // Pre-fill if key exists
-  var k = sessionStorage.getItem('pp_groq_key');
-  var inp = document.getElementById('askai-key-inp');
-  if(k && inp) inp.value = k;
-  var statusEl = document.getElementById('askai-key-status');
-  if(statusEl) statusEl.textContent = k ? '\u2714 Key loaded (' + k.slice(0,8) + '...)' : '';
+function toggleMoreMenu(e){
+  if(e) e.stopPropagation();
+  var menu = document.getElementById('nav-more-menu');
+  if(!menu) return;
+  var open = menu.style.display !== 'none';
+  menu.style.display = open ? 'none' : 'block';
+  if(!open){
+    // close when clicking outside
+    setTimeout(function(){
+      document.addEventListener('click', function _close(){ menu.style.display='none'; document.removeEventListener('click',_close); });
+    }, 0);
+  }
 }
-function hideApiKeyPanel(){
-  var panel = document.getElementById('api-key-panel');
-  if(panel) panel.style.display = 'none';
-}
-function loadAskAiKey(){
-  var inp = document.getElementById('askai-key-inp');
-  var k = (inp&&inp.value||'').trim();
-  if(!k){ showToast('\u26A0;','Key Required','Please enter your Groq API key.',3000); return; }
-  apiKey = k;
-  sessionStorage.setItem('pp_groq_key', k);
-  var statusEl = document.getElementById('askai-key-status');
-  if(statusEl) statusEl.textContent = '\u2714 Key saved — Ask AI is now active!';
-  var statusBar = document.getElementById('askai-status');
-  if(statusBar) statusBar.textContent = 'Query your policy database using Groq AI (Llama 3) — fast, free, grounded in your tracked articles';
-  showToast('\u1F511;','API Key Saved','Groq AI is now active. You can start asking questions!',3500);
-  setTimeout(function(){ hideApiKeyPanel(); }, 1500);
-}
+// Groq key no longer needed in browser — stubs kept for any residual calls
+function showApiKeyPanel(){}
+function hideApiKeyPanel(){}
+function loadAskAiKey(){ showToast('&#x2705;','No Key Needed','Groq AI runs through your Render backend automatically.',3500); }
 var _appInitialized = false;
 async function init(){
   if(_appInitialized) return;
@@ -5029,6 +5056,10 @@ async function showTab(n){
     if(pg) pg.style.display=t===n?'block':'none';
     if(tb) tb.classList.toggle('active',t===n);
   });
+  // Mark the More button active when one of its children is selected
+  var moreBtn = document.getElementById('tab-more');
+  var moreTabs = ['notes','subscribers','help','privacy'];
+  if(moreBtn) moreBtn.classList.toggle('active', moreTabs.includes(n));
   // Track tab navigation in Google Analytics
   if(typeof gtag!=='undefined') gtag('event','tab_view',{event_category:'Navigation',event_label:n});
   if(n==='dashboard'){
@@ -5088,7 +5119,7 @@ async function showTab(n){
   if(n==='analytics'){ renderAnalyticsDashboard(); }
   if(n==='tracker'){   renderPolicyTracker(); }
 
-  if(n==='settings'){  initSettingsTab(); }
+  if(n==='settings'){  initSettingsTab(); initNotionTab(); }
 }
 
 function sIcon(s){return s==='Critical'?'🔴':s==='Supportive'?'🟢':'⚪';}
@@ -5891,8 +5922,8 @@ function renderDigestHistory(){
       +'<td style="color:var(--cyan);font-size:11px;font-family:IBM Plex Mono,monospace">'+(d.token||'')+'</td>'
       +'<td><div style="display:flex;gap:5px;flex-wrap:wrap">'
       +(publicUrl?'<a href="'+publicUrl+'" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">&#x1F517; View</a>':'<button class="btn btn-ghost btn-sm" disabled title="Backend not connected">View</button>')
-      +'<button class="btn btn-cyan btn-sm" onclick="resendDigestEntry('+(d.id||0)+',\'"'+escHtml(d.token||'')+'\'",\'"'+escHtml(d.subject||'')+'\'")">&#x2709; Re-send</button>'
-      +'<button class="btn btn-ghost btn-sm" onclick="copyDigestToken(\'"'+escHtml(d.token||'')+'\'")">&#x2398; URL</button>'
+      +'<button class="btn btn-cyan btn-sm" onclick="resendDigestEntry('+d.id+',\''+escHtml(d.token||'')+'\',\''+escHtml((d.subject||'').replace(/'/g,'&#39;'))+'\')">&#x2709; Re-send</button>'
+      +'<button class="btn btn-ghost btn-sm" onclick="copyDigestToken(\''+escHtml(d.token||'')+'\')">&#x2398; URL</button>'
       +'</div></td></tr>';
   }).join('');
 }
@@ -6488,8 +6519,7 @@ function applyStoredAnalyses(){
 async function generateWhyItMatters(){
   var a = articles.find(function(x){ return x.id === _previewArticleId; });
   if(!a) return;
-  var key = apiKey || sessionStorage.getItem('pp_groq_key');
-  if(!key){ showToast('&#x1F511;','No API Key','Enter your Groq key to use AI features.',4000); return; }
+  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Render backend to use AI features.',4000); return; }
 
   var btn = document.getElementById('generate-why-btn');
   var whyEl = document.getElementById('preview-why');
@@ -6523,22 +6553,18 @@ async function generateWhyItMatters(){
       + 'Title: ' + a.title + '\nSource: ' + a.source + '\nDomain: ' + (a.domain||'') + '\nExisting summary: ' + (a.summary||'');
 
   try {
-    var resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    var d = await apiFetch('/ai/chat', {
       method: 'POST',
-      headers: {'Content-Type':'application/json','Authorization':'Bearer '+key},
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
         messages: [
           {role:'system', content:'Return only valid JSON. No markdown, no explanation, no backticks.'},
           {role:'user', content: prompt}
         ],
-        max_tokens: 400, temperature: 0.2
+        max_tokens: 400
       })
     });
-    var data = await resp.json();
-    if(data.error) throw new Error(data.error.message||'Groq error');
-    var raw = data.choices && data.choices[0] ? data.choices[0].message.content.trim() : '';
-    raw = raw.replace(/```json|```/g,'').trim();
+    if(!d || !d.ok) throw new Error((d&&d.detail)||'AI request failed');
+    var raw = (d.content||'').replace(/```json|```/g,'').trim();
     var parsed = JSON.parse(raw);
 
     // Update the article object in memory
@@ -7056,8 +7082,7 @@ function buildAllFormats(e){
 
 /* ── AI Auto-Generate ── */
 async function autoGenerateAll(){
-  var key = apiKey || sessionStorage.getItem('pp_groq_key');
-  if(!key){ showToast('&#x1F511;','No API Key','Enter your Groq key to use AI auto-generation.',4000); return; }
+  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Render backend to use AI features.',4000); return; }
   if(!_citations.length){ showToast('&#x26A0;','No Citations','Add some citations first.',3000); return; }
 
   // Disable the button and show a live progress counter
@@ -7075,7 +7100,7 @@ async function autoGenerateAll(){
   for(var i=0;i<_citations.length;i++){
     var c = _citations[i];
     if(c.aiGenerated) continue;
-    await aiEnhanceCitation(i, key);
+    await aiEnhanceCitation(i);
     done++;
     updateProgress();
     renderCitations(); // update each entry as it comes in
@@ -7086,7 +7111,7 @@ async function autoGenerateAll(){
   showToast('&#x2713;','Done','All '+total+' citation'+(total!==1?'s':'')+' AI-enhanced.',3000);
 }
 
-async function aiEnhanceCitation(idx, key){
+async function aiEnhanceCitation(idx){
   var c = _citations[idx];
   if(!c) return;
   try {
@@ -7100,22 +7125,18 @@ async function aiEnhanceCitation(idx, key){
       + 'Respond ONLY with valid JSON in this exact format (no markdown):\n'
       + '{"APA":"...","MLA":"...","Chicago":"..."}';
 
-    var resp = await fetch('https://api.groq.com/openai/v1/chat/completions',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({
-        model:'llama-3.3-70b-versatile',
-        messages:[
-          {role:'system',content:'You are a citation expert. Generate accurate academic citations in APA 7th, MLA 9th, and Chicago 17th edition formats. Return only the JSON object requested, no additional text.'},
-          {role:'user',content:prompt}
+    var d = await apiFetch('/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        messages: [
+          {role:'system', content:'You are a citation expert. Generate accurate academic citations in APA 7th, MLA 9th, and Chicago 17th edition formats. Return only the JSON object requested, no additional text.'},
+          {role:'user', content: prompt}
         ],
-        max_tokens:600, temperature:0.1
+        max_tokens: 600
       })
     });
-    var data = await resp.json();
-    if(data.error) throw new Error(data.error.message);
-    var text = data.choices&&data.choices[0]?data.choices[0].message.content:'';
-    text = text.replace(/```json|```/g,'').trim();
+    if(!d || !d.ok) throw new Error((d&&d.detail)||'AI request failed');
+    var text = (d.content||'').replace(/```json|```/g,'').trim();
     var parsed = JSON.parse(text);
     if(parsed.APA && parsed.MLA && parsed.Chicago){
       _citations[idx].formatted = parsed;
@@ -7129,11 +7150,10 @@ async function aiEnhanceCitation(idx, key){
 }
 
 async function aiGenerateSingle(idx){
-  var key = apiKey || sessionStorage.getItem('pp_groq_key');
-  if(!key){ showToast('&#x1F511;','No API Key','Enter your Groq key.',4000); return; }
+  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Render backend to use AI features.',4000); return; }
   var el = document.getElementById('cite-entry-'+idx);
   if(el) el.classList.add('generating');
-  await aiEnhanceCitation(idx, key);
+  await aiEnhanceCitation(idx);
   renderCitations();
   showToast('&#x2713;','Citation Generated','AI-enhanced citation ready.',2500);
 }
@@ -7300,8 +7320,6 @@ function enterApp(){
   localStorage.setItem('pp_visited','1');
   if(typeof gtag!=='undefined') gtag('event','enter_app',{event_category:'Navigation'});
   if(!_appInitialized) init();
-  var k = sessionStorage.getItem('pp_groq_key');
-  if(!k) document.getElementById('api-modal').classList.add('show');
 }
 
 /* ═══ ONBOARDING TOUR ═══ */
@@ -7325,8 +7343,6 @@ function startTour(){
   // Close landing if open
   var lp = document.getElementById('landing-page');
   if(lp && lp.style.display!=='none') enterApp();
-  // Always hide API modal so it doesn't appear over the tour
-  document.getElementById('api-modal').classList.remove('show');
   _tourStep = 0;
   _tourActive = true;
   document.getElementById('tour-overlay').style.display='block';
@@ -8128,10 +8144,25 @@ function initNotionTab(){
   if(ti) ti.value = notionToken ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : '';
   if(ai) ai.value = notionArticleDbId || '';
   if(ni) ni.value = notionNotesDbId   || '';
-  if(notionToken && API_BASE) updateNotionStatusBar('connected');
-  else if(notionToken)        updateNotionStatusBar('no-backend');
-  else                        updateNotionStatusBar('disconnected');
+  if(notionToken && API_BASE){ updateNotionStatusBar('connected'); _syncNotionSettingsPanel('connected'); }
+  else if(notionToken)        { updateNotionStatusBar('no-backend'); _syncNotionSettingsPanel('no-backend'); }
+  else                        { updateNotionStatusBar('disconnected'); _syncNotionSettingsPanel('disconnected'); }
   updateNotionButtons();
+}
+
+function _syncNotionSettingsPanel(state){
+  var icon = document.getElementById('notion-status-icon-s');
+  var text = document.getElementById('notion-status-text-s');
+  var map  = {
+    disconnected: ['&#x26AA;','Not connected — paste your token in the field below'],
+    'no-backend': ['&#x1F7E0;','Render backend required to use Notion'],
+    connected:    ['&#x1F7E2;','Connected'],
+    error:        ['&#x1F534;','Connection error'],
+    testing:      ['&#x1F7E1;','Testing\u2026'],
+  };
+  var m = map[state] || map.disconnected;
+  if(icon) icon.innerHTML = m[0];
+  if(text) text.textContent = m[1];
 }
 
 
@@ -8646,9 +8677,8 @@ function _briefingStatus(msg, type){
 }
 
 async function generateBriefingNote(){
-  var key = apiKey || sessionStorage.getItem('pp_groq_key');
-  if(!key){
-    showToast('🔑','No API Key','Enter your Groq key in the Ask AI tab first.',4000);
+  if(!API_BASE){
+    showToast('&#x26A0;','No Backend','Connect your Render backend to generate briefing notes.',4000);
     return;
   }
   if(!_briefingSelected.size){
@@ -8707,23 +8737,19 @@ async function generateBriefingNote(){
 
   var aiText = '';
   try {
-    var resp = await fetch('https://api.groq.com/openai/v1/chat/completions',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({
-        model:'llama-3.3-70b-versatile',
-        messages:[
-          {role:'system',content:systemPrompt},
-          {role:'user',content:userPrompt}
+    var d = await apiFetch('/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        messages: [
+          {role:'system', content:systemPrompt},
+          {role:'user',   content:userPrompt}
         ],
-        max_tokens:2500,
-        temperature:0.25,
+        max_tokens: 2500
       })
     });
-    var data = await resp.json();
-    if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
-    aiText = data.choices&&data.choices[0] ? data.choices[0].message.content.trim() : '';
-    if(!aiText) throw new Error('Empty response from Groq');
+    if(!d || !d.ok) throw new Error((d&&d.detail)||'AI request failed');
+    aiText = (d.content||'').trim();
+    if(!aiText) throw new Error('Empty response from AI');
   } catch(e){
     _briefingStatus('⚠ AI error: '+escHtml(e.message), 'error');
     ['briefing-generate-btn','briefing-generate-btn2'].forEach(function(id){
@@ -9182,8 +9208,69 @@ function exportAnalyticsPDF(){
    GOOGLE SHEETS / CSV EXPORT
    ═══════════════════════════════════════════════════════════════════ */
 
-function exportToGoogleSheets(){
-  var days = parseInt((document.getElementById('analytics-days')||{}).value||9999);
+/* ── CSV EXPORT (News feed — respects active filters) ── */
+function exportNewsCSV(){
+  var q    = (document.getElementById('search-input')||{}).value||'';
+  var dom  = (document.getElementById('filter-domain')||{}).value||'';
+  var jur  = (document.getElementById('filter-juris')||{}).value||'';
+  var sent = (document.getElementById('filter-sentiment')||{}).value||'';
+  var list = articles.filter(function(a){
+    if(dom && !(a.domain||'').includes(dom)) return false;
+    if(jur  && a.jurisdiction!==jur) return false;
+    if(sent && a.sentiment!==sent) return false;
+    if(q){var hay=((a.title||'')+' '+(a.summary||'')).toLowerCase();if(!hay.includes(q.toLowerCase()))return false;}
+    return true;
+  });
+  if(!list.length){ showToast('&#x26A0;','Nothing to Export','No articles match the current filters.',3000); return; }
+  var headers = ['Title','Source','Domain','Jurisdiction','Relevance','Sentiment','Published','Summary','Why It Matters','URL','Tags'];
+  var rows = list.map(function(a){
+    return [
+      '"'+(a.title||'').replace(/"/g,'""')+'"',
+      '"'+(a.source||'').replace(/"/g,'""')+'"',
+      '"'+(a.domain||'').replace(/"/g,'""')+'"',
+      '"'+(a.jurisdiction||'').replace(/"/g,'""')+'"',
+      a.relevance||'',
+      '"'+(a.sentiment||'').replace(/"/g,'""')+'"',
+      '"'+(a.pub_date||a.pubDate||'').replace(/"/g,'""')+'"',
+      '"'+(a.summary||'').replace(/"/g,'""').replace(/\n/g,' ')+'"',
+      '"'+(a.why_it_matters||a.whyItMatters||'').replace(/"/g,'""').replace(/\n/g,' ')+'"',
+      '"'+(a.url||'').replace(/"/g,'""')+'"',
+      '"'+(a.tags||'').replace(/"/g,'""')+'"',
+    ].join(',');
+  });
+  var csv = '\uFEFF'+[headers.join(',')].concat(rows).join('\r\n');
+  var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var url  = URL.createObjectURL(blob);
+  var link = document.createElement('a');
+  link.href=url; link.download='PolicyPulse-News-'+new Date().toISOString().slice(0,10)+'.csv';
+  link.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},8000);
+  showToast('&#x2B07;','CSV Exported',list.length+' articles saved.',3000);
+}
+
+/* ── UNPAYWALL — find legal open-access PDFs by DOI ── */
+async function checkUnpaywall(doi, btnEl){
+  if(!doi){ showToast('&#x26A0;','No DOI','This article has no DOI — cannot check Unpaywall.',3000); return; }
+  if(btnEl){ btnEl.disabled=true; btnEl.textContent='Checking\u2026'; }
+  var cleanDoi = doi.replace('https://doi.org/','').replace('http://doi.org/','');
+  try {
+    var resp = await fetch('https://api.unpaywall.org/v2/'+encodeURIComponent(cleanDoi)+'?email=policypulse@example.com');
+    var data = await resp.json();
+    if(data.best_oa_location && data.best_oa_location.url_for_pdf){
+      window.open(data.best_oa_location.url_for_pdf,'_blank','noopener');
+      showToast('&#x1F513;','Open Access PDF Found','Free legal PDF opened via Unpaywall.',4000);
+    } else if(data.oa_status && data.oa_status !== 'closed'){
+      var landing = (data.best_oa_location && data.best_oa_location.url) || ('https://doi.org/'+cleanDoi);
+      window.open(landing,'_blank','noopener');
+      showToast('&#x1F513;','Open Access Available','Landing page opened \u2014 no direct PDF link found.',4000);
+    } else {
+      showToast('&#x1F512;','No Free Version Found','Unpaywall found no open-access version of this article.',4000);
+    }
+  } catch(e){ showToast('&#x26A0;','Unpaywall Error',e.message,4000); }
+  if(btnEl){ btnEl.disabled=false; btnEl.innerHTML='&#x1F513; Free PDF'; }
+}
+
+function exportToGoogleSheets(){  var days = parseInt((document.getElementById('analytics-days')||{}).value||9999);
   var cutoff = new Date(Date.now() - days*864e5);
   var period = articles.filter(function(a){
     var d = new Date(a.pub_date||a.pubDate||0);
@@ -9632,19 +9719,9 @@ function searchArticlesToLink(q){
 async function aiCompareChanges(){
   var topic = _trackerTopics.find(function(t){return t.id===_currentTopicId;});
   if(!topic) return;
-  var key = apiKey || sessionStorage.getItem('pp_groq_key');
-  if(!key){
+  if(!API_BASE){
     var aiEl = document.getElementById('tracker-ai-comparison');
-    if(aiEl){
-      aiEl.style.display = 'block';
-      aiEl.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:4px 0">'
-        +'<span style="font-size:18px">&#x1F511;</span>'
-        +'<div>'
-        +'<div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:3px">Groq API key required</div>'
-        +'<div style="font-size:11px;color:var(--muted)">Go to the <button onclick="showTab(\'askai\')" style="background:none;border:none;color:var(--cyan);cursor:pointer;font-size:11px;padding:0;font-family:inherit;text-decoration:underline">Ask AI tab</button> and click <strong style="color:var(--text)">Load API Key</strong> to enable AI features. Get a free key at <a href="https://console.groq.com" target="_blank" style="color:var(--cyan)">console.groq.com</a>.</div>'
-        +'</div>'
-        +'</div>';
-    }
+    if(aiEl){ aiEl.style.display='block'; aiEl.textContent='Connect your Render backend to use AI features.'; }
     return;
   }
 
@@ -9664,21 +9741,18 @@ async function aiCompareChanges(){
   }).join('\n\n');
 
   try {
-    var resp = await fetch('https://api.groq.com/openai/v1/chat/completions',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({
-        model:'llama-3.3-70b-versatile',
-        messages:[
-          {role:'system',content:'You are a senior Canadian policy analyst. Analyze how a policy issue has evolved over time based on article coverage.'},
-          {role:'user',content:'Analyze the evolution of this policy topic: "'+topic.name+'"\n\nCompare these articles in chronological order and tell me:\n1. What is NEW or CHANGED in the most recent coverage vs earlier coverage?\n2. How has the policy position shifted?\n3. What should a government relations professional watch for next?\n\nARTICLES:\n'+context+'\n\nBe concise (3-4 sentences per point). Focus on what is genuinely new, not repeated context.'}
+    var d = await apiFetch('/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        messages: [
+          {role:'system', content:'You are a senior Canadian policy analyst. Analyze how a policy issue has evolved over time based on article coverage.'},
+          {role:'user',   content:'Analyze the evolution of this policy topic: "'+topic.name+'"\n\nCompare these articles in chronological order and tell me:\n1. What is NEW or CHANGED in the most recent coverage vs earlier coverage?\n2. How has the policy position shifted?\n3. What should a government relations professional watch for next?\n\nARTICLES:\n'+context+'\n\nBe concise (3-4 sentences per point). Focus on what is genuinely new, not repeated context.'}
         ],
-        max_tokens:600, temperature:0.2
+        max_tokens: 600
       })
     });
-    var data = await resp.json();
-    if(data.error) throw new Error(data.error.message);
-    var reply = data.choices&&data.choices[0]?data.choices[0].message.content.trim():'No response.';
+    if(!d || !d.ok) throw new Error((d&&d.detail)||'AI request failed');
+    var reply = (d.content||'').trim();
     if(aiEl){ aiEl.style.display='block'; aiEl.innerHTML='<strong style="color:var(--cyan);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">&#x1F916; AI: What Changed?</strong><br><br>'+escHtml(reply).replace(/\n/g,'<br>'); }
   } catch(e){
     if(aiEl){ aiEl.textContent='Error: '+e.message; }
