@@ -1002,7 +1002,7 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
   <!-- More dropdown -->
   <div class="nav-more-wrap" id="nav-more-wrap">
     <button class="nav-btn" onclick="toggleMoreMenu(event)" id="tab-more">More &#x25BE;</button>
-    <div id="nav-more-menu" style="display:none;position:absolute;top:100%;right:0;background:var(--bg2);border:1px solid var(--border);border-radius:0 0 10px 10px;min-width:160px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4)">
+    <div id="nav-more-menu" style="display:none;position:fixed;background:var(--bg2);border:1px solid var(--border);border-radius:0 0 10px 10px;min-width:160px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4)">
       <button class="nav-btn" style="display:block;width:100%;text-align:left;border-bottom:1px solid var(--border)" onclick="showTab('notes');toggleMoreMenu()" id="tab-notes">&#x1F4DD; Notes</button>
       <button class="nav-btn" style="display:block;width:100%;text-align:left;border-bottom:1px solid var(--border)" onclick="showTab('subscribers');toggleMoreMenu()" id="tab-subscribers">👥 Subscribers</button>
       <button class="nav-btn" style="display:block;width:100%;text-align:left;border-bottom:1px solid var(--border)" onclick="showTab('help');toggleMoreMenu()" id="tab-help">❓ Help</button>
@@ -4238,8 +4238,13 @@ async function apiFetch(path, opts) {
     var r = await fetch(API_BASE + path, Object.assign({ headers: headers, signal: controller.signal }, opts || {}));
     clearTimeout(timer);
     if (!r.ok) {
-      // For Notion routes, return error body so caller gets real detail
-      if(path.startsWith('/notion')){
+      // For Notion and AI-chat routes, return the error body so the caller
+      // gets the real `detail` message (e.g. "GROQ_API_KEY not set in Render
+      // environment variables") instead of a generic failure. Without this,
+      // every /ai/chat failure (Briefing Note, Ask AI, Citations AI refine,
+      // Policy Tracker evolution) collapses to the same unhelpful
+      // "AI request failed" toast regardless of the actual cause.
+      if(path.startsWith('/notion') || path === '/ai/chat'){
         var errBody = null;
         try { errBody = await r.json(); } catch(e2){}
         return { error: true, detail: (errBody && errBody.detail) || 'HTTP ' + r.status };
@@ -4950,13 +4955,26 @@ function toggleMoreMenu(e){
   var menu = document.getElementById('nav-more-menu');
   if(!menu) return;
   var open = menu.style.display !== 'none';
-  menu.style.display = open ? 'none' : 'block';
-  if(!open){
-    // close when clicking outside
-    setTimeout(function(){
-      document.addEventListener('click', function _close(){ menu.style.display='none'; document.removeEventListener('click',_close); });
-    }, 0);
+  if(open){
+    menu.style.display = 'none';
+    return;
   }
+  // #nav has overflow-x:auto, which forces overflow-y to clip too — so an
+  // absolutely-positioned dropdown anchored inside #nav gets hidden below
+  // the nav bar. Using position:fixed (set in the markup) and computing
+  // coordinates from the button's viewport position escapes that clipping.
+  var btn = document.getElementById('tab-more');
+  if(btn){
+    var rect = btn.getBoundingClientRect();
+    menu.style.top   = rect.bottom + 'px';
+    menu.style.left  = '';
+    menu.style.right = (window.innerWidth - rect.right) + 'px';
+  }
+  menu.style.display = 'block';
+  // close when clicking outside
+  setTimeout(function(){
+    document.addEventListener('click', function _close(){ menu.style.display='none'; document.removeEventListener('click',_close); });
+  }, 0);
 }
 // Groq key no longer needed in browser — stubs kept for any residual calls
 function showApiKeyPanel(){}

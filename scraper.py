@@ -499,7 +499,7 @@ def run_scrape():
         all_errors.append(f"Google News: {e}")
         log.error(f"Google News error: {e}")
 
-    log_scrape(total_added, "; ".join(all_errors))
+    log_scrape(total_added, "; ".join(all_errors), scrape_type="news")
     log.info(f"=== Done. {total_added} new, {len(all_errors)} errors ===")
     return {
         "added":        total_added,

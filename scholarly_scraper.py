@@ -1355,8 +1355,27 @@ def run_scholarly_scrape(
             f"=== Scholarly done. "
             f"Added: {added}{dry_note}, Skipped: {skipped}, Errors: {len(errors)} ==="
         )
+
+        # Record this run in scrape_log (scrape_type='research') so the
+        # Research tab's Research Log shows scholarly/research scrape
+        # history separately from the daily news scraper's history. Before
+        # this, scholarly runs were never recorded here at all.
+        try:
+            from database import log_scrape
+            error_summary = "; ".join(errors)
+            if dry_run:
+                error_summary = (error_summary + "; " if error_summary else "") + "DRY RUN — nothing saved"
+            log_scrape(added, error_summary, scrape_type="research")
+        except Exception as log_err:
+            log.warning(f"Could not write scholarly scrape_log entry: {log_err}")
+
         return {"added": added, "skipped": skipped, "errors": errors, "dry_run": dry_run}
 
     except Exception as e:
         log.error(f"=== Scholarly scrape crashed: {e} ===", exc_info=True)
+        try:
+            from database import log_scrape
+            log_scrape(0, str(e), scrape_type="research")
+        except Exception as log_err:
+            log.warning(f"Could not write scholarly scrape_log entry: {log_err}")
         return {"added": 0, "skipped": 0, "errors": [str(e)], "dry_run": False}

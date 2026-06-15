@@ -961,18 +961,29 @@ def view_public_digest(token: str):
 
 @app.get("/scrape/log")
 def get_scrape_log(limit: int = Query(20)):
+    """News/RSS scraper history only. Pre-migration rows (scrape_type IS NULL)
+    are treated as 'news' since the scholarly scraper never logged here
+    before scrape_type existed."""
     from database import get_conn
     conn = get_conn()
-    rows = conn.execute("SELECT * FROM scrape_log ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    rows = conn.execute(
+        "SELECT * FROM scrape_log WHERE scrape_type = 'news' OR scrape_type IS NULL "
+        "ORDER BY id DESC LIMIT ?",
+        (limit,)
+    ).fetchall()
     conn.close()
     return {"log": [dict(r) for r in rows]}
 
 
 @app.get("/scholarly/scrape/log")
 def get_scholarly_scrape_log(limit: int = Query(20)):
+    """Scholarly/research scraper history only."""
     from database import get_conn
     conn = get_conn()
-    rows = conn.execute("SELECT * FROM scrape_log ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    rows = conn.execute(
+        "SELECT * FROM scrape_log WHERE scrape_type = 'research' ORDER BY id DESC LIMIT ?",
+        (limit,)
+    ).fetchall()
     conn.close()
     return {"log": [dict(r) for r in rows]}
 

@@ -192,6 +192,20 @@ def init_db():
         except Exception:
             pass  # column already exists
 
+    # ── Migration: add scrape_type column to scrape_log ────────────────────────
+    # Distinguishes news scraper runs from scholarly/research scraper runs so
+    # the News tab's Scrape Log and the Research tab's Research Log can each
+    # show only their own history instead of an identical, undifferentiated
+    # feed. Existing rows (pre-migration) are backfilled as 'news' since the
+    # scholarly scraper never wrote to this table before this change.
+    try:
+        cur.execute("ALTER TABLE scrape_log ADD COLUMN scrape_type TEXT DEFAULT 'news'")
+        conn.commit()
+        cur.execute("UPDATE scrape_log SET scrape_type = 'news' WHERE scrape_type IS NULL")
+        conn.commit()
+    except Exception:
+        pass  # column already exists
+
     conn.close()
 
 
@@ -413,11 +427,17 @@ def update_article_content(article_id: int, fields: dict):
     conn.close()
 
 
-def log_scrape(articles_added, errors=""):
+def log_scrape(articles_added, errors="", scrape_type="news"):
+    """Record a completed scrape run.
+
+    scrape_type distinguishes the daily news/RSS scraper ('news') from the
+    scholarly/research scraper ('research') so the News tab's Scrape Log and
+    the Research tab's Research Log can each show their own history.
+    """
     conn = get_conn()
     conn.execute(
-        "INSERT INTO scrape_log (scraped_at, articles_added, errors) VALUES (?,?,?)",
-        (datetime.utcnow().isoformat(), articles_added, errors)
+        "INSERT INTO scrape_log (scraped_at, articles_added, errors, scrape_type) VALUES (?,?,?,?)",
+        (datetime.utcnow().isoformat(), articles_added, errors, scrape_type)
     )
     conn.commit()
     conn.close()
