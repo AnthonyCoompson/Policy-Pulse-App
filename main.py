@@ -649,8 +649,19 @@ def send_digest_email(body: dict, _=Depends(require_auth)):
     smtp_pass = os.environ.get("SMTP_PASSWORD","")
     smtp_from = os.environ.get("SMTP_FROM", smtp_user)
 
-    if not all([smtp_host, smtp_user, smtp_pass]):
-        raise HTTPException(status_code=503, detail="SMTP not configured in Render env vars.")
+    # Surface a clear diagnostic rather than a generic 503
+    missing = []
+    if not smtp_host: missing.append("SMTP_HOST")
+    if not smtp_user: missing.append("SMTP_USER")
+    if not smtp_pass: missing.append("SMTP_PASSWORD")
+    if missing:
+        raise HTTPException(
+            status_code=503,
+            detail=f"SMTP not configured — missing Render env vars: {', '.join(missing)}. "
+                   f"Go to Render → Environment and add these variables. "
+                   f"For Gmail use smtp.gmail.com port 587 with an App Password "
+                   f"(Google Account → Security → App passwords)."
+        )
 
     subject      = body.get("subject","PolicyPulse Weekly Digest")
     html_content = body.get("html_content","")
@@ -660,8 +671,10 @@ def send_digest_email(body: dict, _=Depends(require_auth)):
 
     sent_count, errors = 0, []
     try:
-        server = smtplib.SMTP(smtp_host, smtp_port)
-        server.ehlo(); server.starttls(); server.login(smtp_user, smtp_pass)
+        server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+        server.ehlo()
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
         for r in recipients:
             try:
                 msg = MIMEMultipart("alternative")
@@ -676,8 +689,21 @@ def send_digest_email(body: dict, _=Depends(require_auth)):
             except Exception as e:
                 errors.append(f"{r.get('email')}: {e}")
         server.quit()
+    except smtplib.SMTPAuthenticationError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"SMTP authentication failed — check SMTP_USER and SMTP_PASSWORD. "
+                   f"For Gmail, use an App Password not your account password. Error: {e}"
+        )
+    except smtplib.SMTPConnectError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not connect to {smtp_host}:{smtp_port} — check SMTP_HOST and SMTP_PORT. Error: {e}"
+        )
     except smtplib.SMTPException as e:
-        raise HTTPException(status_code=500, detail=f"SMTP connection failed: {e}")
+        raise HTTPException(status_code=500, detail=f"SMTP error: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error sending digest: {e}")
 
     token = "pp-" + secrets.token_hex(4)
     save_digest(subject=subject, html_content=html_content, recipients=sent_count, token=token)
@@ -686,7 +712,43 @@ def send_digest_email(body: dict, _=Depends(require_auth)):
 
 # ── NOTION PROXY ─────────────────────────────────────────────────────────────
 
-@app.post("/notion/test")
+@app.get("/smtp/diagnose")
+def smtp_diagnose(_=Depends(require_auth)):
+    """Test SMTP configuration and return a detailed diagnostic."""
+    import smtplib
+    smtp_host = os.environ.get("SMTP_HOST","")
+    smtp_port = int(os.environ.get("SMTP_PORT", 587))
+    smtp_user = os.environ.get("SMTP_USER","")
+    smtp_pass = os.environ.get("SMTP_PASSWORD","")
+    smtp_from = os.environ.get("SMTP_FROM", smtp_user)
+
+    status = {
+        "SMTP_HOST":     smtp_host or "❌ NOT SET",
+        "SMTP_PORT":     smtp_port,
+        "SMTP_USER":     smtp_user or "❌ NOT SET",
+        "SMTP_PASSWORD": "✓ set" if smtp_pass else "❌ NOT SET",
+        "SMTP_FROM":     smtp_from or "❌ NOT SET",
+    }
+    missing = [k for k, v in status.items() if "NOT SET" in str(v)]
+    if missing:
+        return {"ok": False, "status": status, "error": f"Missing: {', '.join(missing)}",
+                "advice": "Add these to Render → Environment. For Gmail use smtp.gmail.com:587 with an App Password."}
+    try:
+        server = smtplib.SMTP(smtp_host, smtp_port, timeout=15)
+        server.ehlo()
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.quit()
+        return {"ok": True, "status": status, "message": "SMTP connection and login successful ✓"}
+    except smtplib.SMTPAuthenticationError as e:
+        return {"ok": False, "status": status, "error": f"Auth failed: {e}",
+                "advice": "For Gmail: use an App Password (Google Account → Security → App passwords), not your regular password."}
+    except smtplib.SMTPConnectError as e:
+        return {"ok": False, "status": status, "error": f"Connect failed: {e}",
+                "advice": f"Cannot reach {smtp_host}:{smtp_port}. Check SMTP_HOST and SMTP_PORT."}
+    except Exception as e:
+        return {"ok": False, "status": status, "error": str(e),
+                "advice": "Check all SMTP_* variables in Render environment settings."}
 async def notion_test(body: dict):
     import requests as req_lib
     token = body.get("token","").strip()
@@ -1244,20 +1306,32 @@ def _email_wrapper(title: str, subtitle: str, body_html: str, badge_color: str =
 def _dispatch_urgent_alerts(new_articles: list[dict]):
     import logging as _log
     log = _log.getLogger(__name__)
-    urgent = [a for a in new_articles if a.get("relevance", 0) >= 9]
-    if not urgent:
-        return
     recipients = get_alert_subscribers("urgent")
     if not recipients:
         return
-    cards = "".join(_build_article_card_html(a, "#c41e3a") for a in urgent)
-    html  = _email_wrapper(
-        title=f"🔥 {len(urgent)} Urgent Policy Alert{'s' if len(urgent)>1 else ''}",
-        subtitle=f"Critical relevance articles scraped {datetime.utcnow().strftime('%B %d, %Y')}",
-        body_html=cards, badge_color="#c41e3a",
-    )
-    result = _smtp_send(recipients, f"🔥 PolicyPulse Urgent Alert — {len(urgent)} critical article(s)", html)
-    log.info(f"[alert] urgent dispatch: sent={result['sent']} errors={result['errors']}")
+
+    # Each recipient has their own urgent_min_relevance threshold.
+    # Build a per-recipient filtered list so a subscriber who wants only
+    # 10/10 doesn't get flooded by 8/10 articles.
+    for recipient in recipients:
+        threshold = int(recipient.get("urgent_min_relevance") or 9)
+        urgent    = [a for a in new_articles if a.get("relevance", 0) >= threshold]
+        if not urgent:
+            continue
+        cards = "".join(_build_article_card_html(a, "#c41e3a") for a in urgent)
+        html  = _email_wrapper(
+            title    = f"🔥 {len(urgent)} Urgent Policy Alert{'s' if len(urgent)>1 else ''} (score {threshold}+)",
+            subtitle = f"Articles scoring {threshold}+ scraped {datetime.utcnow().strftime('%B %d, %Y')}",
+            body_html= cards,
+            badge_color="#c41e3a",
+        )
+        result = _smtp_send(
+            [{"name": recipient["name"], "email": recipient["email"]}],
+            f"🔥 PolicyPulse Urgent Alert — {len(urgent)} article(s) scoring {threshold}+",
+            html,
+        )
+        log.info(f"[alert] urgent dispatch to {recipient['email']} "
+                 f"(threshold={threshold}): sent={result['sent']} errors={result['errors']}")
 
 
 def _dispatch_keyword_alerts(new_articles: list[dict]):
@@ -1288,9 +1362,10 @@ def _dispatch_keyword_alerts(new_articles: list[dict]):
 
 @app.patch("/subscribers/{subscriber_id}/alerts")
 def update_subscriber_alert_prefs(subscriber_id: int, body: dict, _=Depends(require_auth)):
-    urgent  = int(body.get("urgent_alerts",  0))
-    keyword = int(body.get("keyword_alerts", 0))
-    update_subscriber_alerts(subscriber_id, urgent, keyword)
+    urgent   = int(body.get("urgent_alerts",         0))
+    keyword  = int(body.get("keyword_alerts",        0))
+    min_rel  = int(body.get("urgent_min_relevance",  9))
+    update_subscriber_alerts(subscriber_id, urgent, keyword, min_rel)
     return {"ok": True}
 
 

@@ -729,6 +729,13 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
   color:var(--cyan);margin:0 2px;
 }
 
+/* ── BRIEFING FORMAT CARDS ── */
+.briefing-fmt-card { transition:all .18s; }
+.briefing-fmt-card:hover { border-color:rgba(0,194,255,0.3) !important; background:rgba(0,194,255,0.05) !important; }
+body.light-mode .briefing-fmt-card { background:rgba(255,255,255,0.95) !important; border-color:rgba(0,0,0,0.1) !important; }
+body.light-mode .briefing-fmt-card.active { border-color:rgba(0,119,170,0.5) !important; background:rgba(0,119,170,0.07) !important; }
+body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); border-color:rgba(0,119,170,0.2); color:#0f1f35; }
+
 /* ── PRINT STYLES ──────────────────────────────────────────────── */
 @media print {
   #banner,#nav,#api-modal,#boot-loader,#landing-page,
@@ -1823,13 +1830,15 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
     </div>
     <div style="margin-bottom:12px;padding:11px 14px;background:rgba(0,194,255,0.05);border:1px solid rgba(0,194,255,0.15);border-radius:var(--radius);font-size:12px;color:var(--muted);line-height:1.7">
       <strong style="color:var(--text)">&#x1F514; Per-subscriber alert opt-ins &mdash;</strong>
-      <span style="color:#f87171;font-weight:600">&#x1F525; Urgent Alerts:</span> immediate email when a scraped article scores 9&ndash;10.
+      <span style="color:#f87171;font-weight:600">&#x1F525; Urgent Alerts:</span> immediate email when a scraped article meets that subscriber's personal minimum relevance score.
       <span style="color:#60a5fa;font-weight:600">&#x1F4E1; Keyword Alerts:</span> email when a watchlist keyword match is found.
+      Each subscriber sets their own <strong style="color:var(--text)">Min Score</strong> (6–10) so Anthony only gets 10/10 while another subscriber gets 8+.
       Requires SMTP in Render. Toggle per subscriber using the buttons below.
     </div>
     <div class="table-wrap" style="overflow-x:auto"><table>
       <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>
-        <th title="Immediate email for articles scoring 9-10">&#x1F525; Urgent</th>
+        <th title="Immediate email for articles at or above their personal threshold">&#x1F525; Urgent</th>
+        <th title="Personal minimum score for urgent alerts (6–10)">Min Score</th>
         <th title="Email when a watchlist keyword article is found">&#x1F4E1; Keyword</th>
         <th>Added</th><th>Actions</th></tr></thead>
       <tbody id="subscribers-tbody"></tbody>
@@ -1841,23 +1850,88 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
 
   <!-- BRIEFING NOTE GENERATOR -->
   <div id="page-briefing" style="display:none" class="fade-in">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
       <div>
         <div class="page-title">&#x1F4CB; Briefing Note Generator</div>
-        <div class="page-subtitle">Select up to 3 articles, then generate and download a structured policy brief as a Word .docx</div>
+        <div class="page-subtitle">Select up to 8 articles from news <em>or</em> research, fill institutional context, then generate a structured policy brief</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="briefingClearAll()">&#x2715; Clear</button>
         <button class="btn btn-cyan" id="briefing-generate-btn" onclick="generateBriefingNote()" disabled>&#x1F9E0; Generate Briefing Note (PDF)</button>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
-      <!-- LEFT: article picker -->
-      <div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:10px">
-          Select Articles <span id="briefing-count-label" style="font-weight:400;color:var(--dim);text-transform:none;font-size:11px;letter-spacing:0">(0 of max 8)</span>
+
+    <!-- INSTITUTIONAL CONTEXT PANEL (collapses, persists to localStorage) -->
+    <div class="card" style="margin-bottom:12px;border-color:rgba(240,165,0,0.2)">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleBriefingContext()">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold)">
+          &#x1F3DB; Institutional Context <span id="briefing-ctx-saved-badge" style="display:none;font-weight:400;text-transform:none;letter-spacing:0;color:var(--green);font-size:10px;margin-left:6px">&#x2713; Saved</span>
         </div>
-        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+        <span id="briefing-ctx-toggle-icon" style="font-size:12px;color:var(--muted)">&#x25BC;</span>
+      </div>
+      <div id="briefing-ctx-body" style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Institution name</div>
+          <input class="filter-input" id="bctx-institution" placeholder="e.g. Simon Fraser University" style="width:100%" oninput="saveBriefingContext()"></div>
+        <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Office / unit</div>
+          <input class="filter-input" id="bctx-office" placeholder="e.g. Government Relations &amp; Policy" style="width:100%" oninput="saveBriefingContext()"></div>
+        <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Prepared for</div>
+          <input class="filter-input" id="briefing-recipient" placeholder="e.g. Vice-President, External Relations" style="width:100%" oninput="saveBriefingContext()"></div>
+        <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Prepared by</div>
+          <input class="filter-input" id="briefing-author" placeholder="e.g. Policy &amp; Government Relations Office" style="width:100%" oninput="saveBriefingContext()"></div>
+        <div style="grid-column:1/-1"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Standing mandate / key commitments <span style="color:var(--dim)">(used in AI prompts — update when your priorities shift)</span></div>
+          <textarea class="why-input" id="bctx-mandate" rows="2"
+            placeholder="e.g. Advance reconciliation per DRIPA and TRC obligations; protect tri-council research funding; expand Indigenous post-secondary partnerships."
+            style="width:100%;font-size:12px;padding:8px 10px" oninput="saveBriefingContext()"></textarea></div>
+        <div style="grid-column:1/-1"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Brief purpose / context <span style="color:var(--dim)">(specific to this note — changes each time)</span></div>
+          <textarea class="why-input" id="briefing-context" rows="2"
+            placeholder="e.g. Provide senior leadership with a summary of the most significant BC and federal policy developments affecting post-secondary education this week."
+            style="width:100%;font-size:12px;padding:8px 10px"></textarea></div>
+        <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Jurisdiction / portfolio <span style="color:var(--dim)">(e.g. BC Indigenous Policy)</span></div>
+          <input class="filter-input" id="bctx-jurisdiction" placeholder="e.g. BC Indigenous Relations &amp; Reconciliation" style="width:100%" oninput="saveBriefingContext()"></div>
+
+        <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Issue / portfolio tag <span style="color:var(--dim)">(short label for header)</span></div>
+          <input class="filter-input" id="bctx-portfolio" placeholder="e.g. Indigenous Relations &amp; Reconciliation" style="width:100%" oninput="saveBriefingContext()"></div>
+
+        <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Issue Status</div>
+          <select class="filter-select" id="bctx-issue-status" style="width:100%" onchange="saveBriefingContext()">
+            <option value="">— Select —</option>
+            <option value="Emerging">🟡 Emerging</option>
+            <option value="Active">🟠 Active</option>
+            <option value="Escalating">🔴 Escalating</option>
+            <option value="Monitoring">🔵 Monitoring</option>
+            <option value="Resolved">⚪ Resolved</option>
+          </select></div>
+
+        <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Document type</div>
+          <select class="filter-select" id="bctx-action-type" style="width:100%" onchange="saveBriefingContext()">
+            <option value="Action Required">⚡ Action Required</option>
+            <option value="FYI">📋 FYI — No Action Needed</option>
+            <option value="Decision Required">✅ Decision Required</option>
+            <option value="Consultation">💬 For Consultation</option>
+          </select></div>
+
+        <div style="grid-column:1/-1"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Related institutional commitments <span style="color:var(--dim)">(DRIPA alignment, TRC obligations, tri-council commitments etc.)</span></div>
+          <textarea class="why-input" id="bctx-commitments" rows="2"
+            placeholder="e.g. Board-approved DRIPA Action Plan 2024–2027; TRC Call to Action 62 curriculum commitment; Universities Canada Indigenous Strategy signatory."
+            style="width:100%;font-size:12px;padding:8px 10px" oninput="saveBriefingContext()"></textarea></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
+      <!-- LEFT: article picker (news + research merged) -->
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)">
+            Select Articles <span id="briefing-count-label" style="font-weight:400;color:var(--dim);text-transform:none;font-size:11px;letter-spacing:0">(0 of max 8)</span>
+          </div>
+          <!-- Source toggle pills -->
+          <div style="display:flex;gap:4px">
+            <button class="pill active" id="briefing-src-news" onclick="setBriefingSource('news')" style="font-size:10px;padding:4px 10px">&#x1F4F0; News</button>
+            <button class="pill" id="briefing-src-research" onclick="setBriefingSource('research')" style="font-size:10px;padding:4px 10px">&#x1F4DA; Research</button>
+            <button class="pill" id="briefing-src-all" onclick="setBriefingSource('all')" style="font-size:10px;padding:4px 10px">All</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
           <input class="filter-input" id="briefing-search" placeholder="&#x1F50D; Filter articles..." oninput="renderBriefingArticleList()" style="flex:1;min-width:120px">
           <select class="filter-select" id="briefing-filter-domain" onchange="renderBriefingArticleList()">
             <option value="">All Domains</option>
@@ -1870,23 +1944,68 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
             <option value="date">Newest First</option>
           </select>
         </div>
-        <div id="briefing-article-list" style="max-height:560px;overflow-y:auto;display:flex;flex-direction:column;gap:5px"></div>
+        <div id="briefing-article-list" style="max-height:520px;overflow-y:auto;display:flex;flex-direction:column;gap:5px"></div>
       </div>
-      <!-- RIGHT: config + selected list -->
+      <!-- RIGHT: format selector + config + selected list -->
       <div>
+
+        <!-- FORMAT SELECTOR -->
+        <div class="card" style="margin-bottom:10px;border-color:rgba(0,194,255,0.2)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)">&#x1F4C4; Choose Format</div>
+            <button class="btn btn-cyan btn-sm" id="briefing-recommend-btn" onclick="recommendBriefingFormat()" style="font-size:10px;padding:4px 12px">&#x1F916; Recommend for Me</button>
+          </div>
+
+          <!-- AI recommendation display -->
+          <div id="briefing-recommendation" style="display:none;margin-bottom:12px;padding:10px 13px;background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.2);border-radius:8px;font-size:11px;color:var(--text);line-height:1.7"></div>
+
+          <!-- Three format cards -->
+          <div style="display:flex;flex-direction:column;gap:7px">
+
+            <!-- Policy Brief -->
+            <div id="fmt-card-brief" class="briefing-fmt-card active" onclick="setBriefingFormat('brief')"
+              style="padding:11px 13px;border-radius:8px;cursor:pointer;border:1px solid rgba(0,194,255,0.4);background:rgba(0,194,255,0.08);transition:all .18s">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+                <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--cyan);background:var(--cyan);flex-shrink:0;display:flex;align-items:center;justify-content:center">
+                  <div style="width:5px;height:5px;border-radius:50%;background:#fff"></div>
+                </div>
+                <span style="font-size:12px;font-weight:700;color:var(--white)">Policy Brief</span>
+                <span style="font-size:9px;font-weight:600;padding:1px 7px;border-radius:3px;background:rgba(0,194,255,0.15);color:var(--cyan);letter-spacing:.06em;text-transform:uppercase;margin-left:auto">Minister / Cabinet</span>
+              </div>
+              <div style="font-size:11px;color:var(--muted);line-height:1.6;padding-left:22px">BLUF opening · 3 options with risk register · Formal sign-off block · Evidenced throughout · Longest format</div>
+            </div>
+
+            <!-- Policy Memo -->
+            <div id="fmt-card-memo" class="briefing-fmt-card" onclick="setBriefingFormat('memo')"
+              style="padding:11px 13px;border-radius:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(11,24,41,0.7);transition:all .18s">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+                <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--muted);flex-shrink:0"></div>
+                <span style="font-size:12px;font-weight:700;color:var(--white)">Policy Memo</span>
+                <span style="font-size:9px;font-weight:600;padding:1px 7px;border-radius:3px;background:rgba(240,165,0,0.12);color:var(--gold);letter-spacing:.06em;text-transform:uppercase;margin-left:auto">Director / VP</span>
+              </div>
+              <div style="font-size:11px;color:var(--muted);line-height:1.6;padding-left:22px">Direct ask on line 1 · Internal collegial tone · Shared context assumed · Explicit deadline · Mid-length</div>
+            </div>
+
+            <!-- Briefing Note -->
+            <div id="fmt-card-note" class="briefing-fmt-card" onclick="setBriefingFormat('note')"
+              style="padding:11px 13px;border-radius:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(11,24,41,0.7);transition:all .18s">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+                <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--muted);flex-shrink:0"></div>
+                <span style="font-size:12px;font-weight:700;color:var(--white)">Briefing Note</span>
+                <span style="font-size:9px;font-weight:600;padding:1px 7px;border-radius:3px;background:rgba(16,185,129,0.1);color:var(--green);letter-spacing:.06em;text-transform:uppercase;margin-left:auto">Executive / Pre-meeting</span>
+              </div>
+              <div style="font-size:11px;color:var(--muted);line-height:1.6;padding-left:22px">Situation-forward · Spoken-language tone · Do Not Say section · No options required · Shortest format</div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- BRIEF SETTINGS -->
         <div class="card" style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px">&#x2699;&#xFE0F; Brief Configuration</div>
-          <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:10px">&#x2699;&#xFE0F; Settings</div>
+          <div style="display:flex;flex-direction:column;gap:9px">
             <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Title</div>
-              <input class="filter-input" id="briefing-title" placeholder="e.g. Policy Watch: Reconciliation &amp; Post-Secondary &mdash; May 2026" style="width:100%"></div>
-            <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Prepared for</div>
-              <input class="filter-input" id="briefing-recipient" placeholder="e.g. Vice-President, Government Relations" style="width:100%"></div>
-            <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Prepared by</div>
-              <input class="filter-input" id="briefing-author" placeholder="e.g. Policy &amp; Government Relations Office" style="width:100%"></div>
-            <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Purpose / Context</div>
-              <textarea class="why-input" id="briefing-context" rows="2"
-                placeholder="e.g. Provide senior leadership with a summary of the most significant BC and federal policy developments affecting post-secondary education this week."
-                style="width:100%;font-size:12px;padding:8px 10px"></textarea></div>
+              <input class="filter-input" id="briefing-title" placeholder="e.g. Policy Watch: Reconciliation &amp; Post-Secondary — May 2026" style="width:100%"></div>
             <div style="display:flex;gap:12px;flex-wrap:wrap">
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text)">
                 <input type="checkbox" id="briefing-incl-summary" checked style="accent-color:var(--cyan)"> Summaries</label>
@@ -1897,6 +2016,8 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
             </div>
           </div>
         </div>
+
+        <!-- SELECTED ARTICLES -->
         <div class="card" style="margin-bottom:10px">
           <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:8px">
             &#x1F4CB; Selected <span id="briefing-sel-count" style="font-weight:400;color:var(--dim);text-transform:none;letter-spacing:0">(0)</span>
@@ -1905,9 +2026,10 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
             <div style="font-size:11px;color:var(--dim);font-style:italic">No articles selected yet.</div>
           </div>
         </div>
+
         <button class="btn btn-primary" id="briefing-generate-btn2" onclick="generateBriefingNote()" disabled
           style="width:100%;padding:12px;font-size:13px;font-weight:700;justify-content:center">
-          &#x1F9E0; Generate Briefing Note (PDF)
+          &#x1F9E0; Generate <span id="briefing-format-label-btn">Policy Brief</span> (PDF)
         </button>
         <div id="briefing-status" style="display:none;margin-top:10px;padding:10px 14px;border-radius:7px;font-size:12px"></div>
       </div>
@@ -2492,6 +2614,12 @@ body.light-mode .note-fmt-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0
           <button class="btn btn-ghost" onclick="testBackendConnection()">&#x1F50D; Test</button>
         </div>
         <div id="setting-backend-status" style="font-size:11px;color:var(--muted)"></div>
+        <div style="margin-top:14px;padding:12px 14px;background:rgba(240,165,0,0.06);border:1px solid rgba(240,165,0,0.15);border-radius:8px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:8px">&#x2709; SMTP Email Diagnostic</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.7">Tests your SMTP credentials and returns the exact error if something is wrong. Required for digest sending and urgent alerts.</div>
+          <button class="btn btn-ghost btn-sm" onclick="runSmtpDiagnostic()" style="color:var(--gold);border-color:rgba(240,165,0,0.3)">&#x1F50D; Test SMTP Connection</button>
+          <div id="smtp-diagnostic-result" style="display:none;margin-top:10px;font-size:11px;padding:10px 12px;border-radius:7px;line-height:1.8"></div>
+        </div>
         <div style="margin-top:10px">
           <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">API Key (PP_API_KEY)</div>
           <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Set this to the same value as the PP_API_KEY environment variable in Render to enable write operations.</div>
@@ -2945,7 +3073,12 @@ function renderResearchArchive(){
   var dom = (document.getElementById('research-archive-domain')||{}).value||'';
   var db  = (document.getElementById('research-archive-db')||{}).value||'';
   var list = _researchArticles.filter(function(a){
-    if(dom && !(a.domain||'').toLowerCase().includes(dom.toLowerCase())) return false;
+    // Multi-domain: domain field may be comma-separated — match exactly
+    // against the selected value rather than a loose substring check.
+    if(dom){
+      var _archDoms = (a.domain||'').split(',').map(function(d){return d.trim().toLowerCase();});
+      if(!_archDoms.some(function(d){return d===dom.toLowerCase();})) return false;
+    }
     if(db  && (a.database_name||'') !== db) return false;
     if(q){ var hay=((a.title||'')+' '+(a.abstract||a.summary||'')+' '+(a.authors||'')).toLowerCase(); if(!hay.includes(q.toLowerCase())) return false; }
     return true;
@@ -4594,7 +4727,7 @@ function openPreview(id, event){
   var metaEl = document.getElementById('preview-meta');
   metaEl.innerHTML =
     '<span class="article-source">'+a.source+'</span>' +
-    '<span class="tag tag-domain">'+a.domain+'</span>' +
+    renderDomainTags(a.domain) +
     '<span class="tag tag-juris">'+(a.jurisdiction||'')+'</span>' +
     '<span class="relevance-badge">'+rEmoji(a.relevance)+' '+a.relevance+'/10</span>' +
     '<span class="sentiment-badge">'+sIcon(a.sentiment)+' '+a.sentiment+'</span>';
@@ -5790,7 +5923,22 @@ function showYear(y,btn){
     ? list.map(function(a){ return buildCard(a); }).join('')
     : '<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">No articles published this year.</div></div>';
 }
-function renderByDomain(){const domains=[...new Set(articles.map(a=>a.domain))];document.getElementById('domain-results').innerHTML=domains.map(d=>{const list=articles.filter(a=>a.domain===d).sort((a,b)=>new Date(b.pubDate)-new Date(a.pubDate));return`<div class="section-title">${d} <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:11px;letter-spacing:0">(${list.length})</span></div>${list.map(a=>buildCard(a)).join('')}`;}).join('');}
+function renderByDomain(){
+  var domainMap = {};
+  articles.forEach(function(a){
+    (a.domain||'Other').split(',').forEach(function(d){
+      d = d.trim();
+      if(!d) return;
+      (domainMap[d] = domainMap[d] || []).push(a);
+    });
+  });
+  var el = document.getElementById('domain-results');
+  if(!el) return;
+  el.innerHTML = Object.keys(domainMap).sort().map(function(d){
+    var list = domainMap[d].sort(function(a,b){ return new Date(b.pubDate)-new Date(a.pubDate); });
+    return '<div class="section-title">'+escHtml(d)+' <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:11px;letter-spacing:0">('+list.length+')</span></div>'+list.map(function(a){ return buildCard(a); }).join('');
+  }).join('');
+}
 
 async function scrapeNow(){
   if(typeof gtag!=='undefined') gtag('event','scrape_triggered',{event_category:'Scraper'});
@@ -5912,7 +6060,7 @@ function renderDigest(){
           +'<a href="'+a.url+'" target="_blank" style="font-size:13px;font-weight:600;color:var(--white);display:block;margin-bottom:3px;transition:color .15s" onmouseover="this.style.color=\'var(--cyan)\'" onmouseout="this.style.color=\'var(--white)\'">'+a.title+' ↗</a>'
           +'<div style="font-size:11px;color:var(--muted);margin-bottom:5px">'+a.source+' · '+a.pubDate+dbBadge+'</div>'
           +'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">'
-          +(a.domain?'<span class="tag tag-domain">'+a.domain+'</span>':'')
+          +renderDomainTags(a.domain)
           +(a.jurisdiction?'<span class="tag tag-juris">'+a.jurisdiction+'</span>':'')
           +(a.relevance?'<span class="relevance-badge">'+rEmoji(a.relevance)+' '+a.relevance+'/10</span>':'')
           +(a.sentiment?'<span class="sentiment-badge">'+sIcon(a.sentiment)+' '+a.sentiment+'</span>':'')
@@ -6001,7 +6149,10 @@ async function sendDigest(){
         const errNote = resp.errors && resp.errors.length ? ' ('+resp.errors.length+' failed)' : '';
         showToast('&#x2709;','Digest Sent','Delivered to '+(resp.sent||active.length)+' subscriber'+(active.length!==1?'s':'')+errNote+'.',5000);
       } else {
-        showToast('&#x26A0;','Send Failed','Check that SMTP is configured in your Render environment variables. See Reference Guide.',6000);
+        // Surface the real backend error detail so the user knows exactly what to fix
+        var errDetail = (resp && resp.detail) || 'Unknown error';
+        showToast('&#x26A0;','Send Failed', errDetail, 10000);
+        console.error('Digest send failed:', errDetail);
       }
     } catch(e){
       showToast('&#x26A0;','Send Failed',e.message,5000);
@@ -6135,18 +6286,28 @@ function _alertBtn(subId, type, isOn){
 }
 function renderSubscribers(){
   document.getElementById('subscribers-tbody').innerHTML=subscribers.map(function(s){
-    var ua = s.urgent_alerts===1||s.urgent_alerts===true;
-    var ka = s.keyword_alerts===1||s.keyword_alerts===true;
+    var ua  = s.urgent_alerts===1||s.urgent_alerts===true;
+    var ka  = s.keyword_alerts===1||s.keyword_alerts===true;
+    var minR= parseInt(s.urgent_min_relevance)||9;
     var name  = escHtml(s.name||'');
     var email = escHtml(s.email||'');
     var role  = escHtml(s.role||'Reader');
     var added = (s.added||s.added_date||'').slice(0,10);
+    // Min score selector — only meaningful when urgent is on
+    var minScoreSel = '<select class="sentiment-picker" style="height:26px;font-size:10px;width:70px;'+(ua?'':'opacity:.4;pointer-events:none')+'" '
+      +'onchange="saveSubThreshold('+s.id+',this.value)" title="Minimum relevance score for urgent alerts">'
+      +[6,7,8,9,10].map(function(v){
+        var emoji = v>=9?'&#x1F525;':v>=7?'&#x2B50;':'&#x1F4CC;';
+        return '<option value="'+v+'"'+(v===minR?' selected':'')+'>'+emoji+' '+v+'+</option>';
+      }).join('')
+      +'</select>';
     return '<tr>'
       +'<td style="font-weight:600;color:var(--white)">'+name+'</td>'
       +'<td style="color:var(--cyan);font-size:12px">'+email+'</td>'
       +'<td style="color:var(--muted);font-size:11px">'+role+'</td>'
       +'<td><span class="'+(s.active?'status-active':'status-inactive')+'">'+(s.active?'&#x25CF; Active':'&#x25CB; Inactive')+'</span></td>'
       +'<td style="text-align:center">'+_alertBtn(s.id,'urgent',ua)+'</td>'
+      +'<td style="text-align:center">'+minScoreSel+'</td>'
       +'<td style="text-align:center">'+_alertBtn(s.id,'keyword',ka)+'</td>'
       +'<td style="font-size:11px;color:var(--muted);font-family:\'IBM Plex Mono\',monospace">'+added+'</td>'
       +'<td><div style="display:flex;gap:6px">'
@@ -6165,13 +6326,38 @@ async function toggleSubAlert(id, type, currentVal){
   renderSubscribers();
   saveSubscribers();
   if(API_BASE){
+    var minR = parseInt(s.urgent_min_relevance)||9;
     await apiFetch('/subscribers/'+id+'/alerts',{
       method:'PATCH',
-      body:JSON.stringify({urgent_alerts:s.urgent_alerts?1:0, keyword_alerts:s.keyword_alerts?1:0})
+      body:JSON.stringify({
+        urgent_alerts:  s.urgent_alerts ?1:0,
+        keyword_alerts: s.keyword_alerts?1:0,
+        urgent_min_relevance: minR
+      })
     });
   }
   var label = type==='urgent' ? 'Urgent Alerts' : 'Keyword Alerts';
-  showToast(newVal?'&#x1F514;':'&#x1F515;', label+' '+(newVal?'Enabled':'Disabled'), s.name+(newVal?' will receive ':' will not receive ')+label.toLowerCase()+'.',2500);
+  showToast(newVal?'&#x1F514;':'&#x1F515;', label+' '+(newVal?'Enabled':'Disabled'),
+    s.name+(newVal?' will receive ':' will not receive ')+label.toLowerCase()+'.',2500);
+}
+
+async function saveSubThreshold(id, score){
+  var s = subscribers.find(function(x){ return x.id===id; });
+  if(!s) return;
+  s.urgent_min_relevance = parseInt(score)||9;
+  saveSubscribers();
+  if(API_BASE){
+    await apiFetch('/subscribers/'+id+'/alerts',{
+      method:'PATCH',
+      body:JSON.stringify({
+        urgent_alerts:  s.urgent_alerts ?1:0,
+        keyword_alerts: s.keyword_alerts?1:0,
+        urgent_min_relevance: s.urgent_min_relevance
+      })
+    });
+  }
+  showToast('&#x2B50;','Threshold Updated',
+    s.name+' will now receive urgent alerts for articles scoring '+score+'+.',2500);
 }
 async function testUrgentAlert(){
   if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Render backend to send alerts.',4000); return; }
@@ -6353,7 +6539,7 @@ function renderTray(){
   if(!alerts.length){itemsEl.innerHTML='';emptyEl.style.display='block';return;}
   emptyEl.style.display='none';
   itemsEl.innerHTML=alerts.map(function(a){
-    return '<div class="tray-item"><div style="flex:1;min-width:0"><a class="tray-title-link" href="'+a.url+'" target="_blank" rel="noopener">'+a.title+' ↗</a><div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><span class="tag tag-domain">'+a.domain+'</span><span class="relevance-badge">'+rEmoji(a.relevance)+' '+a.relevance+'/10</span><span class="sentiment-badge">'+sIcon(a.sentiment)+' '+a.sentiment+'</span><span style="font-size:10px;color:var(--dim);font-family:IBM Plex Mono,monospace">'+a.pubDate+'</span></div></div><button class="btn btn-gold btn-sm" style="flex-shrink:0;margin-top:2px" onclick="trayStage('+a.id+')">+ Stage</button></div>';
+    return '<div class="tray-item"><div style="flex:1;min-width:0"><a class="tray-title-link" href="'+a.url+'" target="_blank" rel="noopener">'+a.title+' ↗</a><div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">'+renderDomainTags(a.domain)+'<span class="relevance-badge">'+rEmoji(a.relevance)+' '+a.relevance+'/10</span><span class="sentiment-badge">'+sIcon(a.sentiment)+' '+a.sentiment+'</span><span style="font-size:10px;color:var(--dim);font-family:IBM Plex Mono,monospace">'+a.pubDate+'</span></div></div><button class="btn btn-gold btn-sm" style="flex-shrink:0;margin-top:2px" onclick="trayStage('+a.id+')">+ Stage</button></div>';
   }).join('');
 }
 function trayStage(id){toggleStage(id);renderTray();updateBadges();refreshAlerts();}
@@ -8567,15 +8753,226 @@ document.addEventListener('click',function(e){
    then uses the docx library (CDN) to produce a downloadable .docx file.
 ═══════════════════════════════════════════════════════════════════ */
 
-var _briefingSelected = new Set(); // article ids (news) selected for brief
-var _briefingMax = 3;
+/* ═══════════════════════════════════════════════════════════════════
+   BRIEFING NOTE — state
+═══════════════════════════════════════════════════════════════════ */
+
+// Each entry: { id, type:'news'|'research' }
+var _briefingSelected = new Set(); // stores "news:123" or "research:456" keys
+var _briefingMax = 8;
+var _briefingSource = 'news'; // 'news' | 'research' | 'all'
+var _briefingFormat = 'brief'; // 'brief' | 'memo' | 'note'
+
+/* ── Institutional context — persist across sessions ── */
+var _briefingCtxCollapsed = false;
+
+function loadBriefingContext(){
+  try {
+    var saved = JSON.parse(localStorage.getItem('pp_briefing_ctx') || '{}');
+    var f = function(id, val){ var el = document.getElementById(id); if(el && val) el.value = val; };
+    f('bctx-institution', saved.institution);
+    f('bctx-office',      saved.office);
+    f('briefing-recipient', saved.recipient);
+    f('briefing-author',    saved.author);
+    f('bctx-mandate',       saved.mandate);
+    f('bctx-jurisdiction',  saved.jurisdiction);
+    f('bctx-portfolio',     saved.portfolio);
+    f('bctx-commitments',   saved.commitments);
+    var statusEl = document.getElementById('bctx-issue-status');
+    if(statusEl && saved.issueStatus) statusEl.value = saved.issueStatus;
+    var actionEl = document.getElementById('bctx-action-type');
+    if(actionEl && saved.actionType)  actionEl.value = saved.actionType;
+    if(saved.institution || saved.office){
+      var badge = document.getElementById('briefing-ctx-saved-badge');
+      if(badge) badge.style.display = 'inline';
+    }
+  } catch(e){}
+}
+
+function saveBriefingContext(){
+  try {
+    var g = function(id){ var el=document.getElementById(id); return el?el.value:''; };
+    var data = {
+      institution: g('bctx-institution'),
+      office:      g('bctx-office'),
+      recipient:   g('briefing-recipient'),
+      author:      g('briefing-author'),
+      mandate:     g('bctx-mandate'),
+      jurisdiction: g('bctx-jurisdiction'),
+      portfolio:    g('bctx-portfolio'),
+      issueStatus:  g('bctx-issue-status') ? document.getElementById('bctx-issue-status').value : '',
+      actionType:   g('bctx-action-type')  ? document.getElementById('bctx-action-type').value  : 'Action Required',
+      commitments:  g('bctx-commitments'),
+    };
+    localStorage.setItem('pp_briefing_ctx', JSON.stringify(data));
+    var badge = document.getElementById('briefing-ctx-saved-badge');
+    if(badge) badge.style.display = 'inline';
+  } catch(e){}
+}
+
+function toggleBriefingContext(){
+  _briefingCtxCollapsed = !_briefingCtxCollapsed;
+  var body = document.getElementById('briefing-ctx-body');
+  var icon = document.getElementById('briefing-ctx-toggle-icon');
+  if(body) body.style.display = _briefingCtxCollapsed ? 'none' : 'grid';
+  if(icon) icon.innerHTML = _briefingCtxCollapsed ? '&#x25B6;' : '&#x25BC;';
+}
+
+/* ── Format toggle ── */
+function setBriefingFormat(fmt){
+  _briefingFormat = fmt;
+  var labels = { brief:'Policy Brief', memo:'Policy Memo', note:'Briefing Note' };
+  var colors = {
+    brief: { border:'rgba(0,194,255,0.4)',   bg:'rgba(0,194,255,0.08)',   dot:'var(--cyan)' },
+    memo:  { border:'rgba(240,165,0,0.4)',   bg:'rgba(240,165,0,0.08)',   dot:'var(--gold)' },
+    note:  { border:'rgba(16,185,129,0.4)',  bg:'rgba(16,185,129,0.08)',  dot:'var(--green)' },
+  };
+  ['brief','memo','note'].forEach(function(f){
+    var card   = document.getElementById('fmt-card-'+f);
+    var radio  = card ? card.querySelector('div>div') : null;
+    if(!card) return;
+    var isActive = f === fmt;
+    var c = colors[f];
+    card.style.border     = isActive ? '1px solid '+c.border : '1px solid rgba(255,255,255,0.08)';
+    card.style.background = isActive ? c.bg : 'rgba(11,24,41,0.7)';
+    card.classList.toggle('active', isActive);
+    if(radio){
+      radio.style.borderColor  = isActive ? c.dot : 'var(--muted)';
+      radio.style.background   = isActive ? c.dot : 'transparent';
+      var inner = radio.querySelector('div');
+      if(inner) inner.style.display = isActive ? 'block' : 'none';
+    }
+  });
+  // Update generate button label
+  var lbl = document.getElementById('briefing-format-label-btn');
+  if(lbl) lbl.textContent = labels[fmt];
+  // Update top-level button label too
+  var btn1 = document.getElementById('briefing-generate-btn');
+  if(btn1 && !btn1.disabled) btn1.innerHTML = '&#x1F9E0; Generate '+labels[fmt]+' (PDF)';
+}
+
+/* ── AI format recommendation ── */
+async function recommendBriefingFormat(){
+  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Render backend to use AI features.',4000); return; }
+  if(!_briefingSelected.size){ showToast('&#x26A0;','No Articles','Select articles first, then I can recommend a format.',3500); return; }
+
+  var btn = document.getElementById('briefing-recommend-btn');
+  var recEl = document.getElementById('briefing-recommendation');
+  if(btn){ btn.disabled=true; btn.innerHTML='<span class="spin">&#8635;</span> Thinking…'; }
+  if(recEl){ recEl.style.display='block'; recEl.innerHTML='<span class="spin" style="display:inline-block;margin-right:6px">&#8635;</span> Analysing your articles and context…'; }
+
+  var g = function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
+  var recipient  = g('briefing-recipient');
+  var institution= g('bctx-institution');
+  var mandate    = g('bctx-mandate');
+  var context    = g('briefing-context');
+
+  var selected = Array.from(_briefingSelected).map(_resolveArticleByKey).filter(Boolean);
+  var articleSummary = selected.map(function(a,i){
+    return (i+1)+'. '+a.title+' ('+((a.domain||'').split(',')[0]||'')+', '+(a.jurisdiction||'')+', rel '+(a.relevance||0)+'/10'+(a._btype==='research'?' [academic]':'')+')';
+  }).join('\n');
+
+  var prompt = 'You are an expert in Canadian government relations writing. '
+    +'A policy professional needs to choose between three document formats:\n\n'
+    +'POLICY BRIEF: For Minister/Cabinet. Requires BLUF opening, three options with risk register, formal sign-off block. Use when seeking a specific approval or decision at the political level.\n'
+    +'POLICY MEMO: For Director/VP (internal). Direct ask on line 1, shared context assumed, collegial tone, explicit action deadline. Use for internal direction-seeking or lateral coordination.\n'
+    +'BRIEFING NOTE: For an executive about to enter a meeting or public event. Situation-forward, spoken-language tone, Do Not Say section, no options required. Use when the goal is situational awareness, not a decision.\n\n'
+    +'ARTICLES TO BE COVERED:\n'+articleSummary+'\n\n'
+    +(recipient    ? 'AUDIENCE: '+recipient+'\n'          : '')
+    +(institution  ? 'INSTITUTION: '+institution+'\n'     : '')
+    +(mandate      ? 'MANDATE: '+mandate+'\n'             : '')
+    +(context      ? 'PURPOSE STATED: '+context+'\n'      : '')
+    +'\nRespond in EXACTLY this format — no preamble, no extra text:\n'
+    +'RECOMMENDED: [Policy Brief | Policy Memo | Briefing Note]\n'
+    +'RATIONALE: [2-3 sentences explaining why this format fits the articles, audience, and purpose. Name the specific mechanism — e.g. "these articles don\'t present a decision requiring approval" or "the audience is internal and already has background context".]\n'
+    +'CAUTION: [One sentence on the biggest risk of choosing the wrong format here, if any.]';
+
+  try {
+    var d = await apiFetch('/ai/chat',{method:'POST',body:JSON.stringify({
+      messages:[{role:'system',content:'You are a Canadian government relations writing expert. Follow the response format exactly.'},{role:'user',content:prompt}],
+      max_tokens:300
+    })});
+    if(!d||!d.ok) throw new Error((d&&d.detail)||'No response');
+    var text = (d.content||'').trim();
+
+    // Parse the structured response
+    var recMatch  = text.match(/RECOMMENDED:\s*(.+)/i);
+    var ratMatch  = text.match(/RATIONALE:\s*(.+)/i);
+    var cauMatch  = text.match(/CAUTION:\s*(.+)/i);
+    var recLabel  = recMatch  ? recMatch[1].trim()  : '';
+    var rationale = ratMatch  ? ratMatch[1].trim()  : text;
+    var caution   = cauMatch  ? cauMatch[1].trim()  : '';
+
+    // Auto-select the recommended format
+    var fmtMap = { 'policy brief':'brief', 'policy memo':'memo', 'briefing note':'note' };
+    var autoFmt = fmtMap[recLabel.toLowerCase()];
+    if(autoFmt) setBriefingFormat(autoFmt);
+
+    // Color-code the recommendation display
+    var fmtColor = {brief:'var(--cyan)', memo:'var(--gold)', note:'var(--green)'}[autoFmt||'brief'];
+    if(recEl){
+      recEl.innerHTML =
+        '<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px">'
+        +'<span style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:'+fmtColor+'">&#x1F916; AI Recommends</span>'
+        +'<strong style="font-size:12px;color:'+fmtColor+'">'+escHtml(recLabel)+'</strong>'
+        +(autoFmt ? '<span style="font-size:10px;color:var(--green);margin-left:auto">&#x2713; Selected</span>' : '')
+        +'</div>'
+        +'<div style="font-size:11px;color:var(--text);margin-bottom:'+(caution?'7px':'0')+'">'+escHtml(rationale)+'</div>'
+        +(caution ? '<div style="font-size:10px;color:var(--amber);padding-top:6px;border-top:1px solid rgba(255,255,255,0.06)">&#x26A0; '+escHtml(caution)+'</div>' : '')
+        +'<div style="display:flex;gap:6px;margin-top:8px">'
+        +'<button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="document.getElementById(\'briefing-recommendation\').style.display=\'none\'">Dismiss</button>'
+        +'<span style="font-size:10px;color:var(--dim);align-self:center">or click a format card above to override</span>'
+        +'</div>';
+    }
+    showToast('&#x1F916;','Format Recommended',recLabel+' selected — you can override by clicking any card.',4000);
+  } catch(e){
+    if(recEl){ recEl.innerHTML='<span style="color:var(--red)">&#x26A0; '+escHtml(e.message)+'</span>'; }
+    showToast('&#x26A0;','Recommendation Failed',e.message,4000);
+  }
+  if(btn){ btn.disabled=false; btn.innerHTML='&#x1F916; Recommend for Me'; }
+}
+
+/* ── Source toggle ── */
+function setBriefingSource(src){
+  _briefingSource = src;
+  ['news','research','all'].forEach(function(s){
+    var btn = document.getElementById('briefing-src-'+s);
+    if(btn) btn.classList.toggle('active', s===src);
+  });
+  renderBriefingArticleList();
+}
+
+/* ── Unified article pool ── */
+function _briefingPool(){
+  var newsItems = (_briefingSource==='news'||_briefingSource==='all')
+    ? articles.map(function(a){ return Object.assign({},a,{_bkey:'news:'+a.id,_btype:'news'}); })
+    : [];
+  var resItems  = (_briefingSource==='research'||_briefingSource==='all')
+    ? (_researchArticles||[]).map(function(a){
+        return Object.assign({},a,{
+          _bkey:'research:'+a.id, _btype:'research',
+          pub_date: a.pub_date||a.pubDate||'',
+          summary:  a.summary||a.abstract||'',
+          why_it_matters: a.why_it_matters||a.whyItMatters||'',
+        });
+      })
+    : [];
+  return newsItems.concat(resItems);
+}
 
 function renderBriefingTab(){
   _briefingSelected = new Set();
+  _briefingFormat   = 'brief';
+  _briefingSource   = 'news';
+  loadBriefingContext();
+  setBriefingFormat('brief');   // initialise card states + button label
+  setBriefingSource('news');    // initialise source pill states
   renderBriefingArticleList();
   renderBriefingSelectedList();
   _briefingUpdateBtns();
-  // Pre-fill date in title if blank
+  // Hide recommendation panel on fresh open
+  var recEl = document.getElementById('briefing-recommendation');
+  if(recEl) recEl.style.display = 'none';
   var titleInp = document.getElementById('briefing-title');
   if(titleInp && !titleInp.value){
     titleInp.value = 'Policy Watch — ' + new Date().toLocaleDateString('en-CA',{month:'long',year:'numeric'});
@@ -8589,39 +8986,53 @@ function renderBriefingArticleList(){
   var dom  = (document.getElementById('briefing-filter-domain')||{}).value||'';
   var sort = (document.getElementById('briefing-sort')||{}).value||'rel';
 
-  var list = articles.filter(function(a){
-    if(dom && (a.domain||'') !== dom) return false;
+  var pool = _briefingPool();
+
+  var list = pool.filter(function(a){
+    if(dom){
+      var aDoms = (a.domain||'').split(',').map(function(d){return d.trim().toLowerCase();});
+      if(!aDoms.some(function(d){return d===dom.toLowerCase();})) return false;
+    }
     if(q){
       var hay = ((a.title||'')+' '+(a.summary||'')+' '+(a.source||'')).toLowerCase();
       if(!hay.includes(q.toLowerCase())) return false;
     }
     return true;
   }).sort(function(a,b){
-    if(sort==='date') return new Date(b.pub_date||b.pubDate||0)-new Date(a.pub_date||a.pubDate||0);
+    if(sort==='date') return new Date(b.pub_date||0)-new Date(a.pub_date||0);
     return (b.relevance||0)-(a.relevance||0);
-  }).slice(0,60);
+  }).slice(0,80);
 
   if(!list.length){
-    container.innerHTML = '<div class="empty" style="padding:20px"><div class="empty-icon" style="font-size:24px">&#x1F4CB;</div><div class="empty-text" style="font-size:11px">No articles match. Try clearing the filter.</div></div>';
+    var emptyMsg = _briefingSource==='research' && !(_researchArticles||[]).length
+      ? 'No research articles yet — go to the Research tab and click Fetch New Research.'
+      : 'No articles match. Try clearing the filter.';
+    container.innerHTML = '<div class="empty" style="padding:20px"><div class="empty-icon" style="font-size:24px">&#x1F4CB;</div><div class="empty-text" style="font-size:11px">'+emptyMsg+'</div></div>';
     return;
   }
 
   container.innerHTML = list.map(function(a){
-    var sel = _briefingSelected.has(a.id);
+    var key = a._bkey;
+    var sel = _briefingSelected.has(key);
     var rel = a.relevance||0;
     var emoji = rel>=9?'&#x1F525;':rel>=7?'&#x2B50;':'&#x1F4CC;';
     var borderCol = sel ? 'rgba(0,194,255,0.5)' : 'rgba(255,255,255,0.06)';
     var bg        = sel ? 'rgba(0,194,255,0.08)' : 'rgba(11,24,41,0.7)';
-    return '<div onclick="briefingToggleArticle('+a.id+')" style="cursor:pointer;padding:10px 12px 9px 14px;border:1px solid '+borderCol+';background:'+bg+';border-radius:8px;transition:all .15s">'
+    // Source type badge
+    var srcBadge  = a._btype==='research'
+      ? '<span class="research-db-badge '+ dbBadgeClass(a.database_name||'') +'" style="font-size:8px">'+(a.database_name||'Research')+'</span>'
+      : '';
+    return '<div onclick="briefingToggleArticle(\''+key+'\')" style="cursor:pointer;padding:10px 12px 9px 14px;border:1px solid '+borderCol+';background:'+bg+';border-radius:8px;transition:all .15s">'
       +'<div style="display:flex;align-items:flex-start;gap:8px">'
-      +'<input type="checkbox" '+(sel?'checked':'')+' onclick="event.stopPropagation();briefingToggleArticle('+a.id+')" style="accent-color:var(--cyan);margin-top:3px;flex-shrink:0">'
+      +'<input type="checkbox" '+(sel?'checked':'')+' onclick="event.stopPropagation();briefingToggleArticle(\''+key+'\')" style="accent-color:var(--cyan);margin-top:3px;flex-shrink:0">'
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:12px;font-weight:600;color:var(--white);line-height:1.4;margin-bottom:4px">'+escHtml(a.title||'')+'</div>'
       +'<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">'
-      +'<span class="tag tag-domain" style="font-size:8px">'+(a.domain||'')+'</span>'
-      +'<span class="tag tag-juris" style="font-size:8px">'+(a.jurisdiction||'')+'</span>'
+      +srcBadge
+      +(a.domain?'<span class="tag tag-domain" style="font-size:8px">'+escHtml((a.domain||'').split(',')[0].trim())+'</span>':'')
+      +(a.jurisdiction?'<span class="tag tag-juris" style="font-size:8px">'+escHtml(a.jurisdiction)+'</span>':'')
       +'<span class="relevance-badge" style="font-size:9px">'+emoji+' '+rel+'/10</span>'
-      +'<span style="font-size:9px;color:var(--dim);font-family:\'IBM Plex Mono\',monospace">'+(a.pub_date||a.pubDate||'')+'</span>'
+      +'<span style="font-size:9px;color:var(--dim);font-family:\'IBM Plex Mono\',monospace">'+(a.pub_date||'')+'</span>'
       +'</div>'
       +'</div>'
       +'</div>'
@@ -8629,19 +9040,38 @@ function renderBriefingArticleList(){
   }).join('');
 }
 
-function briefingToggleArticle(id){
-  if(_briefingSelected.has(id)){
-    _briefingSelected.delete(id);
+function briefingToggleArticle(key){
+  if(_briefingSelected.has(key)){
+    _briefingSelected.delete(key);
   } else {
     if(_briefingSelected.size >= _briefingMax){
       showToast('&#x26A0;','Max '+_briefingMax+' Articles','Remove one before adding another.',3000);
       return;
     }
-    _briefingSelected.add(id);
+    _briefingSelected.add(key);
   }
   renderBriefingArticleList();
   renderBriefingSelectedList();
   _briefingUpdateBtns();
+}
+
+function _resolveArticleByKey(key){
+  var parts = key.split(':');
+  var type  = parts[0];
+  var id    = parseInt(parts[1]);
+  if(type==='research'){
+    var ra = (_researchArticles||[]).find(function(x){return x.id===id;});
+    if(ra) return Object.assign({},ra,{
+      _btype:'research',
+      pub_date: ra.pub_date||ra.pubDate||'',
+      summary:  ra.summary||ra.abstract||'',
+      why_it_matters: ra.why_it_matters||ra.whyItMatters||'',
+    });
+  } else {
+    var na = articles.find(function(x){return x.id===id;});
+    if(na) return Object.assign({},na,{_btype:'news'});
+  }
+  return null;
 }
 
 function renderBriefingSelectedList(){
@@ -8655,12 +9085,16 @@ function renderBriefingSelectedList(){
     container.innerHTML = '<div style="font-size:11px;color:var(--dim);font-style:italic">No articles selected yet.</div>';
     return;
   }
-  container.innerHTML = Array.from(_briefingSelected).map(function(id){
-    var a = articles.find(function(x){ return x.id===id; });
+  container.innerHTML = Array.from(_briefingSelected).map(function(key){
+    var a = _resolveArticleByKey(key);
     if(!a) return '';
+    var typeDot = a._btype==='research'
+      ? '<span style="font-size:9px;color:#a5b4fc;margin-right:4px">&#x1F4DA;</span>'
+      : '<span style="font-size:9px;color:var(--cyan);margin-right:4px">&#x1F4F0;</span>';
     return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">'
-      +'<div style="flex:1;font-size:11px;font-weight:600;color:var(--text);line-height:1.4">'+escHtml(a.title||'')+'</div>'
-      +'<button onclick="briefingToggleArticle('+id+')" style="background:none;border:none;color:var(--dim);font-size:14px;cursor:pointer;flex-shrink:0;padding:0;line-height:1">&#x2715;</button>'
+      +typeDot
+      +'<div style="flex:1;font-size:11px;font-weight:600;color:var(--text);line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escHtml(a.title||'')+'">'+escHtml(a.title||'')+'</div>'
+      +'<button onclick="briefingToggleArticle(\''+key+'\')" style="background:none;border:none;color:var(--dim);font-size:14px;cursor:pointer;flex-shrink:0;padding:0;line-height:1">&#x2715;</button>'
       +'</div>';
   }).join('');
 }
@@ -8704,55 +9138,216 @@ async function generateBriefingNote(){
     return;
   }
 
-  var selected = Array.from(_briefingSelected)
-    .map(function(id){ return articles.find(function(x){return x.id===id;}); })
-    .filter(Boolean);
-  var title     = (document.getElementById('briefing-title')||{}).value     || 'Policy Intelligence Brief';
-  var recipient = (document.getElementById('briefing-recipient')||{}).value || '';
-  var author    = (document.getElementById('briefing-author')||{}).value    || 'PolicyPulse';
-  var context   = (document.getElementById('briefing-context')||{}).value   || '';
+  var selected = Array.from(_briefingSelected).map(_resolveArticleByKey).filter(Boolean);
+
+  var g = function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
+  var title       = g('briefing-title')     || 'Policy Intelligence Brief';
+  var recipient   = g('briefing-recipient') || '';
+  var author      = g('briefing-author')    || 'PolicyPulse';
+  var context     = g('briefing-context')   || '';
+  var institution = g('bctx-institution')   || '';
+  var office      = g('bctx-office')        || '';
+  var mandate     = g('bctx-mandate')       || '';
+  var jurisdiction = g('bctx-jurisdiction') || '';
+  var portfolio    = g('bctx-portfolio')    || '';
+  var issueStatus  = (document.getElementById('bctx-issue-status')||{}).value || 'Active';
+  var actionType   = (document.getElementById('bctx-action-type') ||{}).value || 'Action Required';
+  var commitments  = g('bctx-commitments')  || '';
   var inclSum   = document.getElementById('briefing-incl-summary') ? document.getElementById('briefing-incl-summary').checked : true;
   var inclWhy   = document.getElementById('briefing-incl-why')     ? document.getElementById('briefing-incl-why').checked     : true;
   var inclRefs  = document.getElementById('briefing-incl-refs')    ? document.getElementById('briefing-incl-refs').checked    : true;
+  var fmt       = _briefingFormat || 'brief';
+
+  var fmtLabels = { brief:'Policy Brief', memo:'Policy Memo', note:'Briefing Note' };
 
   ['briefing-generate-btn','briefing-generate-btn2'].forEach(function(id){
     var btn = document.getElementById(id);
     if(btn){ btn.disabled=true; btn.innerHTML='<span class="spin">⟳</span> Generating…'; }
   });
-  _briefingStatus('<span class="spin" style="display:inline-block;margin-right:6px">⟳</span> Asking Groq AI to draft the briefing note… (15–30 seconds)', 'info');
+  _briefingStatus('<span class="spin" style="display:inline-block;margin-right:6px">⟳</span> Drafting '
+    +fmtLabels[fmt]+'… (15–30 seconds)', 'info');
 
-  var articleContext = selected.map(function(a, i){
-    return (i+1)+'. TITLE: '+(a.title||'')
+  // ── Shared article context block ──────────────────────────────────────────
+  var articleContext = selected.map(function(a,i){
+    var isRes    = a._btype === 'research';
+    var srcLabel = isRes
+      ? '[PEER-REVIEWED / '+(a.database_name||'Academic')+']'
+      : '[NEWS / GOVERNMENT SOURCE]';
+    return '['+(i+1)+'] '+srcLabel
+      +'\n   FOOTNOTE MARKER: ['+(i+1)+'] — use this marker inline in the document body whenever you reference this source'
+      +'\n   TITLE: '+(a.title||'')
       +'\n   SOURCE: '+(a.source||'')+' | DOMAIN: '+(a.domain||'')+' | JURISDICTION: '+(a.jurisdiction||'')
       +' | RELEVANCE: '+(a.relevance||'')+'/10 | SENTIMENT: '+(a.sentiment||'')
-      +(inclSum && a.summary ? '\n   SUMMARY: '+a.summary : '')
-      +(inclWhy && (a.why_it_matters||a.whyItMatters) ? '\n   WHY IT MATTERS: '+(a.why_it_matters||a.whyItMatters) : '')
+      +(a.authors   ? '\n   AUTHORS: '+a.authors   : '')
+      +(a.pub_date  ? '\n   PUBLISHED: '+a.pub_date : '')
+      +(inclSum && a.summary         ? '\n   SUMMARY: '+a.summary               : '')
+      +(inclWhy && a.why_it_matters  ? '\n   WHY IT MATTERS: '+a.why_it_matters : '')
       +'\n   URL: '+(a.url||'');
   }).join('\n\n');
 
-  var systemPrompt = 'You are a senior government relations analyst at a Canadian post-secondary institution. '
-    +'Write structured policy briefing notes in professional Canadian government relations style. '
-    +'Be concrete, action-oriented, and specific. Use the exact article details provided.';
+  // ── Institution-aware system prompt (shared base) ─────────────────────────
+  var institutionLine = institution
+    ? 'You are a senior government relations analyst at '+institution+(office?' ('+office+')':'')+'.'
+    : 'You are a senior government relations analyst at a Canadian post-secondary institution.';
+  var mandateLine = mandate
+    ? '\n\nINSTITUTIONAL MANDATE (always consider):\n'+mandate : '';
 
-  var userPrompt = 'Write a structured policy briefing note. '
-    +'Use these exact section headers on their own lines, followed by the content:\n\n'
-    +'EXECUTIVE SUMMARY\n'
-    +'BACKGROUND\n'
-    +'KEY DEVELOPMENTS\n'
-    +'IMPLICATIONS FOR THE INSTITUTION\n'
-    +'RECOMMENDED ACTIONS\n'
-    +(inclRefs ? 'REFERENCES\n' : '')
-    +'\nBRIEFING DETAILS:\n'
-    +'Title: '+title+'\n'
-    +(recipient ? 'Prepared for: '+recipient+'\n' : '')
-    +(author    ? 'Prepared by: '+author+'\n'    : '')
-    +(context   ? 'Purpose: '+context+'\n'       : '')
-    +'\nARTICLES ('+selected.length+'):\n'+articleContext+'\n\n'
-    +'Write each section with substantive content. For RECOMMENDED ACTIONS, use numbered items. '
-    +'For KEY DEVELOPMENTS, one focused paragraph per article naming the specific policy, bill, or funding amount. '
-    +(inclRefs ? 'For REFERENCES, list each article as: Title — Source — URL\n' : '')
-    +'Tone: professional, senior-executive audience. Be concrete, never generic.';
+  var baseSystem = institutionLine
+    +' Write in professional Canadian government relations style.'
+    +' Be concrete, action-oriented, specific. Use the exact article details provided.'
+    +' When peer-reviewed research is included, cite it as academic evidence — do not treat it the same as a news item.'
+    + mandateLine;
 
+  // ── Format-specific prompts ───────────────────────────────────────────────
+  var systemPrompt, userPrompt;
+
+  if(fmt === 'brief'){
+    // POLICY BRIEF — for Minister/Cabinet, requires options + risk register
+    systemPrompt = baseSystem
+      +'\n\nYou are writing a POLICY BRIEF intended for a Minister, Deputy Minister, or Cabinet-level audience.'
+      +' This format requires: (1) a BLUF (Bottom Line Up Front) as the very first paragraph that states the issue and recommended option in plain language; '
+      +'(2) three distinct policy options each with pros, cons, and a risk level; '
+      +'(3) a formal sign-off / decision block at the end; '
+      +'(4) a risk register table; '
+      +'(5) fully evidenced analysis — every claim must trace to a specific article.';
+
+    userPrompt = 'Write a POLICY BRIEF using EXACTLY these section headers on their own lines:\n\n'
+      +'BOTTOM LINE UP FRONT\n'
+      +'ISSUE\n'
+      +'BACKGROUND\n'
+      +'KEY STAKEHOLDERS\n'
+      +'POLICY OPTIONS\n'
+      +'RISK REGISTER\n'
+      +'RECOMMENDED OPTION\n'
+      +'IMPLICATIONS FOR THE INSTITUTION\n'
+      +'INSTITUTIONAL COMMITMENTS AT STAKE\n'
+      +'NEXT CRITICAL DATES\n'
+      +(inclRefs ? 'REFERENCES\n' : '')
+      +'DECISION / SIGN-OFF\n\n'
+      +'BRIEFING DETAILS:\n'
+      +'Title: '+title+'\n'
+      +'Document Type: '+actionType+'\n'
+      +'Issue Status: '+issueStatus+'\n'
+      +(jurisdiction  ? 'Jurisdiction/Portfolio: '+jurisdiction+'\n' : '')
+      +(portfolio     ? 'Issue Tag: '+portfolio+'\n'                 : '')
+      +(recipient     ? 'Prepared for: '+recipient+'\n'              : '')
+      +(author        ? 'Prepared by: '+author+'\n'                  : '')
+      +(institution   ? 'Institution: '+institution+'\n'             : '')
+      +(commitments   ? 'Existing institutional commitments: '+commitments+'\n' : '')
+      +(context       ? 'Purpose: '+context+'\n'                     : '')
+      +'\nARTICLES ('+selected.length+') — use [N] markers inline as footnotes:\n'+articleContext+'\n\n'
+      +'WRITING RULES — follow every rule exactly:\n'
+      +'- BOTTOM LINE UP FRONT: 2 sentences max. State the central issue and your recommended option. No hedging. End with the document type: "'+actionType+'"\n'
+      +'- ISSUE: 1 paragraph. What decision or action is required and by when. Include issue status: '+issueStatus+'.\n'
+      +'- BACKGROUND: 2-3 paragraphs. Factual context only. Every factual claim must have an inline footnote marker [N] referencing the article number.\n'
+      +'- KEY STAKEHOLDERS: List format. For each stakeholder: Name | Role/Interest | Current Position | Relationship to Institution. Include at minimum: relevant BC ministries, First Nations organizations if Indigenous policy, federal counterparts, and sector associations.\n'
+      +'- POLICY OPTIONS: Exactly 3 options. For each: Option name, Description (2-3 sentences), Pros (bullet), Cons (bullet), Risk Level (Low/Medium/High). Each option must have at least one inline footnote [N].\n'
+      +'- RISK REGISTER: Text table with columns: Risk | Likelihood | Impact | Mitigation. Minimum 4 rows.\n'
+      +'- RECOMMENDED OPTION: State which option and why in 2-3 sentences tied to institutional mandate and existing commitments.\n'
+      +'- IMPLICATIONS FOR THE INSTITUTION: Specific operational impacts. Named actors, timelines. Every implication must reference the institutional commitments where relevant.\n'
+      +'- INSTITUTIONAL COMMITMENTS AT STAKE: List each relevant commitment from the context provided. For each: Commitment name | How this issue affects it | Required response timeline.\n'
+      +'- NEXT CRITICAL DATES: Table format. Columns: Date | Event | Required Action | Owner. Minimum 3 rows. Include: legislative dates, consultation deadlines, board meeting dates, implementation milestones.\n'
+      +(inclRefs ? '- REFERENCES: [N] Title — Source (Type) — URL — Date\n' : '')
+      +'- DECISION / SIGN-OFF: "[ ] Approved  [ ] Approved with amendments  [ ] Deferred  [ ] Rejected\\n\\nSignature: _____________  Title: _____________  Date: _____________"\n'
+      +'- INLINE CITATIONS: Every factual claim in every section must end with [N] where N matches the article number. This is mandatory — unfootnoted claims will be rejected.\n'
+      +'Tone: formal, evidenced, no contractions. Every recommended action must follow format: [Verb] [specific thing] by [date/deadline] — [Owner/Role]';
+
+  } else if(fmt === 'memo'){
+    // POLICY MEMO — internal, Director/VP, direct ask on line 1
+    systemPrompt = baseSystem
+      +'\n\nYou are writing a POLICY MEMO for an internal audience (Director, VP, or ADM level).'
+      +' This format requires: (1) the explicit ask or decision needed on the very FIRST LINE — no preamble; '
+      +'(2) shared context assumed — do not explain things the reader already knows as a policy professional; '
+      +'(3) a collegial but direct tone; '
+      +'(4) an explicit action deadline in the closing; '
+      +'(5) a lighter risk treatment than a Policy Brief — one paragraph, not a full register.';
+
+    userPrompt = 'Write a POLICY MEMO using EXACTLY these section headers on their own lines:\n\n'
+      +'ACTION REQUESTED\n'
+      +'SITUATION\n'
+      +'KEY STAKEHOLDERS\n'
+      +'ANALYSIS\n'
+      +'INSTITUTIONAL COMMITMENTS AT STAKE\n'
+      +'RISKS AND CONSIDERATIONS\n'
+      +'RECOMMENDATION\n'
+      +'NEXT CRITICAL DATES\n'
+      +(inclRefs ? 'REFERENCES\n' : '')
+      +'NEXT STEPS\n\n'
+      +'BRIEFING DETAILS:\n'
+      +'Title: '+title+'\n'
+      +'Document Type: '+actionType+'\n'
+      +'Issue Status: '+issueStatus+'\n'
+      +(jurisdiction  ? 'Jurisdiction/Portfolio: '+jurisdiction+'\n' : '')
+      +(portfolio     ? 'Issue Tag: '+portfolio+'\n'                 : '')
+      +'TO: '+(recipient || '[Recipient]')+'\n'
+      +'FROM: '+(author || '[Author]')+'\n'
+      +(institution   ? 'Institution: '+institution+'\n'             : '')
+      +(commitments   ? 'Existing institutional commitments: '+commitments+'\n' : '')
+      +(context       ? 'Purpose: '+context+'\n'                     : '')
+      +'\nARTICLES ('+selected.length+') — use [N] markers inline as footnotes:\n'+articleContext+'\n\n'
+      +'WRITING RULES:\n'
+      +'- ACTION REQUESTED: One sentence. "I am seeking your approval to…" or "I recommend we…" End with document type tag: '+actionType+'.\n'
+      +'- SITUATION: 1-2 paragraphs. What has changed and why it matters now. Issue status: '+issueStatus+'. Include inline footnotes [N].\n'
+      +'- KEY STAKEHOLDERS: Name | Role | Position | Our Relationship. Focus on internal and sector stakeholders relevant to this audience.\n'
+      +'- ANALYSIS: 2-3 paragraphs. Synthesise the articles with inline [N] footnotes on every factual claim. Reference peer-reviewed evidence explicitly if included.\n'
+      +'- INSTITUTIONAL COMMITMENTS AT STAKE: Bullet list. Each commitment + how this issue triggers or tests it.\n'
+      +'- RISKS AND CONSIDERATIONS: 1 paragraph. Name the 2-3 most material risks only.\n'
+      +'- RECOMMENDATION: 2-3 sentences. Clear direction with rationale tied to commitments.\n'
+      +'- NEXT CRITICAL DATES: Date | Event | Action Required | Owner. Minimum 3 rows.\n'
+      +(inclRefs ? '- REFERENCES: [N] Title — Source (Type) — URL — Date\n' : '')
+      +'- NEXT STEPS: Numbered list. EVERY item must follow this exact format: [Verb] [specific thing] by [date] — [Owner/Role]. No passive voice. No vague items like "monitor" or "review" without a specific deliverable.\n'
+      +'Tone: direct, collegial. Inline [N] footnotes on every factual claim are mandatory.';
+
+  } else {
+    // BRIEFING NOTE — pre-meeting, situational awareness, spoken-language tone
+    systemPrompt = baseSystem
+      +'\n\nYou are writing a BRIEFING NOTE for an executive about to walk into a meeting, media availability, or stakeholder event.'
+      +' This format requires: (1) the situation stated immediately — who, what, where, when; '
+      +'(2) spoken-language tone — write as if the reader will read this aloud or refer to it in a conversation; '
+      +'(3) a DO NOT SAY section listing phrases, positions, or commitments to avoid; '
+      +'(4) no policy options or risk register — this is situational awareness, not a decision document; '
+      +'(5) short paragraphs and bullet points preferred over dense prose.';
+
+    userPrompt = 'Write a BRIEFING NOTE using EXACTLY these section headers on their own lines:\n\n'
+      +'SITUATION\n'
+      +'ISSUE STATUS\n'
+      +'KEY DEVELOPMENTS\n'
+      +'KEY STAKEHOLDERS\n'
+      +'INSTITUTIONAL COMMITMENTS\n'
+      +'WHAT TO KNOW\n'
+      +'NEXT CRITICAL DATES\n'
+      +'ANTICIPATED QUESTIONS\n'
+      +'DO NOT SAY\n'
+      +(inclRefs ? 'REFERENCES\n' : '')
+      +'CONTACTS\n\n'
+      +'BRIEFING DETAILS:\n'
+      +'Title: '+title+'\n'
+      +'Document Type: '+actionType+'\n'
+      +'Issue Status: '+issueStatus+'\n'
+      +(jurisdiction  ? 'Jurisdiction/Portfolio: '+jurisdiction+'\n' : '')
+      +(portfolio     ? 'Issue Tag: '+portfolio+'\n'                 : '')
+      +(recipient     ? 'Prepared for: '+recipient+'\n'              : '')
+      +(author        ? 'Prepared by: '+author+'\n'                  : '')
+      +(institution   ? 'Institution: '+institution+'\n'             : '')
+      +(commitments   ? 'Existing institutional commitments: '+commitments+'\n' : '')
+      +(context       ? 'Context: '+context+'\n'                     : '')
+      +'\nARTICLES ('+selected.length+') — use [N] markers inline:\n'+articleContext+'\n\n'
+      +'WRITING RULES:\n'
+      +'- SITUATION: 2-3 sentences. Who, what, where, when, institutional stake. Plain language.\n'
+      +'- ISSUE STATUS: One line only: "Status: '+issueStatus+'" followed by one sentence explaining what that means right now.\n'
+      +'- KEY DEVELOPMENTS: Bullet points. One per article. Format: [Date] [Source] — [Development] [N]. Lead with most important.\n'
+      +'- KEY STAKEHOLDERS: Bullet list. Name | Role | Current Position. Only the 4-6 most relevant to this meeting/event.\n'
+      +'- INSTITUTIONAL COMMITMENTS: Bullet list. Each commitment + one-sentence implication for this situation. Use the commitments provided.\n'
+      +'- WHAT TO KNOW: 4-5 bullets of facts the executive needs if challenged. No opinions. Each fact ends with [N].\n'
+      +'- NEXT CRITICAL DATES: Bullet list. Date — Event — What it means for us. Minimum 3 items.\n'
+      +'- ANTICIPATED QUESTIONS: 4-5 questions with a 1-sentence suggested response each. Format: Q: [question]\\nA: [response]\n'
+      +'- DO NOT SAY: Bullet list. Each item: "Do not say \'[phrase]\' — instead say \'[alternative]\' because [reason]."\n'
+      +(inclRefs ? '- REFERENCES: [N] Title — Source (Type) — URL\n' : '')
+      +'- CONTACTS: Name | Role | Phone/Email — for 2-3 subject matter experts.\n'
+      +'Tone: plain English, short sentences. Write for someone reading on their phone in a car.';
+  }
+
+  // ── Call Groq ─────────────────────────────────────────────────────────────
   var aiText = '';
   try {
     var d = await apiFetch('/ai/chat', {
@@ -8762,7 +9357,7 @@ async function generateBriefingNote(){
           {role:'system', content:systemPrompt},
           {role:'user',   content:userPrompt}
         ],
-        max_tokens: 2500
+        max_tokens: 3000
       })
     });
     if(!d || !d.ok) throw new Error((d&&d.detail)||'AI request failed');
@@ -8772,43 +9367,64 @@ async function generateBriefingNote(){
     _briefingStatus('⚠ AI error: '+escHtml(e.message), 'error');
     ['briefing-generate-btn','briefing-generate-btn2'].forEach(function(id){
       var btn=document.getElementById(id);
-      if(btn){btn.disabled=false;btn.innerHTML='🧠 Generate Briefing Note (PDF)';}
+      if(btn){btn.disabled=false;btn.innerHTML='&#x1F9E0; Generate '+fmtLabels[fmt]+' (PDF)';}
     });
     return;
   }
 
-  _briefingStatus('✨ AI draft complete — opening print view…', 'info');
-  _briefingOpenPrintWindow(aiText, title, recipient, author, selected, inclRefs);
+  _briefingStatus('✨ Draft complete — opening print view…', 'info');
+  _briefingOpenPrintWindow(aiText, fmt, title, recipient, author, institution, office, selected, inclRefs, {
+    jurisdiction: jurisdiction,
+    portfolio:    portfolio,
+    issueStatus:  issueStatus,
+    actionType:   actionType,
+    commitments:  commitments,
+  });
 
   ['briefing-generate-btn','briefing-generate-btn2'].forEach(function(id){
     var btn=document.getElementById(id);
-    if(btn){btn.disabled=false;btn.innerHTML='🧠 Generate Briefing Note (PDF)';}
+    if(btn){btn.disabled=false;btn.innerHTML='&#x1F9E0; Generate '+fmtLabels[fmt]+' (PDF)';}
   });
-  _briefingStatus('✅ Briefing note opened — use Ctrl+P / Cmd+P to save as PDF.', 'success');
-  if(typeof gtag!=='undefined') gtag('event','briefing_generated',{event_category:'Briefing',event_label:title.slice(0,60)});
+  _briefingStatus('&#x2705; Document opened — Ctrl+P / Cmd+P to save as PDF.', 'success');
+  if(typeof gtag!=='undefined') gtag('event','briefing_generated',{event_category:'Briefing',event_label:fmt+':'+title.slice(0,50)});
 }
 
-function _briefingOpenPrintWindow(aiText, title, recipient, author, articles_list, inclRefs){
-  var dateStr = new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+function _briefingOpenPrintWindow(aiText, fmt, title, recipient, author, institution, office, articles_list, inclRefs, meta){
+  meta = meta || {};
+  var jurisdiction = meta.jurisdiction || '';
+  var portfolio    = meta.portfolio    || '';
+  var issueStatus  = meta.issueStatus  || '';
+  var actionType   = meta.actionType   || 'Action Required';
+  var commitments  = meta.commitments  || '';
+  var dateStr   = new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+  var fmtLabels = { brief:'Policy Brief', memo:'Policy Memo', note:'Briefing Note' };
+  var fmtLabel  = fmtLabels[fmt] || 'Policy Brief';
 
+  // ── Cover accent colours per format ────────────────────────────────────────
+  var coverGradients = {
+    brief: 'linear-gradient(135deg,#003366 0%,#1d4ed8 100%)',
+    memo:  'linear-gradient(135deg,#3d1f00 0%,#b45309 100%)',
+    note:  'linear-gradient(135deg,#063319 0%,#047857 100%)',
+  };
+  var accentColor = { brief:'#1d4ed8', memo:'#b45309', note:'#047857' };
+  var coverGrad = coverGradients[fmt] || coverGradients.brief;
+  var accent    = accentColor[fmt]    || accentColor.brief;
+
+  // ── Section parser — recognises any ALL-CAPS heading ───────────────────────
   function parseSections(text){
-    var sectionNames = [
-      'EXECUTIVE SUMMARY','BACKGROUND','KEY DEVELOPMENTS',
-      'IMPLICATIONS FOR THE INSTITUTION','RECOMMENDED ACTIONS','REFERENCES'
-    ];
-    var result = [];
-    var lines = text.split('\n');
+    var result  = [];
     var current = null;
-    lines.forEach(function(line){
+    text.split('\n').forEach(function(line){
       var trimmed = line.trim();
-      var matched = sectionNames.find(function(s){ return trimmed.toUpperCase() === s; });
-      if(matched){
+      // A section header: all-caps, no trailing punctuation except colon, 3+ chars
+      var isHeader = /^[A-Z][A-Z /\-&]{2,}:?$/.test(trimmed) && trimmed.length <= 60;
+      if(isHeader){
         if(current) result.push(current);
-        current = {heading: matched, lines: []};
+        current = {heading: trimmed.replace(/:$/,''), lines: []};
       } else if(current){
         current.lines.push(line);
       } else {
-        if(!result.length) result.push({heading: null, lines: []});
+        if(!result.length) result.push({heading:null, lines:[]});
         result[0].lines.push(line);
       }
     });
@@ -8816,91 +9432,336 @@ function _briefingOpenPrintWindow(aiText, title, recipient, author, articles_lis
     return result;
   }
 
-  function renderSection(sec){
+  // ── Section renderer — handles bullets, numbered lists, Q&A, plain paras ──
+  function renderSection(sec, fmt){
+    function linkFootnotes(text){
+      return escHtml(text).replace(/\[(\d+)\]/g, function(_, n){
+        return '<sup style="color:'+accent+';font-weight:700;font-size:9px;cursor:pointer" title="See source ['+n+'] in references">['+n+']</sup>';
+      });
+    }
     if(!sec.heading){
       var content = sec.lines.join('\n').trim();
       return content ? '<p class="intro">'+escHtml(content)+'</p>' : '';
     }
     var body = sec.lines.join('\n').trim();
     if(!body) return '';
-    var isNumbered = /^\d+\./.test(body.trim());
-    var html = '<div class="section"><h2>'+escHtml(sec.heading)+'</h2>';
-    if(isNumbered){
-      var items = body.split(/\n(?=\d+\.)/).map(function(s){return s.trim();}).filter(Boolean);
-      html += '<ol>'+items.map(function(item){
-        return '<li>'+escHtml(item.replace(/^\d+\.\s*/,''))+'</li>';
+
+    var h2Class = '';
+    // Special styling for BLUF / ACTION REQUESTED / SITUATION (first-line prominence)
+    if(['BOTTOM LINE UP FRONT','ACTION REQUESTED'].includes(sec.heading)){
+      h2Class = ' style="color:'+accent+';border-bottom-color:'+accent+'"';
+    }
+    // Sign-off block — render verbatim in a box
+    if(sec.heading === 'DECISION / SIGN-OFF'){
+      return '<div class="section"><h2'+h2Class+'>'+escHtml(sec.heading)+'</h2>'
+        +'<div style="border:1px solid #d1defa;border-radius:6px;padding:18px 22px;background:#f8faff;font-size:13px;white-space:pre-line;color:#1a2b42;line-height:2">'+escHtml(body)+'</div></div>';
+    }
+    // DO NOT SAY — red-tinted box
+    if(sec.heading === 'DO NOT SAY'){
+      var bullets = body.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+      return '<div class="section"><h2 style="color:#be123c;border-bottom-color:#be123c">&#x26D4; '+escHtml(sec.heading)+'</h2>'
+        +'<div style="background:#fff5f5;border:1px solid #fecaca;border-radius:6px;padding:12px 16px">'
+        +'<ul style="padding-left:18px;margin:0">'+bullets.map(function(b){
+          return '<li style="color:#be123c;margin-bottom:6px">'+escHtml(b.replace(/^[-•*]\s*/,''))+'</li>';
+        }).join('')+'</ul></div></div>';
+    }
+    // RISK REGISTER — attempt to render as a mini-table
+    if(sec.heading === 'RISK REGISTER'){
+      var rows = body.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+      var tableRows = rows.map(function(row){
+        var cells = row.split(/\s*[|│]\s*/).map(function(c){return c.trim();});
+        if(cells.length >= 2){
+          return '<tr>'+cells.map(function(c,ci){
+            var isRisk = /high/i.test(c)?'color:#be123c;font-weight:700':
+                         /medium/i.test(c)?'color:#b45309;font-weight:700':
+                         /low/i.test(c)?'color:#047857;font-weight:700':'';
+            return ci===0
+              ? '<td style="font-weight:600;padding:6px 10px;border-bottom:1px solid #eef2f7">'+escHtml(c)+'</td>'
+              : '<td style="padding:6px 10px;border-bottom:1px solid #eef2f7;'+isRisk+'">'+escHtml(c)+'</td>';
+          }).join('')+'</tr>';
+        }
+        return '<tr><td colspan="4" style="padding:6px 10px;border-bottom:1px solid #eef2f7">'+escHtml(row)+'</td></tr>';
+      }).join('');
+      return '<div class="section"><h2'+h2Class+'>'+escHtml(sec.heading)+'</h2>'
+        +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        +'<thead><tr>'
+        +'<th style="text-align:left;padding:6px 10px;background:#f0f4f8;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6b8aaa;border-bottom:2px solid '+accent+'">Risk</th>'
+        +'<th style="text-align:left;padding:6px 10px;background:#f0f4f8;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6b8aaa;border-bottom:2px solid '+accent+'">Likelihood</th>'
+        +'<th style="text-align:left;padding:6px 10px;background:#f0f4f8;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6b8aaa;border-bottom:2px solid '+accent+'">Impact</th>'
+        +'<th style="text-align:left;padding:6px 10px;background:#f0f4f8;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6b8aaa;border-bottom:2px solid '+accent+'">Mitigation</th>'
+        +'</tr></thead><tbody>'+tableRows+'</tbody></table></div>';
+    }
+    // POLICY OPTIONS — option blocks
+    if(sec.heading === 'POLICY OPTIONS'){
+      var optBlocks = body.split(/\n(?=Option\s+\d|OPTION\s+\d)/i).map(function(b){return b.trim();}).filter(Boolean);
+      if(optBlocks.length > 1){
+        var optHtml = optBlocks.map(function(block){
+          var optLines = block.split('\n');
+          var optTitle = optLines[0];
+          var optBody  = optLines.slice(1).join('\n').trim();
+          return '<div style="border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:10px;background:#f8faff">'
+            +'<div style="font-size:12px;font-weight:700;color:'+accent+';margin-bottom:6px">'+escHtml(optTitle)+'</div>'
+            +'<div style="font-size:12px;color:#334d6b;white-space:pre-line;line-height:1.7">'+escHtml(optBody)+'</div>'
+            +'</div>';
+        }).join('');
+        return '<div class="section"><h2'+h2Class+'>'+escHtml(sec.heading)+'</h2>'+optHtml+'</div>';
+      }
+    }
+    // Q&A format (ANTICIPATED QUESTIONS)
+    if(sec.heading === 'ANTICIPATED QUESTIONS'){
+      var qaPairs = body.split(/\n(?=Q:|Question:)/i).map(function(b){return b.trim();}).filter(Boolean);
+      if(qaPairs.length > 0){
+        var qaHtml = qaPairs.map(function(pair){
+          var pLines = pair.split('\n');
+          var q = pLines[0].replace(/^Q:|^Question:/i,'').trim();
+          var a = pLines.slice(1).join(' ').replace(/^A:|^Answer:/i,'').trim();
+          return '<div style="margin-bottom:12px">'
+            +'<div style="font-size:12px;font-weight:700;color:#1a2b42;margin-bottom:3px">Q: '+escHtml(q)+'</div>'
+            +(a?'<div style="font-size:12px;color:#334d6b;padding-left:14px;border-left:2px solid '+accent+'">'+linkFootnotes(a)+'</div>':'')
+            +'</div>';
+        }).join('');
+        return '<div class="section"><h2'+h2Class+'>'+escHtml(sec.heading)+'</h2>'+qaHtml+'</div>';
+      }
+    }
+
+    // KEY STAKEHOLDERS — 4-column table
+    if(sec.heading === 'KEY STAKEHOLDERS'){
+      var skRows = body.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+      var skTableRows = skRows.map(function(row){
+        var cells = row.replace(/^[-•*]\s*/,'').split(/\s*\|\s*/).map(function(c){return c.trim();});
+        if(cells.length >= 2){
+          return '<tr>'
+            +'<td style="padding:6px 10px;border-bottom:1px solid #eef2f7;font-weight:600;color:#1a2b42;vertical-align:top">'+escHtml(cells[0]||'')+'</td>'
+            +'<td style="padding:6px 10px;border-bottom:1px solid #eef2f7;color:#334d6b;vertical-align:top">'+escHtml(cells[1]||'')+'</td>'
+            +'<td style="padding:6px 10px;border-bottom:1px solid #eef2f7;color:#334d6b;vertical-align:top">'+escHtml(cells[2]||'')+'</td>'
+            +'<td style="padding:6px 10px;border-bottom:1px solid #eef2f7;color:#6b8aaa;vertical-align:top;font-size:11px">'+escHtml(cells[3]||'')+'</td>'
+            +'</tr>';
+        }
+        return '<tr><td colspan="4" style="padding:6px 10px;color:#6b8aaa">'+escHtml(row)+'</td></tr>';
+      }).join('');
+      return '<div class="section"><h2'+h2Class+'>'+escHtml(sec.heading)+'</h2>'
+        +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        +'<thead><tr>'
+        +'<th style="text-align:left;padding:6px 10px;background:#f0f4f8;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6b8aaa;border-bottom:2px solid '+accent+'">Stakeholder</th>'
+        +'<th style="text-align:left;padding:6px 10px;background:#f0f4f8;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6b8aaa;border-bottom:2px solid '+accent+'">Role / Interest</th>'
+        +'<th style="text-align:left;padding:6px 10px;background:#f0f4f8;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6b8aaa;border-bottom:2px solid '+accent+'">Current Position</th>'
+        +'<th style="text-align:left;padding:6px 10px;background:#f0f4f8;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6b8aaa;border-bottom:2px solid '+accent+'">Our Relationship</th>'
+        +'</tr></thead><tbody>'+skTableRows+'</tbody></table></div>';
+    }
+
+    // NEXT CRITICAL DATES — timeline rows
+    if(sec.heading === 'NEXT CRITICAL DATES'){
+      var dateRows = body.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+      var dateHtml = dateRows.map(function(row){
+        row = row.replace(/^[-•*]\s*/,'');
+        // Try pipe-delimited first, then em-dash / en-dash
+        var cells = row.split(/\s*[|—–]\s*/).map(function(c){return c.trim();});
+        var dateCell  = cells[0]||'';
+        var eventCell = cells[1]||row;
+        var actionCell= cells[2]||'';
+        var ownerCell = cells[3]||'';
+        var isPast    = false;
+        try { isPast = dateCell && new Date(dateCell) < new Date(); } catch(e){}
+        return '<div style="display:flex;gap:14px;padding:10px 0;border-bottom:1px solid #eef2f7;align-items:flex-start">'
+          +'<div style="min-width:90px;font-size:11px;font-weight:700;color:'+(isPast?'#94a3b8':accent)+';font-family:monospace;flex-shrink:0;padding-top:2px">'+escHtml(dateCell)+'</div>'
+          +'<div style="flex:1">'
+          +'<div style="font-size:12px;font-weight:600;color:#1a2b42;margin-bottom:2px">'+escHtml(eventCell)+'</div>'
+          +(actionCell?'<div style="font-size:11px;color:#334d6b">'+escHtml(actionCell)+'</div>':'')
+          +(ownerCell ?'<div style="font-size:10px;color:#6b8aaa;margin-top:2px">Owner: '+escHtml(ownerCell)+'</div>':'')
+          +'</div>'
+          +'</div>';
+      }).join('');
+      return '<div class="section"><h2'+h2Class+'>'+escHtml(sec.heading)+'</h2>'
+        +'<div style="border:1px solid #e2e8f0;border-radius:6px;padding:0 14px;background:#f8faff">'+dateHtml+'</div>'
+        +'</div>';
+    }
+
+    // INSTITUTIONAL COMMITMENTS AT STAKE (brief/memo) / INSTITUTIONAL COMMITMENTS (note) — commitment cards
+    if(sec.heading === 'INSTITUTIONAL COMMITMENTS AT STAKE' || sec.heading === 'INSTITUTIONAL COMMITMENTS'){
+      var commitRows = body.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+      var commitHtml = commitRows.map(function(row){
+        var parts = row.split(/\s*\|\s*/);
+        var commitName = parts[0] ? parts[0].replace(/^[-•*]\s*/,'') : row.replace(/^[-•*]\s*/,'');
+        var implication= parts[1]||'';
+        var timeline   = parts[2]||'';
+        return '<div class="commit-card" style="border-left:3px solid '+accent+'">'
+          +'<div style="font-size:12px;font-weight:700;color:#1a2b42;margin-bottom:3px">'+escHtml(commitName)+'</div>'
+          +(implication?'<div style="font-size:11px;color:#334d6b">'+escHtml(implication)+'</div>':'')
+          +(timeline   ?'<div style="font-size:10px;color:'+accent+';margin-top:3px;font-weight:600">Timeline: '+escHtml(timeline)+'</div>':'')
+          +'</div>';
+      }).join('');
+      return '<div class="section"><h2'+h2Class+'>'+escHtml(sec.heading)+'</h2>'+commitHtml+'</div>';
+    }
+
+    // ISSUE STATUS (Briefing Note only) — colour-coded status badge
+    if(sec.heading === 'ISSUE STATUS'){
+      var statusColors = {
+        'Emerging':   {bg:'#fef9c3',border:'#ca8a04',text:'#713f12'},
+        'Active':     {bg:'#fff7ed',border:'#ea580c',text:'#9a3412'},
+        'Escalating': {bg:'#fef2f2',border:'#dc2626',text:'#7f1d1d'},
+        'Monitoring': {bg:'#eff6ff',border:'#2563eb',text:'#1e3a5f'},
+        'Resolved':   {bg:'#f0fdf4',border:'#16a34a',text:'#14532d'},
+      };
+      var statusKey = issueStatus || 'Active';
+      var sc = statusColors[statusKey] || statusColors['Active'];
+      return '<div class="section"><h2'+h2Class+'>'+escHtml(sec.heading)+'</h2>'
+        +'<div style="display:inline-block;padding:8px 18px;background:'+sc.bg+';border:2px solid '+sc.border+';border-radius:6px;font-weight:700;color:'+sc.text+';font-size:13px;margin-bottom:8px">'+escHtml(statusKey)+'</div>'
+        +'<div style="font-size:12px;color:#334d6b;margin-top:6px">'+linkFootnotes(body.split('\n').filter(function(l){return l.trim() && !l.trim().toLowerCase().startsWith('status:');}).join(' '))+'</div>'
+        +'</div>';
+    }
+
+    // REFERENCES — [N]-numbered list with clickable URLs
+    if(sec.heading === 'REFERENCES'){
+      var refItems = body.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+      var refHtml = refItems.map(function(item){
+        item = item.replace(/^[-•*]\s*/,'');
+        var numMatch = item.match(/^\[(\d+)\]\s*/);
+        var num  = numMatch ? numMatch[1] : '';
+        var text = numMatch ? item.slice(numMatch[0].length) : item;
+        var urlMatch = text.match(/(https?:\/\/[^\s]+)/);
+        var url = urlMatch ? urlMatch[1] : '';
+        var displayText = url
+          ? escHtml(text.slice(0, urlMatch.index))+'<a href="'+escHtml(url)+'" style="color:'+accent+';word-break:break-all" target="_blank">'+escHtml(url)+'</a>'+escHtml(text.slice(urlMatch.index+url.length))
+          : escHtml(text);
+        return '<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #eef2f7;font-size:12px">'
+          +(num?'<span style="font-weight:700;color:'+accent+';min-width:24px;flex-shrink:0">['+num+']</span>':'')
+          +'<span style="color:#334d6b;line-height:1.6">'+displayText+'</span>'
+          +'</div>';
+      }).join('');
+      return '<div class="section"><h2'+h2Class+'>'+escHtml(sec.heading)+'</h2>'
+        +'<div style="border:1px solid #e2e8f0;border-radius:6px;padding:8px 14px;background:#f8faff">'+refHtml+'</div>'
+        +'</div>';
+    }
+
+    // Default renderer: bullets → ul, numbered → ol, plain → p
+    var html = '<div class="section"><h2'+h2Class+'>'+escHtml(sec.heading)+'</h2>';
+    var lines = body.split('\n');
+    var isBullet  = lines.some(function(l){return /^[-•*]\s/.test(l.trim());});
+    var isNumered = /^\d+\./.test(body.trim());
+    if(isBullet){
+      var items = lines.map(function(l){return l.trim();}).filter(Boolean);
+      html += '<ul style="padding-left:20px;margin:0">'+items.map(function(item){
+        return '<li style="margin-bottom:6px;color:#1a2b42">'+linkFootnotes(item.replace(/^[-•*]\s*/,''))+'</li>';
+      }).join('')+'</ul>';
+    } else if(isNumered){
+      var nItems = body.split(/\n(?=\d+\.)/).map(function(s){return s.trim();}).filter(Boolean);
+      html += '<ol style="padding-left:22px;margin:0">'+nItems.map(function(item){
+        return '<li style="margin-bottom:8px;color:#1a2b42">'+linkFootnotes(item.replace(/^\d+\.\s*/,''))+'</li>';
       }).join('')+'</ol>';
     } else {
       var paras = body.split(/\n{2,}/).map(function(p){return p.trim();}).filter(Boolean);
       html += paras.map(function(p){
-        return '<p>'+escHtml(p.replace(/\n/g,' '))+'</p>';
+        return '<p>'+linkFootnotes(p.replace(/\n/g,' '))+'</p>';
       }).join('');
     }
     return html + '</div>';
   }
 
-  var sections = parseSections(aiText);
-  var sectionsHTML = sections.map(renderSection).join('');
+  var sections    = parseSections(aiText);
+  var sectionsHTML = sections.map(function(s){return renderSection(s,fmt);}).join('');
 
+  // ── Shared CSS ──────────────────────────────────────────────────────────────
   var css = [
     "@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');",
     "*{box-sizing:border-box;margin:0;padding:0}",
     "body{font-family:'IBM Plex Sans',Georgia,serif;color:#1a2b42;font-size:13.5px;line-height:1.75;background:#fff}",
-    ".cover{background:linear-gradient(135deg,#003366 0%,#1d4ed8 100%);padding:40px 52px 32px;color:#fff;page-break-inside:avoid}",
+    ".cover{background:"+coverGrad+";padding:40px 52px 32px;color:#fff;page-break-inside:avoid}",
     ".cover h1{font-family:'Playfair Display',Georgia,serif;font-size:26px;font-weight:700;margin-bottom:10px;line-height:1.25}",
+    ".cover-institution{font-size:13px;font-weight:600;color:rgba(255,255,255,.9);margin-bottom:2px}",
+    ".cover-office{font-size:11px;color:rgba(255,255,255,.65);margin-bottom:16px;letter-spacing:.04em}",
     ".cover-meta{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin-top:16px;font-size:12px;color:rgba(255,255,255,0.8)}",
     ".cover-meta strong{color:#fff;font-weight:600}",
-    ".confidential{display:inline-block;margin-top:14px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:4px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}",
+    ".fmt-badge{display:inline-block;margin-top:14px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:4px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}",
     ".body{padding:40px 52px}",
     ".intro{font-size:13px;color:#334d6b;font-style:italic;margin-bottom:28px;padding-bottom:18px;border-bottom:1px solid #e2e8f0}",
     ".section{margin-bottom:28px;page-break-inside:avoid}",
     ".section h2{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#003366;margin-bottom:10px;padding-bottom:5px;border-bottom:2px solid #003366}",
     ".section p{margin-bottom:10px;color:#1a2b42;text-align:justify}",
-    ".section ol{padding-left:22px;margin-top:4px}",
-    ".section ol li{margin-bottom:8px;color:#1a2b42}",
     ".source-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}",
-    ".source-table th{text-align:left;padding:6px 10px;background:#f0f4f8;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#6b8aaa;border-bottom:2px solid #003366}",
+    ".source-table th{text-align:left;padding:6px 10px;background:#f0f4f8;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#6b8aaa;border-bottom:2px solid "+accent+"}",
     ".source-table td{padding:8px 10px;border-bottom:1px solid #eef2f7;vertical-align:top}",
     ".source-table tr:last-child td{border-bottom:none}",
-    ".source-table a{color:#1d4ed8;text-decoration:none;word-break:break-all}",
+    ".source-table a{color:"+accent+";text-decoration:none;word-break:break-all}",
     ".rel-badge{display:inline-block;font-weight:700;font-size:11px;padding:1px 7px;border-radius:3px;background:#fef3c7;color:#92400e}",
+    ".type-badge-news{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;background:#e8f0fe;color:#1d4ed8;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}",
+    ".type-badge-research{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;background:#ede9fe;color:#5b21b6;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}",
     ".footer{margin:28px 0 0;padding:14px 52px;background:#f8faff;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;display:flex;justify-content:space-between}",
+    ".next-date-row{display:flex;gap:14px;padding:10px 0;border-bottom:1px solid #eef2f7}",
+    ".commit-card{padding:9px 12px;margin-bottom:6px;background:#fff;border:1px solid #e2e8f0;border-radius:0 6px 6px 0}",
+    "sup{font-size:9px;font-weight:700;vertical-align:super;line-height:0}",
+    "@media print{sup{color:#003366!important}}",
     "@media print{body{font-size:12px}.cover{-webkit-print-color-adjust:exact;print-color-adjust:exact}.section{page-break-inside:avoid}.no-print{display:none!important}}"
   ].join('');
 
+  // ── Source table ────────────────────────────────────────────────────────────
+  var newsCount     = articles_list.filter(function(a){return a._btype!=='research';}).length;
+  var researchCount = articles_list.length - newsCount;
+  var sourcesSummary = [];
+  if(newsCount)     sourcesSummary.push(newsCount+' news/government source'+(newsCount!==1?'s':''));
+  if(researchCount) sourcesSummary.push(researchCount+' peer-reviewed source'+(researchCount!==1?'s':''));
+
   var sourceRows = articles_list.map(function(a,i){
+    var isRes     = a._btype==='research';
+    var typeBadge = isRes ? '<span class="type-badge-research">Academic</span>' : '<span class="type-badge-news">News/Gov</span>';
+    var dbNote    = isRes && a.database_name ? '<br><span style="font-size:10px;color:#94a3b8">'+escHtml(a.database_name)+'</span>' : '';
+    var authNote  = isRes && a.authors       ? '<br><span style="font-size:10px;color:#94a3b8;font-style:italic">'+escHtml(a.authors.slice(0,60))+(a.authors.length>60?'…':'')+'</span>' : '';
     return '<tr>'
-      +'<td style="color:#6b8aaa;font-weight:600">'+(i+1)+'</td>'
-      +'<td><a href="'+escHtml(a.url||'')+'" target="_blank">'+escHtml(a.title||'')+'</a></td>'
-      +'<td style="color:#6b8aaa">'+escHtml(a.source||'')+'</td>'
-      +'<td style="color:#6b8aaa;white-space:nowrap;font-family:monospace;font-size:11px">'+(a.pub_date||a.pubDate||'')+'</td>'
-      +'<td><span class="rel-badge">'+(a.relevance||0)+'/10</span></td>'
+      +'<td style="color:#6b8aaa;font-weight:600;vertical-align:top">'+(i+1)+'</td>'
+      +'<td><a href="'+escHtml(a.url||'')+'" target="_blank">'+escHtml(a.title||'')+'</a>'+authNote+'</td>'
+      +'<td style="color:#6b8aaa;vertical-align:top">'+escHtml(a.source||'')+dbNote+'</td>'
+      +'<td style="color:#6b8aaa;white-space:nowrap;font-family:monospace;font-size:11px;vertical-align:top">'+(a.pub_date||'')+'</td>'
+      +'<td style="vertical-align:top">'+typeBadge+'<br><span class="rel-badge" style="margin-top:3px;display:inline-block">'+(a.relevance||0)+'/10</span></td>'
       +'</tr>';
   }).join('');
 
-  var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'+escHtml(title)+'</title>'
+  // ── Memo-style TO/FROM header block (memo format only) ─────────────────────
+  var memoHeader = '';
+  if(fmt === 'memo'){
+    memoHeader = '<div style="border:1px solid #e2e8f0;border-radius:6px;padding:14px 20px;margin-bottom:28px;font-size:13px;display:grid;grid-template-columns:auto 1fr;gap:4px 16px">'
+      +'<strong style="color:#6b8aaa">TO:</strong><span>'+(recipient||'[Recipient]')+'</span>'
+      +'<strong style="color:#6b8aaa">FROM:</strong><span>'+(author||'[Author]')+'</span>'
+      +(institution?'<strong style="color:#6b8aaa">RE:</strong><span>'+escHtml(institution)+(office?' — '+escHtml(office):'')+'</span>':'')
+      +'<strong style="color:#6b8aaa">DATE:</strong><span>'+dateStr+'</span>'
+      +'</div>';
+  }
+
+  // ── Full HTML assembly ──────────────────────────────────────────────────────
+  var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'+escHtml(fmtLabel+': '+title)+'</title>'
     +'<style>'+css+'</style></head><body>'
-    +'<div class="no-print" style="background:#003366;padding:10px 24px;display:flex;align-items:center;justify-content:space-between">'
-    +'<span style="color:rgba(255,255,255,0.8);font-size:12px">PolicyPulse Briefing Note &mdash; Press <strong style="color:#fff">Ctrl+P</strong> / <strong style="color:#fff">Cmd+P</strong> to save as PDF</span>'
-    +'<button onclick="window.print()" style="background:#fff;color:#003366;border:none;border-radius:6px;padding:7px 18px;font-size:12px;font-weight:700;cursor:pointer">&#x1F5A8; Print / Save PDF</button>'
+    +'<div class="no-print" style="background:'+accent+';padding:10px 24px;display:flex;align-items:center;justify-content:space-between">'
+    +'<span style="color:rgba(255,255,255,0.9);font-size:12px"><strong>'+escHtml(fmtLabel)+'</strong> &mdash; PolicyPulse &mdash; Press <strong>Ctrl+P</strong> / <strong>Cmd+P</strong> to save as PDF</span>'
+    +'<button onclick="window.print()" style="background:#fff;color:'+accent+';border:none;border-radius:6px;padding:7px 18px;font-size:12px;font-weight:700;cursor:pointer">&#x1F5A8; Print / Save PDF</button>'
     +'</div>'
     +'<div class="cover">'
-    +'<div style="font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.6);margin-bottom:8px">PolicyPulse Intelligence</div>'
+    +'<div style="font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:12px">PolicyPulse Intelligence</div>'
+    +(institution?'<div class="cover-institution">'+escHtml(institution)+'</div>':'')
+    +(office     ?'<div class="cover-office">'+escHtml(office)+'</div>'     :'')
     +'<h1>'+escHtml(title)+'</h1>'
+    +'<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">'
+    +'<span style="display:inline-block;padding:3px 12px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.35);color:#fff">'+escHtml(actionType)+'</span>'
+    +(issueStatus?'<span style="display:inline-block;padding:3px 12px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,.9)">Status: '+escHtml(issueStatus)+'</span>':'')
+    +(portfolio?'<span style="display:inline-block;padding:3px 12px;border-radius:4px;font-size:10px;font-weight:600;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,.8)">'+escHtml(portfolio)+'</span>':'')
+    +'</div>'
     +'<div class="cover-meta">'
-    +(recipient?'<strong>Prepared for:</strong><span>'+escHtml(recipient)+'</span>':'')
-    +(author   ?'<strong>Prepared by:</strong><span>'+escHtml(author)+'</span>':'')
+    +(recipient    ?'<strong>Prepared for:</strong><span>'+escHtml(recipient)+'</span>'    :'')
+    +(author       ?'<strong>Prepared by:</strong><span>'+escHtml(author)+'</span>'        :'')
+    +(jurisdiction ?'<strong>Jurisdiction:</strong><span>'+escHtml(jurisdiction)+'</span>' :'')
     +'<strong>Date:</strong><span>'+dateStr+'</span>'
-    +'<strong>Articles:</strong><span>'+articles_list.length+' source article'+(articles_list.length!==1?'s':'')+'</span>'
+    +'<strong>Sources:</strong><span>'+sourcesSummary.join(' · ')+'</span>'
     +'</div>'
-    +'<div class="confidential">Confidential &mdash; For Internal Use</div>'
+    +'<div class="fmt-badge">'+escHtml(fmtLabel)+' &mdash; Confidential</div>'
     +'</div>'
-    +'<div class="body">'+sectionsHTML
+    +'<div class="body">'
+    + memoHeader
+    + sectionsHTML
     +'<div class="section" style="margin-top:32px"><h2>Source Articles</h2>'
-    +'<table class="source-table"><thead><tr><th>#</th><th>Title</th><th>Source</th><th>Date</th><th>Score</th></tr></thead>'
+    +'<table class="source-table"><thead><tr><th>#</th><th>Title</th><th>Source / Database</th><th>Date</th><th>Type / Score</th></tr></thead>'
     +'<tbody>'+sourceRows+'</tbody></table></div>'
     +'</div>'
-    +'<div class="footer"><span>PolicyPulse Intelligence Platform</span><span>Generated: '+dateStr+'</span></div>'
+    +'<div class="footer">'
+    +'<span>PolicyPulse Intelligence &mdash; '+escHtml(fmtLabel)+(institution?' &mdash; '+escHtml(institution):'')+'</span>'
+    +'<span>Generated: '+dateStr+'</span>'
+    +'</div>'
     +'</body></html>';
 
   var win = window.open('','_blank','width=960,height=860');
@@ -8912,10 +9773,10 @@ function _briefingOpenPrintWindow(aiText, title, recipient, author, articles_lis
     var url = URL.createObjectURL(blob);
     var link = document.createElement('a');
     link.href = url;
-    link.download = (title||'PolicyPulse-Brief').replace(/[^a-z0-9\-_ ]/gi,'').replace(/\s+/g,'-').slice(0,60)+'-'+dateStr+'.html';
+    link.download = (fmt+'-'+title).replace(/[^a-z0-9\-_ ]/gi,'').replace(/\s+/g,'-').slice(0,60)+'-'+dateStr+'.html';
     link.click();
     setTimeout(function(){ URL.revokeObjectURL(url); },8000);
-    showToast('&#x2B07;','Downloaded','Popup blocked &mdash; HTML file downloaded instead.',4000);
+    showToast('&#x2B07;','Downloaded','Popup blocked — HTML file downloaded instead.',4000);
   }
 }
 
@@ -8968,7 +9829,7 @@ function _renderDomainChart(period){
   var COLORS = ['#00c2ff','#3b82f6','#6366f1','#8b5cf6','#a78bfa','#60a5fa','#34d399','#fbbf24','#f87171','#94a3b8'];
   el.innerHTML = sorted.map(function(item,i){
     var pct = Math.round((item[1]/max)*100);
-    var avg = period.filter(function(a){return (a.domain||'').includes(item[0]);});
+    var avg = period.filter(function(a){return (a.domain||'').split(',').map(function(d){return d.trim();}).includes(item[0]);});
     var avgR = avg.length ? (avg.reduce(function(s,a){return s+(a.relevance||0);},0)/avg.length).toFixed(1) : '—';
     return '<div class="an-bar-wrap" title="Avg relevance: '+avgR+'/10">'
       +'<div class="an-bar-label">'+escHtml(item[0])+'</div>'
@@ -9233,7 +10094,12 @@ function exportNewsCSV(){
   var jur  = (document.getElementById('filter-juris')||{}).value||'';
   var sent = (document.getElementById('filter-sentiment')||{}).value||'';
   var list = articles.filter(function(a){
-    if(dom && !(a.domain||'').includes(dom)) return false;
+    // Multi-domain: domain field may be comma-separated — match exactly
+    // against the selected value rather than a loose substring check.
+    if(dom){
+      var _csvDoms = (a.domain||'').split(',').map(function(d){return d.trim();});
+      if(!_csvDoms.some(function(d){return d===dom;})) return false;
+    }
     if(jur  && a.jurisdiction!==jur) return false;
     if(sent && a.sentiment!==sent) return false;
     if(q){var hay=((a.title||'')+' '+(a.summary||'')).toLowerCase();if(!hay.includes(q.toLowerCase()))return false;}
@@ -10100,6 +10966,30 @@ function saveApiKeyFromSettings(){
   localStorage.setItem('pp_api_key', val);
   if(inp) inp.value = '••••••••••••••••';
   showToast('&#x1F511;','API Key Saved','Backend authentication key stored.',2500);
+}
+
+async function runSmtpDiagnostic(){
+  var el = document.getElementById('smtp-diagnostic-result');
+  if(!el) return;
+  if(!API_BASE){ el.style.display='block'; el.style.background='rgba(244,63,94,0.08)'; el.style.border='1px solid rgba(244,63,94,0.25)'; el.style.color='#f87171'; el.textContent='⚠ Connect your Render backend first.'; return; }
+  el.style.display='block'; el.style.background='rgba(0,0,0,.2)'; el.style.border='1px solid var(--border)'; el.style.color='var(--muted)';
+  el.innerHTML='<span class="spin" style="display:inline-block;margin-right:6px">&#8635;</span> Testing SMTP…';
+  var d = await apiFetch('/smtp/diagnose');
+  if(!d){ el.style.color='#f87171'; el.textContent='⚠ Could not reach backend.'; return; }
+  if(d.ok){
+    el.style.background='rgba(16,185,129,0.08)'; el.style.border='1px solid rgba(16,185,129,0.25)'; el.style.color='var(--green)';
+    el.innerHTML='<strong>✓ SMTP OK</strong> — '+escHtml(d.message||'Connection successful.')
+      +'<div style="margin-top:8px;display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:10px;color:var(--muted)">'
+      +Object.entries(d.status||{}).map(function(e){ return '<span style="font-weight:600">'+escHtml(e[0])+':</span><span>'+escHtml(String(e[1]))+'</span>'; }).join('')
+      +'</div>';
+  } else {
+    el.style.background='rgba(244,63,94,0.08)'; el.style.border='1px solid rgba(244,63,94,0.25)'; el.style.color='#f87171';
+    el.innerHTML='<strong>&#x26A0; '+escHtml(d.error||'SMTP failed')+'</strong>'
+      +(d.advice?'<div style="margin-top:6px;color:var(--amber);font-size:11px">&#x1F4A1; '+escHtml(d.advice)+'</div>':'')
+      +'<div style="margin-top:8px;display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:10px;color:var(--muted)">'
+      +Object.entries(d.status||{}).map(function(e){ return '<span style="font-weight:600">'+escHtml(e[0])+':</span><span style="color:'+(String(e[1]).includes('NOT SET')?'#f87171':'var(--muted)')+'">'+escHtml(String(e[1]))+'</span>'; }).join('')
+      +'</div>';
+  }
 }
 
 async function testBackendConnection(){

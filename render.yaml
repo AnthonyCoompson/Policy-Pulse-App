@@ -26,11 +26,20 @@ services:
       - key: PP_API_KEY
         sync: false           # same random key you used on Railway
 
-      # ── Database path ─────────────────────────────────────────────────────
-      # Render free tier uses an ephemeral disk — data resets on redeploy.
-      # This is fine for development. To persist data across deploys,
-      # upgrade to Render Starter ($7/mo) and attach a persistent disk,
-      # then change this path to /var/data/policypulse.db
+      # ── Database — Turso (persistent) ───────────────────────────────────────
+      # Render free tier uses an ephemeral disk — a local SQLite file resets
+      # on every redeploy. TURSO_URL / TURSO_TOKEN point the app at a hosted
+      # Turso (libSQL) database instead, which persists permanently.
+      # Get these from: turso db show policypulse --url
+      #                 turso db tokens create policypulse
+      - key: TURSO_URL
+        sync: false            # starts with libsql://
+
+      - key: TURSO_TOKEN
+        sync: false
+
+      # DB_PATH is only used as a local-SQLite fallback if TURSO_URL is ever
+      # unset (e.g. local development). Harmless to leave in place.
       - key: DB_PATH
         value: /opt/render/project/src/policypulse.db
 

@@ -284,8 +284,55 @@ def _build_system_prompt(cfg: dict) -> str:
 
 You analyze news articles and return structured JSON assessments for {institution}.
 
-DOMAIN OPTIONS (pick the single best match):
+DOMAIN OPTIONS (pick the single best match, or up to 3 if genuinely warranted — see rules below):
 Higher Education | Research Funding | Indigenous | Reconciliation | Health | Pharmacare | Budget | Legislation | Infrastructure | Workforce | Consultation | Political | Environment | Housing | Child Care | International | Other
+
+DOMAIN SELECTION RULES — read carefully, this is a precision task, not a thoroughness task:
+
+DEFAULT: Return exactly ONE domain. This is correct for the large majority of articles, including
+ones that mention other policy areas in passing. Mentioning something is not the same as being
+about it.
+
+SECOND DOMAIN — only add a second domain if BOTH are true:
+  (a) The article devotes substantive, specific content to a second policy area — not a passing
+      reference, not background context, but content a reader monitoring that second domain would
+      need to know.
+  (b) Removing the second domain would cause that reader to miss something genuinely actionable.
+
+  Test: "If I described this article using only the first domain, would anything important be lost?"
+  If no, use one domain. If yes, add the second.
+
+THIRD DOMAIN — this is rare. Only add a third domain if the article is simultaneously and equally
+about three distinct policy areas, each with its own substantive detail (not just three domains
+mentioned, but three domains each individually worth monitoring this article for). A third domain
+should be the exception, not a default extension of "use 2 when in doubt."
+
+  Example that EARNS three domains:
+  "BC announces $200M for Indigenous-led health research partnerships with universities" —
+  this is genuinely Indigenous (governance, who it serves) AND Health (the research subject)
+  AND Research Funding (the funding mechanism itself). All three are equally central; cutting
+  any one loses real information.
+  -> ["Indigenous", "Health", "Research Funding"]
+
+  Example that does NOT earn multiple domains (common failure mode — avoid this):
+  "Federal budget includes modest increases across health, education, and infrastructure
+  spending" — this is fundamentally a BUDGET article. Health/education/infrastructure are
+  line items mentioned in passing, not the substance of the piece.
+  -> ["Budget"]   (NOT ["Budget", "Health", "Higher Education", "Infrastructure"])
+
+  Example of a correct SECOND domain:
+  "Federal research grant cuts will reduce health science lab funding and force universities
+  to cut graduate positions" — this substantively covers both the funding mechanism AND the
+  specific health research impact.
+  -> ["Research Funding", "Health"]
+
+HARD LIMITS:
+- Never return more than 3 domains under any circumstances.
+- If you are unsure whether a second or third domain is warranted, do NOT include it. Precision
+  matters more than coverage — a domain filter that over-tags becomes useless for monitoring.
+- Tags (separately) already capture cross-cutting topics like DRIPA, Budget, Reconciliation,
+  Urgent. Do not try to compensate for a single domain choice by adding more domains — use tags
+  for that instead.
 
 JURISDICTION OPTIONS: Federal | BC | Alberta | Ontario | Quebec | Municipal | Pan-Canadian | International
 
@@ -321,7 +368,7 @@ def _build_analysis_prompts(cfg: dict) -> tuple[str, str]:
     full_prompt = f"""Analyze this article and return a JSON object with these exact fields:
 
 {{
-  "domain": "<single domain from list>",
+  "domain": ["<primary domain>", "<optional second domain>", "<optional third domain — rare>"],
   "jurisdiction": "<single jurisdiction from list>",
   "relevance": <integer 1-10, where 10 = critical for {priority_doms}>,
   "sentiment": "<Critical|Supportive|Neutral toward government policy>",
@@ -329,6 +376,8 @@ def _build_analysis_prompts(cfg: dict) -> tuple[str, str]:
   "why_it_matters": "<2-3 sentences — see guidance below>",
   "tags": ["<tag1>", "<tag2>"]
 }}
+
+domain is an array — almost always length 1. See DOMAIN SELECTION RULES above before using length 2 or 3.
 
 TITLE: <TITLE>
 SOURCE: <SOURCE>
@@ -361,7 +410,7 @@ If relevance would be 5 or below, return exactly: null"""
     title_only_prompt = f"""Analyze this article and return a JSON object with these exact fields:
 
 {{
-  "domain": "<single domain from list>",
+  "domain": ["<primary domain>", "<optional second domain>", "<optional third domain — rare>"],
   "jurisdiction": "<single jurisdiction from list>",
   "relevance": <integer 1-10, where 10 = critical for {priority_doms}>,
   "sentiment": "<Critical|Supportive|Neutral toward government policy>",
@@ -369,6 +418,8 @@ If relevance would be 5 or below, return exactly: null"""
   "why_it_matters": "<2-3 sentences — see guidance below>",
   "tags": ["<tag1>", "<tag2>"]
 }}
+
+domain is an array — almost always length 1. See DOMAIN SELECTION RULES above before using length 2 or 3.
 
 TITLE: <TITLE>
 SOURCE: <SOURCE>
@@ -458,6 +509,39 @@ def _extract_json_from_text(text: str) -> str:
     return text
 
 
+def _normalize_domain(raw) -> str:
+    """Normalise the AI's domain field into the comma-separated string format
+    the DB column and frontend already expect (same convention as the tags
+    field, which is stored as ",".join(tags)).
+
+    Accepts either the new array format (["Health", "Research Funding"]) or
+    a legacy single string — the latter covers _default_analysis()'s keyword
+    fallback, which still returns one plain domain string, and guards against
+    the model ignoring the schema and returning a bare string anyway.
+
+    De-dupes (preserving the model's ordering, i.e. primary domain first) and
+    hard-caps at 3 as a safety net in case the model ignores the prompt's
+    own 3-domain limit. Falls back to "Other" if nothing usable comes through.
+    """
+    if isinstance(raw, list):
+        domains = [str(d).strip() for d in raw if str(d).strip()]
+    elif isinstance(raw, str) and raw.strip():
+        domains = [raw.strip()]
+    else:
+        domains = []
+
+    seen: set[str] = set()
+    deduped = []
+    for d in domains:
+        if d not in seen:
+            seen.add(d)
+            deduped.append(d)
+
+    deduped = deduped[:3]  # hard cap — matches the prompt's HARD LIMITS section
+
+    return ",".join(deduped) if deduped else "Other"
+
+
 def _parse_gemini_response(text: str, title: str, source_name: str) -> dict | None:
     """Parse the raw text from a Gemini response into a result dict.
 
@@ -480,7 +564,7 @@ def _parse_gemini_response(text: str, title: str, source_name: str) -> dict | No
         return None
 
     return {
-        "domain":         result.get("domain", "Other"),
+        "domain":         _normalize_domain(result.get("domain", "Other")),
         "jurisdiction":   result.get("jurisdiction", "Unknown"),
         "relevance":      int(result.get("relevance", 6)),
         "sentiment":      result.get("sentiment", "Neutral"),

@@ -1,10 +1,23 @@
 """
-PolicyPulse Database Layer — SQLite
-All data persists in policypulse.db
+PolicyPulse Database Layer — SQLite / Turso (libSQL)
+All data persists in policypulse.db, or in a hosted Turso database when
+TURSO_URL is configured (persists across Render redeploys, unlike the
+ephemeral local disk).
 
 v2: Added full CRUD for sources (add, toggle, delete, update scrape_type).
     Added research_sources table with full CRUD.
     Added scholarly keyword management.
+v3: Added optional Turso (libSQL) backend. When TURSO_URL is set, get_conn()
+    returns a _LibsqlConnection wrapper instead of a raw sqlite3.Connection.
+    The wrapper exists because the libsql_experimental driver's rows are
+    plain tuples (not name-addressable like sqlite3.Row), it has no native
+    executescript()/close() on older builds, list-typed params crash it, and
+    UNIQUE/NOT NULL violations surface as a bare ValueError instead of
+    sqlite3.IntegrityError. The wrapper normalises all of that so every
+    existing dict(row), row["col"], cur.executemany(...), and
+    except sqlite3.IntegrityError: call site elsewhere in this file (and in
+    main.py / scholarly_scraper.py, which import get_conn() directly)
+    continues to work unmodified regardless of which backend is active.
 """
 
 import sqlite3
@@ -13,12 +26,221 @@ from datetime import datetime
 
 DB_PATH = os.environ.get("DB_PATH", "policypulse.db")
 
+# ── Turso / libSQL connection ─────────────────────────────────────────────────
+# If TURSO_URL is set, use the hosted Turso database (persists across Render
+# redeploys). Otherwise fall back to local SQLite (development / first run /
+# TURSO_URL not configured yet).
+TURSO_URL   = os.environ.get("TURSO_URL", "")
+TURSO_TOKEN = os.environ.get("TURSO_TOKEN", "")
+
+_use_turso = bool(TURSO_URL)
+
+if _use_turso:
+    import libsql_experimental as libsql
+
+
+class _LibsqlRow:
+    """Minimal stand-in for sqlite3.Row.
+
+    libsql_experimental returns query results as plain tuples with no
+    column-name access. Every read function in this codebase (and in
+    main.py / scholarly_scraper.py) does dict(row) and/or row["column"],
+    so without this adapter the entire app would break the moment a query
+    ran against Turso. Supports both string-key and positional-index access,
+    plus .keys() so dict(row) works exactly like it does for sqlite3.Row.
+    """
+    __slots__ = ("_cols", "_vals")
+
+    def __init__(self, cols, vals):
+        self._cols = cols
+        self._vals = vals
+
+    def keys(self):
+        return list(self._cols)
+
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            try:
+                return self._vals[self._cols.index(key)]
+            except ValueError:
+                raise KeyError(key)
+        return self._vals[key]
+
+    def __iter__(self):
+        return iter(self._vals)
+
+    def __len__(self):
+        return len(self._vals)
+
+    def __contains__(self, key):
+        return key in self._cols
+
+    def __repr__(self):
+        return f"<Row {dict(zip(self._cols, self._vals))}>"
+
+
+def _as_integrity_error(e: ValueError) -> Exception:
+    """libsql_experimental raises a bare ValueError for UNIQUE / NOT NULL
+    constraint violations (e.g. 'UNIQUE constraint failed: articles.url_hash')
+    instead of sqlite3.IntegrityError. Every duplicate-detection call site in
+    this codebase — save_article, add_watchlist_keyword, add_subscriber,
+    add_exclusion_keyword, save_scholarly_article, etc. — catches
+    sqlite3.IntegrityError specifically. Re-raising as the real
+    sqlite3.IntegrityError means none of those call sites need to change.
+    """
+    msg = str(e)
+    if "unique" in msg.lower() or "constraint" in msg.lower():
+        return sqlite3.IntegrityError(msg)
+    return e
+
+
+def _coerce_params(params):
+    """libsql_experimental's execute() only accepts a tuple for parameters —
+    it raises TypeError on a plain list. This codebase frequently builds
+    params as a list (params = []; params.append(...); params.extend(...))
+    before passing it straight to cur.execute(query, params). Coercing here
+    keeps every call site unchanged."""
+    if params is None:
+        return ()
+    if isinstance(params, tuple):
+        return params
+    return tuple(params)
+
+
+class _LibsqlCursor:
+    """Wraps a raw libsql_experimental cursor so it behaves like a
+    sqlite3.Cursor: row results are _LibsqlRow objects, list params work,
+    and constraint violations come back as sqlite3.IntegrityError."""
+    __slots__ = ("_cur",)
+
+    def __init__(self, raw_cursor):
+        self._cur = raw_cursor
+
+    @property
+    def rowcount(self):
+        return getattr(self._cur, "rowcount", -1)
+
+    @property
+    def lastrowid(self):
+        return getattr(self._cur, "lastrowid", None)
+
+    @property
+    def description(self):
+        return self._cur.description
+
+    def _columns(self):
+        return [d[0] for d in (self._cur.description or [])]
+
+    def execute(self, sql, params=()):
+        try:
+            self._cur.execute(sql, _coerce_params(params))
+        except ValueError as e:
+            raise _as_integrity_error(e)
+        return self
+
+    def executemany(self, sql, seq_of_params):
+        try:
+            rows = [_coerce_params(p) for p in seq_of_params]
+            if hasattr(self._cur, "executemany"):
+                self._cur.executemany(sql, rows)
+            else:
+                for row in rows:
+                    self._cur.execute(sql, row)
+        except ValueError as e:
+            raise _as_integrity_error(e)
+        return self
+
+    def executescript(self, script: str):
+        # Executed one statement at a time rather than relying on the
+        # driver's native batch execution, since that path is untested over
+        # a live remote Turso connection here. This exactly mirrors how
+        # every other query in this app already talks to the database (one
+        # statement per round trip), so it's the lowest-risk option.
+        for stmt in script.split(";"):
+            stmt = stmt.strip()
+            if stmt:
+                self._cur.execute(stmt)
+        return self
+
+    def fetchall(self):
+        cols = self._columns()
+        return [_LibsqlRow(cols, row) for row in self._cur.fetchall()]
+
+    def fetchone(self):
+        cols = self._columns()
+        row = self._cur.fetchone()
+        return _LibsqlRow(cols, row) if row is not None else None
+
+    def close(self):
+        close_fn = getattr(self._cur, "close", None)
+        if close_fn:
+            close_fn()
+
+
+class _LibsqlConnection:
+    """sqlite3.Connection-compatible wrapper around a libsql_experimental
+    connection. See module docstring for why this exists."""
+
+    def __init__(self, raw_conn):
+        self._conn = raw_conn
+        self.row_factory = None  # accepted for API compatibility; unused —
+                                  # rows are always _LibsqlRow already
+
+    def execute(self, sql, params=()):
+        try:
+            raw_cursor = self._conn.execute(sql, _coerce_params(params))
+        except ValueError as e:
+            raise _as_integrity_error(e)
+        return _LibsqlCursor(raw_cursor)
+
+    def executemany(self, sql, seq_of_params):
+        try:
+            rows = [_coerce_params(p) for p in seq_of_params]
+            if hasattr(self._conn, "executemany"):
+                self._conn.executemany(sql, rows)
+            else:
+                for row in rows:
+                    self._conn.execute(sql, row)
+        except ValueError as e:
+            raise _as_integrity_error(e)
+
+    def executescript(self, script: str):
+        for stmt in script.split(";"):
+            stmt = stmt.strip()
+            if stmt:
+                self._conn.execute(stmt)
+        self._conn.commit()
+
+    def cursor(self):
+        return _LibsqlCursor(self._conn.cursor())
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        rb = getattr(self._conn, "rollback", None)
+        if rb:
+            rb()
+
+    def close(self):
+        # Older libsql_experimental builds have no close() at all — treat
+        # it as a no-op rather than letting AttributeError take down every
+        # function in this file (and in main.py / scholarly_scraper.py,
+        # which all call conn.close() after every operation).
+        close_fn = getattr(self._conn, "close", None)
+        if close_fn:
+            close_fn()
+
 
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+    if _use_turso:
+        raw = libsql.connect(database=TURSO_URL, auth_token=TURSO_TOKEN)
+        return _LibsqlConnection(raw)
+    else:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        return conn
 
 
 def init_db():
@@ -130,14 +352,15 @@ def init_db():
         );
 
          CREATE TABLE IF NOT EXISTS subscribers (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            name            TEXT NOT NULL,
-            email           TEXT UNIQUE NOT NULL,
-            role            TEXT DEFAULT 'Reader',
-            active          INTEGER DEFAULT 1,
-            added_date      TEXT,
-            urgent_alerts   INTEGER DEFAULT 0,
-            keyword_alerts  INTEGER DEFAULT 0
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            name                  TEXT NOT NULL,
+            email                 TEXT UNIQUE NOT NULL,
+            role                  TEXT DEFAULT 'Reader',
+            active                INTEGER DEFAULT 1,
+            added_date            TEXT,
+            urgent_alerts         INTEGER DEFAULT 0,
+            keyword_alerts        INTEGER DEFAULT 0,
+            urgent_min_relevance  INTEGER DEFAULT 9
         );
                       
         CREATE TABLE IF NOT EXISTS watchlist_keywords (
@@ -185,7 +408,7 @@ def init_db():
     # Safe to run on every startup — ALTER TABLE IF NOT EXISTS column is
     # not valid SQLite syntax, so we use a try/except per column instead.
     cur = conn.cursor()
-    for col, default in [("urgent_alerts", "0"), ("keyword_alerts", "0")]:
+    for col, default in [("urgent_alerts", "0"), ("keyword_alerts", "0"), ("urgent_min_relevance", "9")]:
         try:
             cur.execute(f"ALTER TABLE subscribers ADD COLUMN {col} INTEGER DEFAULT {default}")
             conn.commit()
@@ -282,13 +505,22 @@ def get_alert_subscribers(alert_type: str) -> list:
     """
     Return active subscribers opted in to a specific alert type.
     alert_type: 'urgent' or 'keyword'
+    For urgent alerts, also returns each subscriber's personal
+    urgent_min_relevance threshold (default 9).
     """
     col = "urgent_alerts" if alert_type == "urgent" else "keyword_alerts"
     conn = get_conn()
     try:
-        rows = conn.execute(
-            f"SELECT id, name, email FROM subscribers WHERE active=1 AND {col}=1"
-        ).fetchall()
+        if alert_type == "urgent":
+            rows = conn.execute(
+                f"SELECT id, name, email, urgent_min_relevance FROM subscribers "
+                f"WHERE active=1 AND {col}=1"
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                f"SELECT id, name, email, urgent_min_relevance FROM subscribers "
+                f"WHERE active=1 AND {col}=1"
+            ).fetchall()
         return [dict(r) for r in rows]
     except Exception:
         return []
@@ -296,13 +528,15 @@ def get_alert_subscribers(alert_type: str) -> list:
         conn.close()
 
 
-def update_subscriber_alerts(subscriber_id: int, urgent_alerts: int, keyword_alerts: int):
-    """Update alert opt-in flags for a subscriber."""
+def update_subscriber_alerts(subscriber_id: int, urgent_alerts: int, keyword_alerts: int,
+                             urgent_min_relevance: int = 9):
+    """Update alert opt-in flags and personal urgency threshold for a subscriber."""
+    urgent_min_relevance = max(6, min(10, int(urgent_min_relevance)))
     conn = get_conn()
     try:
         conn.execute(
-            "UPDATE subscribers SET urgent_alerts=?, keyword_alerts=? WHERE id=?",
-            (urgent_alerts, keyword_alerts, subscriber_id)
+            "UPDATE subscribers SET urgent_alerts=?, keyword_alerts=?, urgent_min_relevance=? WHERE id=?",
+            (urgent_alerts, keyword_alerts, urgent_min_relevance, subscriber_id)
         )
         conn.commit()
     except Exception:
@@ -772,7 +1006,7 @@ def delete_subscriber(subscriber_id: int):
 
 
 def update_subscriber(subscriber_id: int, fields: dict):
-    allowed = {"name", "role", "active", "urgent_alerts", "keyword_alerts"}
+    allowed = {"name", "role", "active", "urgent_alerts", "keyword_alerts", "urgent_min_relevance"}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return
