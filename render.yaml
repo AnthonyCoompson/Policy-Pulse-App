@@ -15,6 +15,17 @@ services:
     # For a personal daily-use tool this is completely fine.
 
     envVars:
+      # ── Python runtime ───────────────────────────────────────────────────
+      # Pinned explicitly. Without this, Render uses its current default
+      # Python version, which can change at any time — that's what broke a
+      # prior deploy: Render moved to 3.14, and libsql-experimental has no
+      # prebuilt wheel for 3.14, so pip tried to compile it from source and
+      # failed (Render's build sandbox disallows the Rust/cargo writes that
+      # requires). 3.12.8 is verified to have prebuilt wheels for every
+      # package in requirements.txt, so nothing needs to compile from source.
+      - key: PYTHON_VERSION
+        value: 3.12.8
+
       # ── Required ─────────────────────────────────────────────────────────
       # Paste your actual values in the Render dashboard under
       # Environment → Add Environment Variable
