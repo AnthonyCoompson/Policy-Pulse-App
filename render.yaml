@@ -4,8 +4,11 @@ services:
     runtime: python
     plan: free
 
-    # Build — installs all dependencies from requirements.txt
-    buildCommand: pip install -r requirements.txt
+    # Build — installs all dependencies from backend-requirements.txt
+    # Named backend-requirements.txt (not requirements.txt) so Netlify's
+    # auto-detection doesn't try to pip-install the Python backend deps
+    # during the frontend static site build.
+    buildCommand: pip install -r backend-requirements.txt
 
     # Start — identical to Railway's startCommand
     startCommand: python main.py

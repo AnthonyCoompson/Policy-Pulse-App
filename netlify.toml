@@ -1,0 +1,15 @@
+# PolicyPulse — Netlify configuration
+# This is a static single-file frontend (app.html).
+# No build step needed — Netlify just serves the file directly.
+# Python backend deps live in backend-requirements.txt (not requirements.txt)
+# so Netlify's auto-detection never tries to pip-install them.
+
+[build]
+  command = ""
+  publish = "."
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
