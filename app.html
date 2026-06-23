@@ -1031,7 +1031,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
       </div>
     </div>
     <div class="stat-grid" style="grid-template-columns:repeat(5,1fr)">
-      <div class="stat-card"><div class="stat-val" id="stat-this-week">—</div><div class="stat-label">News This Week</div><div class="stat-delta" id="stat-this-week-delta">↑ Loading…</div></div>
+      <div class="stat-card" style="cursor:pointer" onclick="showTab('scraper');setTimeout(function(){document.getElementById('sort-select').value='date_desc';setSortFromSelect();showUnreadOnly=false;document.getElementById('pill-unread').classList.remove('active');renderFeed();},150)" title="Click to view newest articles"><div class="stat-val" id="stat-this-week">—</div><div class="stat-label">News This Week</div><div class="stat-delta" id="stat-this-week-delta">↑ Loading…</div></div>
       <div class="stat-card"><div class="stat-val" id="stat-unread" style="color:var(--gold)">—</div><div class="stat-label">Unread News</div><div class="stat-delta" style="color:var(--gold)">→ Needs review</div></div>
       <div class="stat-card"><div class="stat-val" id="stat-research-unread" style="color:#a5b4fc">—</div><div class="stat-label">Unread Research</div><div class="stat-delta" style="color:#a5b4fc">→ Academic feed</div></div>
       <div class="stat-card"><div class="stat-val" id="stat-staged" style="color:var(--cyan)">0</div><div class="stat-label">Staged for Digest</div><div class="stat-delta" style="color:var(--cyan)">Ready to send</div></div>
@@ -1040,8 +1040,9 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
     <div id="alert-panel">
       <div class="alert-header">
         <div class="alert-title"><span class="ping"></span> Recommended Alerts — Auto-Updated</div>
-        <div style="display:flex;align-items:center;gap:10px">
+        <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:10px;color:var(--muted)" id="alert-count-label">3 high-relevance items</span>
+          <button class="btn btn-ghost btn-sm" onclick="openAlertsTab()" style="font-size:10px;padding:3px 10px" title="Open full alert view in a new browser tab">&#x2197; Open Tab</button>
           <button class="btn btn-gold btn-sm" onclick="viewAllHighRelevance()" style="font-size:10px;padding:3px 10px">View All &#x2192;</button>
         </div>
       </div>
@@ -1157,6 +1158,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         </select>
         <button class="pill active" id="pill-unread" onclick="toggleUnread()">Unread Only</button>
         <button class="pill" id="pill-flagged" onclick="toggleFlagFilter()">&#x1F6A9; Flagged Only</button>
+        <button class="pill" id="pill-multidomain" onclick="toggleMultiDomainFilter()" title="Show only articles tagged with more than one policy domain">&#x1F3F7; Multi-Domain</button>
         <select class="filter-select" id="sort-select" onchange="setSortFromSelect()" style="min-width:155px">
           <option value="date_desc">&#128197; Newest First</option>
           <option value="rel_desc">&#128293; Highest Relevance</option>
@@ -1180,7 +1182,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
       </div>
       <div id="fix-links-result" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:12px;border:1px solid rgba(0,194,255,0.2);background:rgba(0,194,255,0.05);color:var(--cyan)"></div>
       <div class="table-wrap" style="overflow-x:auto"><table>
-        <thead><tr><th>Source</th><th>URL</th><th>Jurisdiction</th><th>Status</th><th>Last Scraped</th><th>Articles</th><th></th></tr></thead>
+        <thead><tr><th>Source</th><th>URL</th><th>Jurisdiction</th><th>Type</th><th>Status</th><th>Last Scraped</th><th>Articles</th><th></th></tr></thead>
         <tbody id="sources-tbody"></tbody>
       </table></div>
     </div>
@@ -4623,6 +4625,7 @@ let digestHistory=loadDigestHistory();
 let digestSections=DS_DEF.map(s=>({...s,items:[]}));
 let watchlist=["Indigenous","DRIPA","TRC","SSHRC","budget","pharmacare"];
 let showUnreadOnly=true;
+let showMultiDomainOnly=false;
 let chatHistory=[];
 var apiKey='';//legacy stub — key now lives in Render env var GROQ_API_KEY
 let notionToken = localStorage.getItem('pp_notion_token') || '';
@@ -5551,7 +5554,9 @@ function toggleStage(id){
   var _a=articles.find(x=>x.id===id);
   if(_a){
     if(_a.staged){
-      showToast('&#x2705;','Added to Digest','Article staged — go to the Digest tab to organise and send.',2500);
+      showToast('&#x2705;','Added to Digest',
+        'Article staged. <button onclick="addStagedToBriefing('+id+')" style="background:var(--gold);color:#000;border:none;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;margin-left:6px">+ Briefing Note</button>',
+        4000);
     } else {
       showToast('&#x2715;','Removed from Digest','Article removed from your digest.',2000);
     }
@@ -5560,6 +5565,24 @@ function toggleStage(id){
 }
 
 function toggleUnread(){showUnreadOnly=!showUnreadOnly;document.getElementById('pill-unread').classList.toggle('active',showUnreadOnly);renderFeed();}
+function toggleMultiDomainFilter(){showMultiDomainOnly=!showMultiDomainOnly;document.getElementById('pill-multidomain').classList.toggle('active',showMultiDomainOnly);renderFeed();}
+
+function addStagedToBriefing(id){
+  var a = articles.find(function(x){return x.id===id;});
+  if(!a) return;
+  // Add to the briefing pool selection — the pool tracks IDs of selected articles
+  if(!window._briefingSelectedIds) window._briefingSelectedIds = [];
+  if(!window._briefingSelectedIds.includes(id)){
+    window._briefingSelectedIds.push(id);
+  }
+  showTab('briefing');
+  setTimeout(function(){
+    // Tick the checkbox for this article in the briefing article list if rendered
+    var chk = document.getElementById('bsel-'+id);
+    if(chk && !chk.checked){ chk.checked = true; chk.dispatchEvent(new Event('change')); }
+    showToast('&#x1F4CB;','Added to Briefing','Article queued in Briefing Note generator.',2500);
+  }, 400);
+}
 
 function refreshAlerts(){
   const alerts=articles.filter(a=>a.relevance>=8&&!a.read).slice(0,3);
@@ -5629,6 +5652,7 @@ function renderFeedPage(){
 
   let list=articles.filter(a=>{
     if(showUnreadOnly&&a.read)return false;
+    if(showMultiDomainOnly&&(a.domain||'').split(',').filter(function(d){return d.trim();}).length<2)return false;
     if(dom){var _doms=(a.domain||'').split(',').map(function(d){return d.trim().toLowerCase();});if(!_doms.some(function(d){return d===dom.toLowerCase();}))return false;}
     if(jur&&a.jurisdiction!==jur)return false;
     if(sent&&a.sentiment!==sent)return false;
@@ -5709,18 +5733,61 @@ function loadAll(){
 }
 
 function renderSources(){
-  document.getElementById('sources-count').textContent=sources.length+' sources configured';
-  document.getElementById('sources-tbody').innerHTML=sources.map(s=>`<tr>
-    <td style="font-weight:600;color:var(--white);white-space:nowrap">${s.name}</td>
-    <td><a href="https://${s.url}" target="_blank" style="color:var(--cyan);font-size:11px">${s.url}</a></td>
-    <td><span class="tag tag-juris">${s.jurisdiction}</span></td>
-    <td><span class="source-status"><span class="dot" style="background:${s.active?'var(--green)':'var(--red)'}"></span>${s.active?'Active':'Paused'}</span></td>
-    <td style="font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;white-space:nowrap">${s.lastScraped}</td>
-    <td style="font-family:'IBM Plex Mono',monospace">${s.count}</td>
-    <td><button class="btn ${s.active?'btn-red':'btn-green'} btn-sm" onclick="toggleSource(${s.id})">${s.active?'Pause':'Activate'}</button></td>
-  </tr>`).join('');
+  var countEl = document.getElementById('sources-count');
+  var tbody   = document.getElementById('sources-tbody');
+  if(!tbody) return;
+  if(countEl) countEl.textContent = sources.length + ' sources configured';
+  if(!sources.length){
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--dim);padding:24px">No sources loaded yet. Connect the backend and refresh.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = sources.map(function(s){
+    var active      = s.active === 1 || s.active === true;
+    var lastScraped = s.last_scraped ? s.last_scraped.slice(0,16).replace('T',' ') : '—';
+    var count       = s.article_count !== undefined ? s.article_count : 0;
+    var typeTag     = s.scrape_type === 'rss'
+      ? '<span style="font-size:9px;font-weight:700;color:#38bdf8;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.25);border-radius:3px;padding:1px 5px">RSS</span>'
+      : '<span style="font-size:9px;font-weight:700;color:#a78bfa;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.25);border-radius:3px;padding:1px 5px">HTML</span>';
+    return '<tr>'
+      + '<td style="font-weight:600;color:var(--white);white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis" title="'+escHtml(s.name||'')+'">'+escHtml(s.name||'')+'</td>'
+      + '<td><a href="'+escHtml(s.url||'')+'" target="_blank" style="color:var(--cyan);font-size:10px;font-family:\'IBM Plex Mono\',monospace;max-width:200px;overflow:hidden;text-overflow:ellipsis;display:block;white-space:nowrap">'+escHtml(s.url||'')+'</a></td>'
+      + '<td><span class="tag tag-juris">'+escHtml(s.jurisdiction||'')+'</span></td>'
+      + '<td>'+typeTag+'</td>'
+      + '<td><span class="source-status"><span class="dot" style="background:'+(active?'var(--green)':'var(--red)')+'"></span>'+(active?'Active':'Paused')+'</span></td>'
+      + '<td style="font-size:11px;color:var(--muted);font-family:\'IBM Plex Mono\',monospace;white-space:nowrap">'+lastScraped+'</td>'
+      + '<td style="font-family:\'IBM Plex Mono\',monospace">'+count+'</td>'
+      + '<td><div style="display:flex;gap:4px">'
+      + '<button class="btn '+(active?'btn-red':'btn-green')+' btn-sm" onclick="toggleSourceApi('+s.id+')">'+(active?'Pause':'Activate')+'</button>'
+      + '<button class="btn btn-ghost btn-sm" onclick="checkSourceReachability('+s.id+',this)" title="Test if this URL is reachable" style="font-size:10px">&#x1F50D;</button>'
+      + '</div></td>'
+      + '</tr>';
+  }).join('');
 }
-function toggleSource(id){const s=sources.find(x=>x.id===id);if(s)s.active=!s.active;renderSources();}
+function toggleSource(id){var s=sources.find(function(x){return x.id===id;});if(s)s.active=!s.active;renderSources();}
+
+async function toggleSourceApi(id){
+  var resp = await apiFetch('/sources/'+id+'/toggle', {method:'PATCH'});
+  if(resp && resp.ok !== false){
+    var s = sources.find(function(x){return x.id===id;});
+    if(s) s.active = resp.active !== undefined ? resp.active : !s.active;
+    renderSources();
+    showToast('&#x2705;','Source updated','Source status toggled.',1800);
+  } else {
+    showToast('&#x26A0;','Error','Could not toggle source — check backend connection.',3000);
+  }
+}
+
+async function checkSourceReachability(id, btn){
+  if(btn){ btn.textContent='…'; btn.disabled=true; }
+  var resp = await apiFetch('/sources/'+id+'/check');
+  if(btn){ btn.textContent='🔍'; btn.disabled=false; }
+  if(!resp){ showToast('&#x26A0;','Check failed','No response from backend.',3000); return; }
+  if(resp.reachable){
+    showToast('&#x2705;','Reachable','URL returned HTTP '+resp.status+'.',2500);
+  } else {
+    showToast('&#x274C;','Unreachable','URL returned: '+resp.status+'. Consider updating this source URL.',4000);
+  }
+}
 function addSource(){const name=prompt('Source name:');if(!name)return;const url=prompt('URL:');if(!url)return;const jur=prompt('Jurisdiction (Federal/BC/Municipal):')||'Federal';sources.push({id:Date.now(),name,url,jurisdiction:jur,active:true,lastScraped:'Never',count:0});renderSources();}
 
 function renderWatchlist(){document.getElementById('watchlist-tags').innerHTML=watchlist.map(k=>`<span class="kw-tag">${k}<span class="kw-remove" onclick="removeKeyword('${k}')">×</span></span>`).join('');}
@@ -5756,9 +5823,14 @@ async function loadScrapeLog(){
     return;
   }
   container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)"><span class="spin" style="display:inline-block;margin-right:6px">&#8635;</span> Loading…</div>';
-  var data = await apiFetch('/scrape/log?limit=30');
-  if(!data || !data.log || !data.log.length){
-    container.innerHTML = '<div class="empty"><div class="empty-icon">&#x1F4CB;</div><div class="empty-text">No scrape history yet. Run a scrape to see results here.</div></div>';
+  var data;
+  try { data = await apiFetch('/scrape/log?limit=30'); } catch(e){ data = null; }
+  if(!data || !data.log){
+    container.innerHTML = '<div class="empty"><div class="empty-icon">&#x26A0;</div><div class="empty-text">Could not reach backend. Check your API connection and try refreshing.</div></div>';
+    return;
+  }
+  if(!data.log.length){
+    container.innerHTML = '<div class="empty"><div class="empty-icon">&#x1F4CB;</div><div class="empty-text">No scrape history yet. Run a scrape first to see results here.</div></div>';
     return;
   }
   var rows = data.log.map(function(entry){
@@ -8685,6 +8757,78 @@ async function savePreviewRelevance(){
 /* ══════════════════════════════════════════════════════════════
    FIX 7 — HIGH-RELEVANCE MODAL
 ══════════════════════════════════════════════════════════════ */
+function openAlertsTab(){
+  var minScore = 7;
+  var all = articles.concat((_researchArticles||[]).map(function(a){return Object.assign({},a,{_btype:'research'});}));
+  var items = all.filter(function(a){return (a.relevance||0)>=minScore;})
+    .sort(function(a,b){return b.relevance-a.relevance;});
+
+  var sentColor={'Critical':'#f43f5e','Supportive':'#10b981','Neutral':'#94a3b8'};
+  var rows = items.map(function(a){
+    var sc = sentColor[a.sentiment]||'#94a3b8';
+    var domains = (a.domain||'Other').split(',').map(function(d){
+      return d.trim()?'<span style="display:inline-block;padding:2px 7px;border-radius:3px;background:#1e3a5f;color:#93c5fd;font-size:10px;font-weight:600;margin-right:3px">'+d.trim()+'</span>':'';
+    }).join('');
+    return '<tr data-relevance="'+a.relevance+'" data-domain="'+(a.domain||'')+'" data-type="'+(a._btype||'news')+'">'
+      +'<td style="padding:10px 12px;vertical-align:top;border-bottom:1px solid #1e2d3d"><a href="'+(a.url||'#')+'" target="_blank" style="color:#60a5fa;font-weight:600;font-size:13px;text-decoration:none">'+(a.title||'')+'</a>'
+      +'<div style="font-size:11px;color:#64748b;margin-top:3px">'+(a.source||'')+(a.pubDate?' &bull; '+a.pubDate:'')+'</div></td>'
+      +'<td style="padding:10px 12px;vertical-align:top;border-bottom:1px solid #1e2d3d">'+domains+'</td>'
+      +'<td style="padding:10px 12px;vertical-align:top;border-bottom:1px solid #1e2d3d;text-align:center"><span style="font-size:18px;font-weight:700;color:'+(a.relevance>=9?'#f97316':a.relevance>=7?'#eab308':'#64748b')+'">'+a.relevance+'</span><span style="font-size:10px;color:#64748b">/10</span></td>'
+      +'<td style="padding:10px 12px;vertical-align:top;border-bottom:1px solid #1e2d3d"><span style="color:'+sc+';font-size:11px;font-weight:600">'+(a.sentiment||'')+'</span></td>'
+      +'<td style="padding:10px 12px;vertical-align:top;border-bottom:1px solid #1e2d3d;font-size:11px;color:#94a3b8;max-width:260px">'+(a.summary||'').slice(0,160)+(a.summary&&a.summary.length>160?'…':'')+'</td>'
+      +'</tr>';
+  }).join('');
+
+  var domains = [...new Set(items.map(function(a){return (a.domain||'').split(',');}).flat().map(function(d){return d.trim();}).filter(Boolean))].sort();
+  var domOpts = '<option value="">All Domains</option>'+domains.map(function(d){return '<option>'+d+'</option>';}).join('');
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PolicyPulse — Policy Alerts</title>'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0a1628;color:#e2e8f0;min-height:100vh}'
+    +'header{background:linear-gradient(135deg,#003366,#1e3a5f);padding:18px 28px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.1)}'
+    +'.logo{font-size:14px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#fff}'
+    +'.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:16px 28px;background:#0f1f35;border-bottom:1px solid #1e2d3d}'
+    +'select,input{background:#1a2b42;border:1px solid #2d4a6b;color:#e2e8f0;padding:6px 10px;border-radius:6px;font-size:12px}'
+    +'label{font-size:11px;color:#94a3b8;margin-right:4px}'
+    +'.count{font-size:11px;color:#64748b;margin-left:auto}'
+    +'table{width:100%;border-collapse:collapse}'
+    +'thead th{text-align:left;padding:8px 12px;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;background:#0f1f35;border-bottom:2px solid #1e2d3d;position:sticky;top:0}'
+    +'tr:hover{background:rgba(255,255,255,.02)}'
+    +'.wrap{padding:16px 28px}'
+    +'</style></head><body>'
+    +'<header><div class="logo">&#128225; PolicyPulse — Alert Feed</div>'
+    +'<div style="font-size:11px;color:rgba(255,255,255,.5)">'+items.length+' items scored '+minScore+'+</div></header>'
+    +'<div class="controls">'
+    +'<label>Min Score</label><select id="f-score" onchange="applyFilters()"><option value="7">7+</option><option value="8">8+</option><option value="9">9+</option><option value="10">10 only</option></select>'
+    +'<label style="margin-left:10px">Domain</label><select id="f-domain" onchange="applyFilters()">'+domOpts+'</select>'
+    +'<label style="margin-left:10px">Type</label><select id="f-type" onchange="applyFilters()"><option value="">All</option><option value="news">News</option><option value="research">Research</option></select>'
+    +'<label style="margin-left:10px">Sentiment</label><select id="f-sent" onchange="applyFilters()"><option value="">All</option><option>Critical</option><option>Supportive</option><option>Neutral</option></select>'
+    +'<input id="f-search" placeholder="Search title or source…" oninput="applyFilters()" style="min-width:200px;margin-left:10px">'
+    +'<span class="count" id="f-count">'+items.length+' shown</span>'
+    +'</div>'
+    +'<div class="wrap"><table><thead><tr><th>Article</th><th>Domain(s)</th><th>Score</th><th>Sentiment</th><th>Summary</th></tr></thead>'
+    +'<tbody id="alert-tbody">'+rows+'</tbody></table></div>'
+    +'<script>function applyFilters(){'
+    +'var score=parseInt(document.getElementById("f-score").value||"7");'
+    +'var dom=(document.getElementById("f-domain").value||"").toLowerCase();'
+    +'var type=document.getElementById("f-type").value;'
+    +'var sent=document.getElementById("f-sent").value;'
+    +'var q=document.getElementById("f-search").value.toLowerCase();'
+    +'var rows=document.querySelectorAll("#alert-tbody tr");var shown=0;'
+    +'rows.forEach(function(r){'
+    +'var rel=parseInt(r.dataset.relevance||"0");'
+    +'var d=(r.dataset.domain||"").toLowerCase();'
+    +'var t=r.dataset.type||"";'
+    +'var text=r.textContent.toLowerCase();'
+    +'var vis=rel>=score&&(!dom||d.split(",").some(function(x){return x.trim()===dom;}))&&(!type||t===type)&&(!sent||text.includes(sent.toLowerCase()))&&(!q||text.includes(q));'
+    +'r.style.display=vis?"":"none";if(vis)shown++;'
+    +'});document.getElementById("f-count").textContent=shown+" shown";}'
+    +'<\/script></body></html>';
+
+  var tab = window.open('','_blank');
+  if(tab){ tab.document.write(html); tab.document.close(); }
+  else { showToast('&#x26A0;','Popup blocked','Allow popups for this site to open the alert tab.',3000); }
+}
+
 function viewAllHighRelevance(){
   document.getElementById('high-relevance-modal').style.display = 'flex';
   document.body.style.overflow = 'hidden';

@@ -429,6 +429,33 @@ def init_db():
     except Exception:
         pass  # column already exists
 
+    # ── Migration: add health sources + fix BC Legislature URL ───────────────
+    # Safe to run on every boot — INSERT OR IGNORE skips already-present rows.
+    # Also fixes the BC Legislature URL from the old navigation page (which
+    # returns no articles) to the actual RSS feed.
+    _new_sources = [
+        ("Health Canada News",                        "https://www.canada.ca/en/health-canada/news.html",     "Federal", "html"),
+        ("BC Ministry of Health",                     "https://news.gov.bc.ca/ministries/health",              "BC",      "html"),
+        ("Mental Health Commission of Canada",        "https://www.mentalhealthcommission.ca/news/",           "Federal", "html"),
+        ("CIHI — Canadian Institute for Health Info", "https://www.cihi.ca/en/news",                           "Federal", "html"),
+        ("Canadian Pharmacists Association",          "https://www.pharmacists.ca/news-events/news/",           "Federal", "html"),
+        ("BC Centre on Substance Use",                "https://www.bccsu.ca/news/",                            "BC",      "html"),
+    ]
+    try:
+        for name, url, jurisdiction, scrape_type in _new_sources:
+            cur.execute(
+                "INSERT OR IGNORE INTO sources (name, url, jurisdiction, scrape_type) VALUES (?,?,?,?)",
+                (name, url, jurisdiction, scrape_type)
+            )
+        # Fix BC Legislature URL from the dead navigation page to the RSS feed
+        cur.execute(
+            "UPDATE sources SET url=?, scrape_type=? WHERE name=?",
+            ("https://www.leg.bc.ca/rss/hansard", "rss", "BC Legislature News")
+        )
+        conn.commit()
+    except Exception:
+        pass  # non-fatal if sources table doesn't exist yet (handled by seeding)
+
     conn.close()
 
 
@@ -437,7 +464,7 @@ def _seed_sources(cur):
     sources = [
         ("BC Ministry of Post-Secondary Education",    "https://news.gov.bc.ca/ministries/post-secondary-education-and-future-skills", "BC",            "html"),
         ("Government of Canada — Education",           "https://www.canada.ca/en/employment-social-development/news.html",              "Federal",        "html"),
-        ("BC Legislature News",                        "https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings",   "BC",            "html"),
+        ("BC Legislature Hansard",                     "https://www.leg.bc.ca/rss/hansard",                                             "BC",            "rss"),
         ("BC Indigenous Relations & Reconciliation",   "https://news.gov.bc.ca/ministries/indigenous-relations-reconciliation",          "BC",            "html"),
         ("University Affairs Canada",                  "https://www.universityaffairs.ca/feed/",                                         "Federal",        "rss"),
         ("Burnaby City Hall News",                     "https://www.burnaby.ca/city-hall/news",                                          "Municipal",      "html"),
@@ -455,6 +482,13 @@ def _seed_sources(cur):
         ("Policy Options (IRPP)",                      "https://policyoptions.irpp.org/feed/",                                           "Federal",        "rss"),
         ("Maclean's Education",                        "https://www.macleans.ca/education/feed/",                                        "Federal",        "rss"),
         ("BC Public Service Agency",                   "https://www2.gov.bc.ca/gov/content/careers-myhr/about-the-bc-public-service/our-organization", "BC", "html"),
+        # ── Health sources ────────────────────────────────────────────────
+        ("Health Canada News",                         "https://www.canada.ca/en/health-canada/news.html",                              "Federal",        "html"),
+        ("BC Ministry of Health",                      "https://news.gov.bc.ca/ministries/health",                                      "BC",            "html"),
+        ("Mental Health Commission of Canada",         "https://www.mentalhealthcommission.ca/news/",                                   "Federal",        "html"),
+        ("CIHI — Canadian Institute for Health Info",  "https://www.cihi.ca/en/news",                                                   "Federal",        "html"),
+        ("Canadian Pharmacists Association",           "https://www.pharmacists.ca/news-events/news/",                                   "Federal",        "html"),
+        ("BC Centre on Substance Use",                 "https://www.bccsu.ca/news/",                                                    "BC",            "html"),
     ]
     cur.executemany(
         "INSERT INTO sources (name, url, jurisdiction, scrape_type) VALUES (?,?,?,?)",
