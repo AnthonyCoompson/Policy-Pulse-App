@@ -2985,44 +2985,170 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
   <div id="page-tracker" style="display:none" class="fade-in">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
       <div>
-        <div class="page-title">&#x1F4CD; Policy Position Tracker</div>
-        <div class="page-subtitle">Track how ongoing policy issues evolve over time — bills, consultations, inquiries</div>
+        <div class="page-title">&#x1F4CD; Policy Tracker</div>
+        <div class="page-subtitle">Track how ongoing policy issues evolve over time — bills, consultations, inquiries, commitments</div>
       </div>
-      <button class="btn btn-primary" onclick="addTrackerTopic()">+ New Topic</button>
+      <button class="btn btn-primary" onclick="openTrackerModal()">+ New Tracker</button>
     </div>
 
-    <div style="display:grid;grid-template-columns:280px 1fr;gap:14px;min-height:500px">
-      <!-- Topics list -->
-      <div>
-        <input class="filter-input" id="tracker-search" placeholder="&#x1F50D; Filter topics..." oninput="filterTrackerTopics(this.value)" style="margin-bottom:10px">
-        <div id="tracker-topics-list" style="display:flex;flex-direction:column;gap:6px"></div>
+    <!-- New / Edit tracker modal -->
+    <div id="tracker-modal" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.6);align-items:center;justify-content:center">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;width:100%;max-width:520px;margin:20px">
+        <div style="font-weight:700;font-size:15px;color:var(--white);margin-bottom:16px" id="tracker-modal-title">New Tracker</div>
+        <div style="display:grid;gap:10px">
+          <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Name *</label>
+            <input class="filter-input" id="tm-name" placeholder="e.g. BC Pharmacare Implementation" style="width:100%"></div>
+          <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Description</label>
+            <textarea class="why-input" id="tm-desc" rows="2" placeholder="What are you tracking and why?" style="width:100%;font-size:12px;padding:8px 10px"></textarea></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Domain</label>
+              <select class="filter-select" id="tm-domain" style="width:100%">
+                <option value="">— Any —</option>
+                <option>Higher Education</option><option>Research Funding</option>
+                <option>Indigenous</option><option>Reconciliation</option>
+                <option>Health</option><option>Pharmacare</option>
+                <option>Budget</option><option>Legislation</option>
+                <option>Infrastructure</option><option>Workforce</option>
+                <option>Consultation</option><option>Environment</option>
+                <option>Housing</option><option>Child Care</option>
+                <option>Political</option><option>International</option>
+              </select></div>
+            <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Status</label>
+              <select class="filter-select" id="tm-status" style="width:100%">
+                <option value="Emerging">🟡 Emerging</option>
+                <option value="Active" selected>🟠 Active</option>
+                <option value="Escalating">🔴 Escalating</option>
+                <option value="Monitoring">🔵 Monitoring</option>
+                <option value="Resolved">⚪ Resolved</option>
+              </select></div>
+          </div>
+          <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Keywords <span style="color:var(--dim)">(comma-separated — used to find matching articles)</span></label>
+            <input class="filter-input" id="tm-keywords" placeholder="e.g. pharmacare, drug coverage, BC formulary" style="width:100%"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">
+          <button class="btn btn-ghost" onclick="closeTrackerModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveTrackerModal()">Save Tracker</button>
+        </div>
       </div>
-      <!-- Timeline panel -->
-      <div id="tracker-timeline-panel" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;min-height:400px">
+    </div>
+
+    <!-- Add-to-tracker picker (opened from article cards) -->
+    <div id="tracker-picker" style="display:none;position:fixed;inset:0;z-index:9100;background:rgba(0,0,0,.5);align-items:center;justify-content:center">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;width:100%;max-width:400px;margin:20px">
+        <div style="font-weight:700;font-size:14px;color:var(--white);margin-bottom:4px">Add to Tracker</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:14px" id="tracker-picker-article-title"></div>
+        <div id="tracker-picker-list" style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto;margin-bottom:14px"></div>
+        <div style="display:flex;gap:8px;justify-content:space-between">
+          <button class="btn btn-ghost btn-sm" onclick="openTrackerModal();closeTrackerPicker()">+ New Tracker</button>
+          <button class="btn btn-ghost" onclick="closeTrackerPicker()">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:290px 1fr;gap:14px;min-height:500px">
+      <!-- Tracker list -->
+      <div>
+        <input class="filter-input" id="tracker-search" placeholder="&#x1F50D; Filter trackers…" oninput="filterTrackerList(this.value)" style="margin-bottom:10px;width:100%">
+        <div id="tracker-list" style="display:flex;flex-direction:column;gap:6px">
+          <div style="text-align:center;padding:24px;color:var(--dim);font-size:12px">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Detail panel -->
+      <div id="tracker-detail-panel" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;min-height:400px">
         <div id="tracker-empty-state" style="display:flex;align-items:center;justify-content:center;height:300px;flex-direction:column;gap:12px;color:var(--dim)">
           <div style="font-size:40px;opacity:.4">&#x1F4CD;</div>
-          <div style="font-size:13px">Select a topic or create a new one</div>
-          <button class="btn btn-primary" onclick="addTrackerTopic()">+ New Topic</button>
+          <div style="font-size:13px">Select a tracker or create a new one</div>
+          <button class="btn btn-primary" onclick="openTrackerModal()">+ New Tracker</button>
         </div>
         <div id="tracker-topic-view" style="display:none">
+          <!-- Header -->
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-            <div>
-              <div id="tracker-topic-title" style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--white);margin-bottom:4px"></div>
-              <div id="tracker-topic-meta" style="font-size:11px;color:var(--muted)"></div>
+            <div style="flex:1;min-width:0">
+              <div id="tracker-topic-title" style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--white);margin-bottom:6px"></div>
+              <div id="tracker-topic-meta" style="font-size:11px;color:var(--muted);line-height:1.7"></div>
             </div>
-            <div style="display:flex;gap:8px">
-              <button class="btn btn-cyan btn-sm" onclick="aiCompareChanges()">&#x1F916; AI: What Changed?</button>
-              <button class="btn btn-ghost btn-sm" onclick="deleteTrackerTopic()">&#x1F5D1; Delete</button>
+            <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
+              <button class="btn btn-cyan btn-sm" onclick="runTrackerSynthesis()" id="btn-synthesize">&#x1F916; AI Synthesis</button>
+              <button class="btn btn-gold btn-sm"  onclick="runTrackerSuggest()"   id="btn-suggest">&#x2728; Suggest Articles</button>
+              <button class="btn btn-ghost btn-sm" onclick="runTrackerGaps()"      id="btn-gaps">&#x1F50D; Gap Analysis</button>
+              <button class="btn btn-primary btn-sm" onclick="sendTrackerToBriefing()" id="btn-to-briefing" title="Pre-populate the Briefing Note generator with this tracker's articles and context">&#x1F4CB; Send to Briefing</button>
+              <button class="btn btn-ghost btn-sm" onclick="openTrackerModal(_currentTrackerId)">&#x270E; Edit</button>
+              <button class="btn btn-ghost btn-sm" onclick="deleteCurrentTracker()" style="color:#f87171">&#x1F5D1; Delete</button>
             </div>
           </div>
-          <div id="tracker-ai-comparison" style="display:none;margin-bottom:14px;padding:12px 16px;background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.2);border-radius:8px;font-size:12px;color:var(--text);line-height:1.7"></div>
+
+          <!-- AI Synthesis panel -->
+          <div id="tracker-synthesis-panel" style="display:none;margin-bottom:16px;border:1px solid rgba(0,194,255,.25);border-radius:8px;background:rgba(0,194,255,.04);overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(0,194,255,.15)">
+              <div style="font-size:11px;font-weight:700;color:var(--cyan);letter-spacing:.06em;text-transform:uppercase">&#x1F916; AI Synthesis</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span id="tracker-synthesis-meta" style="font-size:10px;color:var(--dim)"></span>
+                <button onclick="document.getElementById('tracker-synthesis-panel').style.display='none'" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px">&#x2715;</button>
+              </div>
+            </div>
+            <div id="tracker-synthesis-loading" style="display:none;padding:16px;text-align:center;color:var(--muted);font-size:12px">
+              <span style="display:inline-block;animation:spin 1s linear infinite;margin-right:6px">&#8635;</span> Generating narrative synthesis…
+            </div>
+            <div id="tracker-synthesis-content" style="padding:14px 16px;font-size:12px;color:var(--text);line-height:1.8;white-space:pre-wrap"></div>
+          </div>
+
+          <!-- AI Suggestions panel -->
+          <div id="tracker-suggest-panel" style="display:none;margin-bottom:16px;border:1px solid rgba(234,179,8,.2);border-radius:8px;background:rgba(234,179,8,.03);overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(234,179,8,.12)">
+              <div style="font-size:11px;font-weight:700;color:var(--gold);letter-spacing:.06em;text-transform:uppercase">&#x2728; Suggested Articles</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span id="tracker-suggest-meta" style="font-size:10px;color:var(--dim)"></span>
+                <button onclick="document.getElementById('tracker-suggest-panel').style.display='none'" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px">&#x2715;</button>
+              </div>
+            </div>
+            <div id="tracker-suggest-loading" style="display:none;padding:16px;text-align:center;color:var(--muted);font-size:12px">
+              <span style="display:inline-block;animation:spin 1s linear infinite;margin-right:6px">&#8635;</span> Scanning articles for matches…
+            </div>
+            <div id="tracker-suggest-list" style="padding:8px 0"></div>
+          </div>
+
+          <!-- Gap Analysis panel -->
+          <div id="tracker-gaps-panel" style="display:none;margin-bottom:16px;border:1px solid rgba(139,92,246,.25);border-radius:8px;background:rgba(139,92,246,.04);overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(139,92,246,.15)">
+              <div style="font-size:11px;font-weight:700;color:#a78bfa;letter-spacing:.06em;text-transform:uppercase">&#x1F50D; Intelligence Gap Analysis</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span id="tracker-gaps-meta" style="font-size:10px;color:var(--dim)"></span>
+                <button onclick="document.getElementById('tracker-gaps-panel').style.display='none'" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px">&#x2715;</button>
+              </div>
+            </div>
+            <div id="tracker-gaps-loading" style="display:none;padding:16px;text-align:center;color:var(--muted);font-size:12px">
+              <span style="display:inline-block;animation:spin 1s linear infinite;margin-right:6px">&#8635;</span> Analysing intelligence gaps…
+            </div>
+            <div id="tracker-gaps-content" style="padding:14px 16px;font-size:12px;color:var(--text);line-height:1.8;white-space:pre-wrap"></div>
+          </div>
+
+          <!-- Description -->
+          <div id="tracker-topic-desc" style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:16px;padding:10px 14px;background:rgba(255,255,255,.03);border-radius:6px;display:none"></div>
+
+          <!-- Timeline + linked articles -->
+          <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Timeline</div>
           <div id="tracker-timeline" style="position:relative;padding-left:24px"></div>
+
+          <!-- Add manual event -->
+          <div style="margin-top:12px;padding:10px 14px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px">+ Manual Event</div>
+            <div style="display:grid;grid-template-columns:1fr 140px;gap:8px;margin-bottom:6px">
+              <input class="filter-input" id="tracker-event-title" placeholder="Event title…">
+              <input class="filter-input" id="tracker-event-date" type="date">
+            </div>
+            <textarea class="why-input" id="tracker-event-note" rows="1" placeholder="Optional note…" style="width:100%;font-size:11px;padding:6px 8px;margin-bottom:6px"></textarea>
+            <button class="btn btn-cyan btn-sm" onclick="addTrackerEventFromForm()">Add Event</button>
+          </div>
+
+          <!-- Linked articles section -->
           <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
-            <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Linked Articles from Feed</div>
+            <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Linked Articles <span id="tracker-linked-count" style="color:var(--cyan)"></span></div>
             <div id="tracker-linked-articles" style="display:flex;flex-direction:column;gap:6px"></div>
+            <!-- Search to link -->
             <div style="margin-top:10px">
-              <input class="filter-input" id="tracker-link-search" placeholder="Search articles to link..." oninput="searchArticlesToLink(this.value)" style="max-width:320px">
-              <div id="tracker-link-results" style="max-height:200px;overflow-y:auto;margin-top:6px;display:none"></div>
+              <input class="filter-input" id="tracker-link-search" placeholder="&#x1F50D; Search articles to link…" oninput="searchArticlesToLink(this.value)" style="width:100%;max-width:360px">
+              <div id="tracker-link-results" style="max-height:220px;overflow-y:auto;margin-top:6px;display:none"></div>
             </div>
           </div>
         </div>
@@ -3707,6 +3833,7 @@ function buildResearchCard(a, forDashboard){
       ?'<button class="hbtn" onclick="event.stopPropagation();markResearchRead('+a.id+',false)">&#x21A9; Unread</button>'
       :'<button class="hbtn" onclick="event.stopPropagation();markResearchRead('+a.id+',true)">&#x2713; Read</button>'
     )
+    +'<button class="hbtn" onclick="event.stopPropagation();openTrackerPicker('+a.id+',\'research\','+JSON.stringify(a.title||'')+'" title="Add to a Policy Tracker">&#x1F4CD; Track</button>'
     +'<button class="hbtn '+(a.flagged?'hbtn-flagged':'')+'" onclick="event.stopPropagation();toggleResearchFlag('+a.id+')" title="'+(a.flagged?'Remove flag':'Flag')+'">'+(a.flagged?'&#x1F6A9;':'&#x2691;')+' '+(a.flagged?'Flagged':'Flag')+'</button>'
     +'<button class="hbtn" onclick="event.stopPropagation();addResearchToCitations('+a.id+')" title="Add to bibliography">&#x1F4DA; Cite</button>'
     +'<button class="hbtn" onclick="event.stopPropagation();shareResearchArticle('+a.id+')">&#x1F517; Share</button>'
@@ -5436,6 +5563,7 @@ function buildCard(a,expanded){
         <button class="hbtn" onclick="event.stopPropagation();openPreview(${a.id},event)">&#x25BA; Preview</button>
         <button class="hbtn" onclick="event.stopPropagation();${a.read?'markUnread('+a.id+')':'markRead('+a.id+')'}">${a.read?'&#x21A9; Unread':'&#x2713; Read'}</button>
         <button class="hbtn" onclick="event.stopPropagation();toggleStage(${a.id})">${a.staged?'&#x2715; Unstage':'+&#x1F4C4; Stage'}</button>
+        <button class="hbtn" onclick="event.stopPropagation();openTrackerPicker(${a.id},'news',${JSON.stringify(a.title||'')})" title="Add to a Policy Tracker">&#x1F4CD; Track</button>
         <button class="hbtn ${a.flagged?'hbtn-flagged':''}" onclick="event.stopPropagation();toggleFlag(${a.id})" title="${a.flagged?'Remove flag':'Flag article'}">${a.flagged?'&#x1F6A9;':'&#x2691;'} ${a.flagged?'Flagged':'Flag'}</button>
         <button class="hbtn" onclick="event.stopPropagation();reanalyzeArticle(${a.id})" title="Re-run AI analysis">&#x1F504; Re-analyze</button>
         <button class="hbtn" onclick="event.stopPropagation();shareArticle(${a.id})">&#x1F517; Share</button>
@@ -10491,303 +10619,552 @@ function _openPublicFeedWindow(cfg, arts){
 
 
 /* ═══════════════════════════════════════════════════════════════════
-   POLICY POSITION TRACKER
+   POLICY TRACKER — backend-driven
    ═══════════════════════════════════════════════════════════════════ */
 
-var _trackerTopics = [];
-var _currentTopicId = null;
+var _trackers       = [];   // full list from API
+var _currentTrackerId = null;
+var _currentTracker   = null; // loaded detail (articles + events)
+var _trackerEditingId = null; // non-null when editing existing
 
-try { _trackerTopics = JSON.parse(localStorage.getItem('pp_tracker_topics')||'[]'); } catch(e){ _trackerTopics=[]; }
-function saveTrackerTopics(){ try{ localStorage.setItem('pp_tracker_topics',JSON.stringify(_trackerTopics)); }catch(e){} }
+// ── Status helpers ────────────────────────────────────────────────
+var _trackerStatusEmoji = {
+  'Emerging':'🟡','Active':'🟠','Escalating':'🔴','Monitoring':'🔵','Resolved':'⚪'
+};
+var _trackerStatusColors = {
+  'Emerging':'#ca8a04','Active':'#ea580c','Escalating':'#dc2626',
+  'Monitoring':'#2563eb','Resolved':'#6b7280'
+};
 
+function _tStatusBadge(status){
+  var e = _trackerStatusEmoji[status]||'⬜';
+  var c = _trackerStatusColors[status]||'#6b7280';
+  return '<span style="font-size:10px;font-weight:700;color:'+c+';background:'+c+'1a;border:1px solid '+c+'44;border-radius:4px;padding:2px 7px">'+e+' '+escHtml(status||'')+'</span>';
+}
+
+// ── Tab entry point ───────────────────────────────────────────────
 function renderPolicyTracker(){
-  _renderTrackerTopicsList();
-  if(_currentTopicId) _renderTrackerTimeline(_currentTopicId);
+  loadTrackers();
 }
 
-function filterTrackerTopics(q){
-  _renderTrackerTopicsList(q);
-}
-
-function _renderTrackerTopicsList(filter){
-  var container = document.getElementById('tracker-topics-list');
-  if(!container) return;
-  var list = _trackerTopics;
-  if(filter) list = list.filter(function(t){return t.name.toLowerCase().includes(filter.toLowerCase());});
-  if(!list.length){
-    container.innerHTML = '<div style="font-size:12px;color:var(--dim);padding:16px 0;text-align:center">'+(filter?'No matching topics.':'No topics yet. Click + New Topic.')+'</div>';
+async function loadTrackers(){
+  var listEl = document.getElementById('tracker-list');
+  if(!listEl) return;
+  if(!API_BASE){
+    listEl.innerHTML='<div style="font-size:11px;color:var(--dim);padding:12px;text-align:center">Connect your Render backend to use the Policy Tracker.</div>';
     return;
   }
-  container.innerHTML = list.map(function(t){
-    var events = (t.events||[]).length;
-    var linked = (t.linkedArticleIds||[]).length;
-    return '<div class="tracker-topic-item'+(t.id===_currentTopicId?' active':'')+'" onclick="openTrackerTopic(\''+t.id+'\')">'
-      +'<div class="tracker-topic-name">'+escHtml(t.name)+'</div>'
-      +'<div class="tracker-topic-meta">'+events+' events &bull; '+linked+' linked articles &bull; updated '+t.updated.slice(0,10)+'</div>'
-      +(t.status?'<div style="margin-top:5px"><span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:4px;background:'+(t.status==='Active'?'rgba(16,185,129,0.15)':t.status==='Resolved'?'rgba(100,116,139,0.15)':'rgba(240,165,0,0.12)')+';color:'+(t.status==='Active'?'#10b981':t.status==='Resolved'?'#94a3b8':'#f0a500')+'">'+t.status+'</span></div>':'')
+  var data = await apiFetch('/trackers');
+  _trackers = (data && data.trackers) ? data.trackers : [];
+  _renderTrackerList();
+  if(_currentTrackerId){
+    var still = _trackers.find(function(t){return t.id===_currentTrackerId;});
+    if(still) openTrackerDetail(_currentTrackerId);
+    else { _currentTrackerId=null; _currentTracker=null; _showTrackerEmpty(); }
+  }
+}
+
+function _renderTrackerList(filter){
+  var listEl = document.getElementById('tracker-list');
+  if(!listEl) return;
+  var items = filter
+    ? _trackers.filter(function(t){ return (t.name||'').toLowerCase().includes(filter.toLowerCase()); })
+    : _trackers;
+  if(!items.length){
+    listEl.innerHTML='<div style="font-size:11px;color:var(--dim);padding:12px;text-align:center">'+(filter?'No matches.':'No trackers yet. Create your first one.')+'</div>';
+    return;
+  }
+  listEl.innerHTML = items.map(function(t){
+    var active = t.id===_currentTrackerId;
+    var kws = (t.keywords||'').split(',').map(function(k){return k.trim();}).filter(Boolean);
+    return '<div class="tracker-topic-item'+(active?' active':'')+'" onclick="openTrackerDetail('+t.id+')">'
+      +'<div class="tracker-topic-name">'+escHtml(t.name||'')+'</div>'
+      +'<div class="tracker-topic-meta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">'
+      +_tStatusBadge(t.status)
+      +(t.domain?'<span style="font-size:10px;color:var(--cyan)">'+escHtml(t.domain)+'</span>':'')
+      +'</div>'
+      +'<div class="tracker-topic-meta" style="margin-top:5px">'
+      +'<span>'+t.article_count+' articles</span>'
+      +(t.event_count?' &bull; <span>'+t.event_count+' events</span>':'')
+      +(kws.length?' &bull; <span style="color:var(--dim)">'+escHtml(kws.slice(0,2).join(', '))+(kws.length>2?'…':'')+'</span>':'')
+      +'</div>'
       +'</div>';
   }).join('');
 }
 
-function addTrackerTopic(){
-  var name = prompt('Topic name (e.g. "Bill 22 — Post-Secondary Amendment"):');
-  if(!name || !name.trim()) return;
-  var keyword = prompt('Search keyword (used to auto-match articles, e.g. "Bill 22"):') || name.trim();
-  var now = new Date().toISOString();
-  var topic = {
-    id: 'tp-'+Date.now(),
-    name: name.trim(),
-    keyword: keyword.trim(),
-    status: 'Active',
-    events: [],
-    linkedArticleIds: [],
-    created: now,
-    updated: now,
-  };
-  _trackerTopics.unshift(topic);
-  saveTrackerTopics();
-  _renderTrackerTopicsList();
-  openTrackerTopic(topic.id);
-  showToast('&#x1F4CD;','Topic Created','"'+name.trim()+'" added. Link articles from the feed below.',3000);
+function filterTrackerList(q){ _renderTrackerList(q||undefined); }
+
+function _showTrackerEmpty(){
+  var emp = document.getElementById('tracker-empty-state');
+  var vw  = document.getElementById('tracker-topic-view');
+  if(emp) emp.style.display='flex';
+  if(vw)  vw.style.display='none';
 }
 
-function openTrackerTopic(id){
-  _currentTopicId = id;
-  _renderTrackerTopicsList();
-  _renderTrackerTimeline(id);
-  var emptyEl = document.getElementById('tracker-empty-state');
-  var viewEl  = document.getElementById('tracker-topic-view');
-  if(emptyEl) emptyEl.style.display='none';
-  if(viewEl)  viewEl.style.display='block';
+// ── Load and render a specific tracker ───────────────────────────
+async function openTrackerDetail(id){
+  _currentTrackerId = id;
+  _renderTrackerList(document.getElementById('tracker-search')&&document.getElementById('tracker-search').value||undefined);
+  var emp = document.getElementById('tracker-empty-state');
+  var vw  = document.getElementById('tracker-topic-view');
+  if(emp) emp.style.display='none';
+  if(vw)  vw.style.display='block';
+  document.getElementById('tracker-topic-title').textContent='Loading…';
+
+  var data = await apiFetch('/trackers/'+id);
+  if(!data || !data.id){ _showTrackerEmpty(); return; }
+  _currentTracker = data;
+
+  // Header
+  document.getElementById('tracker-topic-title').textContent = data.name||'';
+  var metaEl = document.getElementById('tracker-topic-meta');
+  metaEl.innerHTML = _tStatusBadge(data.status)
+    +(data.domain?' &bull; <span style="color:var(--cyan)">'+escHtml(data.domain)+'</span>':'')
+    +(data.keywords?' &bull; Keywords: <span style="color:var(--dim)">'+escHtml(data.keywords)+'</span>':'')
+    +'<br><span style="color:var(--dim);font-size:10px">Created '+((data.created_date||'').slice(0,10))+' &bull; Updated '+((data.updated_date||'').slice(0,10))+'</span>';
+
+  var descEl = document.getElementById('tracker-topic-desc');
+  if(data.description && data.description.trim()){
+    descEl.textContent = data.description; descEl.style.display='block';
+  } else {
+    descEl.style.display='none';
+  }
+
+  _renderTrackerTimeline(data);
+  _renderLinkedArticles(data.articles||[]);
 }
 
-function _renderTrackerTimeline(id){
-  var topic = _trackerTopics.find(function(t){return t.id===id;});
-  if(!topic) return;
-
-  var titleEl = document.getElementById('tracker-topic-title');
-  var metaEl  = document.getElementById('tracker-topic-meta');
-  if(titleEl) titleEl.textContent = topic.name;
-  if(metaEl)  metaEl.textContent = 'Keyword: "'+topic.keyword+'" &bull; Status: '+(topic.status||'Active')+' &bull; Created: '+topic.created.slice(0,10);
-
-  // Build events from linked articles + manual events
-  var linkedArts = (topic.linkedArticleIds||[]).map(function(aid){
-    return articles.find(function(a){return a.id===aid;});
-  }).filter(Boolean);
-
-  // Merge manual events + linked articles into one timeline sorted by date
-  var timelineItems = [];
-  (topic.events||[]).forEach(function(e){
-    timelineItems.push({date:e.date, title:e.title, note:e.note, type:'event'});
-  });
-  linkedArts.forEach(function(a){
-    timelineItems.push({date:a.pub_date||a.pubDate||a.scrapedDate||'', title:a.title, note:a.summary||'', url:a.url, source:a.source, relevance:a.relevance, sentiment:a.sentiment, type:'article', id:a.id});
-  });
-  timelineItems.sort(function(a,b){return new Date(a.date)-new Date(b.date);});
-
+// ── Timeline render (events + articles merged chronologically) ───
+function _renderTrackerTimeline(tracker){
   var tlEl = document.getElementById('tracker-timeline');
-  if(tlEl){
-    if(!timelineItems.length){
-      tlEl.innerHTML = '<div style="font-size:12px;color:var(--dim);padding:12px 0">No events yet. Add manual events or link articles below.</div>';
+  if(!tlEl) return;
+
+  var items = [];
+
+  // Manual events
+  (tracker.events||[]).forEach(function(e){
+    items.push({ type:'event', date:e.event_date||e.created_date||'', title:e.title, note:e.note, id:e.id });
+  });
+
+  // Linked articles
+  (tracker.articles||[]).forEach(function(a){
+    items.push({ type:'article', date:a.pub_date||a.added_date||'', title:a.title, source:a.source,
+      domain:a.domain, relevance:a.relevance, summary:a.summary, url:a.url,
+      article_id:a.article_id, link_id:a.link_id });
+  });
+
+  // Sort chronologically
+  items.sort(function(a,b){ return (a.date||'') < (b.date||'') ? -1 : 1; });
+
+  if(!items.length){
+    tlEl.innerHTML='<div style="font-size:12px;color:var(--dim);padding:12px 0">No events or articles yet. Link articles from your feed or add manual events below.</div>';
+    return;
+  }
+
+  tlEl.innerHTML = items.map(function(item){
+    var dotColor = item.type==='article' ? 'var(--cyan)' : 'var(--gold)';
+    var dateLabel = item.date ? item.date.slice(0,10) : '—';
+    var body = '';
+    if(item.type==='article'){
+      body = '<a href="'+(item.url||'#')+'" target="_blank" rel="noopener" class="tracker-event-title" style="color:var(--cyan);text-decoration:none">'+escHtml(item.title||'')+'↗</a>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:2px">'+escHtml(item.source||'')
+        +(item.relevance?' &bull; '+rEmoji(item.relevance)+' '+item.relevance+'/10':'')+'</div>'
+        +(item.summary?'<div class="tracker-event-note" style="margin-top:4px">'+escHtml((item.summary||'').slice(0,160))+'</div>':'')
+        +'<button onclick="unlinkTrackerArticle('+_currentTrackerId+','+item.article_id+')" style="font-size:9px;color:var(--dim);background:none;border:none;cursor:pointer;padding:2px 0;margin-top:4px">✕ Unlink</button>';
     } else {
-      tlEl.innerHTML = timelineItems.map(function(item, i){
-        var dotColor = item.type==='event'?'var(--gold)':'var(--cyan)';
-        var relBadge = item.relevance?'<span style="font-size:10px;color:var(--gold);margin-left:6px">'+item.relevance+'/10</span>':'';
-        var sentBadge = item.sentiment?'<span style="font-size:10px;margin-left:6px">'+sIcon(item.sentiment)+' '+item.sentiment+'</span>':'';
-        return '<div class="tracker-timeline-event">'
-          +'<div class="tracker-timeline-dot" style="border-color:'+dotColor+'"></div>'
-          +'<div class="tracker-event-date">'+item.date+'</div>'
-          +'<div class="tracker-event-title">'
-          +(item.url?'<a href="'+escHtml(item.url)+'" target="_blank" rel="noopener" style="color:var(--cyan);text-decoration:none">'+escHtml(item.title)+' ↗</a>':escHtml(item.title))
-          +relBadge+sentBadge
-          +'</div>'
-          +(item.source?'<div style="font-size:10px;color:var(--muted);margin-bottom:4px">'+escHtml(item.source)+'</div>':'')
-          +(item.note?'<div class="tracker-event-note">'+escHtml(item.note)+'</div>':'')
-          +(item.type==='article'?'<button onclick="unlinkTrackerArticle(\''+id+'\','+item.id+')" style="font-size:10px;background:none;border:none;color:var(--dim);cursor:pointer;margin-top:4px;padding:0" onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--dim)\'">&#x2715; Unlink</button>':'<button onclick="deleteTrackerEvent(\''+id+'\','+i+')" style="font-size:10px;background:none;border:none;color:var(--dim);cursor:pointer;margin-top:4px;padding:0" onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--dim)\'">&#x2715; Delete</button>')
-          +'</div>';
-      }).join('');
+      body = '<div class="tracker-event-title" style="color:var(--gold)">'+escHtml(item.title||'')+'</div>'
+        +(item.note?'<div class="tracker-event-note">'+escHtml(item.note)+'</div>':'')
+        +'<button onclick="deleteTrackerEventItem('+item.id+')" style="font-size:9px;color:var(--dim);background:none;border:none;cursor:pointer;padding:2px 0;margin-top:4px">✕ Remove</button>';
     }
-    // Add manual event button
-    tlEl.innerHTML += '<div style="margin-top:12px">'
-      +'<button class="btn btn-ghost btn-sm" onclick="addTrackerEvent(\''+id+'\')">+ Add Manual Event</button>'
-      +'&nbsp;<select class="filter-select" style="height:28px;width:auto" onchange="changeTopicStatus(\''+id+'\',this.value)">'
-      +'<option value="Active" '+(topic.status==='Active'?'selected':'')+'>Active</option>'
-      +'<option value="Monitoring" '+(topic.status==='Monitoring'?'selected':'')+'>Monitoring</option>'
-      +'<option value="Resolved" '+(topic.status==='Resolved'?'selected':'')+'>Resolved</option>'
-      +'</select>'
+    return '<div class="tracker-timeline-event">'
+      +'<div class="tracker-timeline-dot" style="border-color:'+dotColor+'"></div>'
+      +'<div class="tracker-event-date">'+escHtml(dateLabel)+'</div>'
+      +body
       +'</div>';
+  }).join('');
+}
+
+// ── Linked articles list ──────────────────────────────────────────
+function _renderLinkedArticles(artList){
+  var el  = document.getElementById('tracker-linked-articles');
+  var cnt = document.getElementById('tracker-linked-count');
+  if(cnt) cnt.textContent = artList.length ? '('+artList.length+')' : '';
+  if(!el) return;
+  if(!artList.length){
+    el.innerHTML='<div style="font-size:11px;color:var(--dim)">No articles linked yet. Search below or use the Track button on any article card.</div>';
+    return;
   }
+  el.innerHTML = artList.map(function(a){
+    return '<div class="tracker-link-result" style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+      +'<div><div style="font-size:11px;font-weight:600;color:var(--white)">'+escHtml((a.title||'').slice(0,90))+'</div>'
+      +'<div style="font-size:10px;color:var(--muted)">'+escHtml(a.source||'')+' &bull; '+(a.pub_date||'').slice(0,10)+'</div></div>'
+      +'<button onclick="unlinkTrackerArticle('+_currentTrackerId+','+a.article_id+')" style="font-size:10px;background:none;border:none;cursor:pointer;color:var(--dim);flex-shrink:0">✕</button>'
+      +'</div>';
+  }).join('');
+}
 
-  // Linked articles panel
-  var laEl = document.getElementById('tracker-linked-articles');
-  if(laEl){
-    if(!linkedArts.length){
-      laEl.innerHTML='<div style="font-size:11px;color:var(--dim)">No articles linked yet. Search below to add.</div>';
-    } else {
-      laEl.innerHTML = linkedArts.map(function(a){
-        return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)">'
-          +'<div style="flex:1;font-size:11px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escHtml(a.title)+'">'+escHtml(a.title)+'</div>'
-          +'<span style="font-size:10px;color:var(--muted);flex-shrink:0">'+(a.pub_date||a.pubDate||'')+'</span>'
-          +'<button onclick="unlinkTrackerArticle(\''+id+'\','+a.id+')" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;flex-shrink:0">&#x2715;</button>'
-          +'</div>';
-      }).join('');
-    }
+// ── Add / unlink articles ─────────────────────────────────────────
+async function unlinkTrackerArticle(trackerId, articleId){
+  var resp = await apiFetch('/trackers/'+trackerId+'/articles/'+articleId, {method:'DELETE'});
+  if(resp && resp.ok !== false){
+    showToast('✓','Removed','Article unlinked from tracker.',1800);
+    openTrackerDetail(trackerId);
+    loadTrackers();
   }
-
-  // Auto-detect matching articles by keyword
-  var keyLow = (topic.keyword||'').toLowerCase();
-  var autoMatches = keyLow ? articles.filter(function(a){
-    return !topic.linkedArticleIds.includes(a.id) &&
-      ((a.title||'').toLowerCase().includes(keyLow) || (a.summary||'').toLowerCase().includes(keyLow));
-  }).slice(0,5) : [];
-  if(autoMatches.length){
-    var laEl2 = document.getElementById('tracker-linked-articles');
-    if(laEl2){
-      laEl2.innerHTML += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">'
-        +'<div style="font-size:10px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">&#x26A1; Auto-matched from feed</div>'
-        + autoMatches.map(function(a){
-          return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">'
-            +'<div style="flex:1;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(a.title)+'</div>'
-            +'<button class="btn btn-cyan btn-sm" style="font-size:9px;padding:2px 7px;flex-shrink:0" onclick="linkTrackerArticle(\''+id+'\','+a.id+')">Link</button>'
-            +'</div>';
-        }).join('')
-        +'</div>';
-    }
-  }
-}
-
-function linkTrackerArticle(topicId, articleId){
-  var topic = _trackerTopics.find(function(t){return t.id===topicId;});
-  if(!topic) return;
-  if(!(topic.linkedArticleIds||[]).includes(articleId)){
-    if(!topic.linkedArticleIds) topic.linkedArticleIds=[];
-    topic.linkedArticleIds.push(articleId);
-    topic.updated = new Date().toISOString();
-    saveTrackerTopics();
-    _renderTrackerTimeline(topicId);
-    showToast('&#x1F4CD;','Article Linked','Added to policy timeline.',2000);
-  }
-}
-
-function unlinkTrackerArticle(topicId, articleId){
-  var topic = _trackerTopics.find(function(t){return t.id===topicId;});
-  if(!topic) return;
-  topic.linkedArticleIds = (topic.linkedArticleIds||[]).filter(function(id){return id!==articleId;});
-  topic.updated = new Date().toISOString();
-  saveTrackerTopics();
-  _renderTrackerTimeline(topicId);
-}
-
-function addTrackerEvent(topicId){
-  var topic = _trackerTopics.find(function(t){return t.id===topicId;});
-  if(!topic) return;
-  var title = prompt('Event title:');
-  if(!title) return;
-  var date = prompt('Date (YYYY-MM-DD):', new Date().toISOString().slice(0,10));
-  if(!date) return;
-  var note = prompt('Notes (optional):') || '';
-  if(!topic.events) topic.events=[];
-  topic.events.push({title:title.trim(), date:date.trim(), note:note.trim()});
-  topic.updated = new Date().toISOString();
-  saveTrackerTopics();
-  _renderTrackerTimeline(topicId);
-  showToast('&#x1F4CD;','Event Added','"'+title.trim()+'" added to timeline.',2000);
-}
-
-function deleteTrackerEvent(topicId, index){
-  var topic = _trackerTopics.find(function(t){return t.id===topicId;});
-  if(!topic || !topic.events) return;
-  topic.events.splice(index, 1);
-  topic.updated = new Date().toISOString();
-  saveTrackerTopics();
-  _renderTrackerTimeline(topicId);
-}
-
-function changeTopicStatus(topicId, status){
-  var topic = _trackerTopics.find(function(t){return t.id===topicId;});
-  if(!topic) return;
-  topic.status = status;
-  topic.updated = new Date().toISOString();
-  saveTrackerTopics();
-  _renderTrackerTopicsList();
-}
-
-function deleteTrackerTopic(){
-  if(!_currentTopicId) return;
-  var topic = _trackerTopics.find(function(t){return t.id===_currentTopicId;});
-  if(!confirm('Delete topic "'+topic.name+'"? This cannot be undone.')) return;
-  _trackerTopics = _trackerTopics.filter(function(t){return t.id!==_currentTopicId;});
-  _currentTopicId = null;
-  saveTrackerTopics();
-  _renderTrackerTopicsList();
-  var emptyEl = document.getElementById('tracker-empty-state');
-  var viewEl  = document.getElementById('tracker-topic-view');
-  if(emptyEl) emptyEl.style.display='flex';
-  if(viewEl)  viewEl.style.display='none';
-  showToast('&#x1F5D1;','Topic Deleted','Policy topic removed.',2500);
 }
 
 function searchArticlesToLink(q){
   var resultsEl = document.getElementById('tracker-link-results');
   if(!resultsEl) return;
   if(!q || q.length<2){ resultsEl.style.display='none'; return; }
-  var matches = articles.filter(function(a){
-    return a.title.toLowerCase().includes(q.toLowerCase()) || (a.summary||'').toLowerCase().includes(q.toLowerCase());
+  var hay = articles.concat((_researchArticles||[]).map(function(a){return Object.assign({},a,{_btype:'research'});}));
+  var matches = hay.filter(function(a){
+    var t = (a.title||'').toLowerCase(); var s = (a.summary||'').toLowerCase();
+    return t.includes(q.toLowerCase())||s.includes(q.toLowerCase());
   }).slice(0,8);
   if(!matches.length){ resultsEl.style.display='none'; return; }
   resultsEl.style.display='block';
   resultsEl.innerHTML = matches.map(function(a){
-    return '<div class="tracker-link-result" onclick="linkTrackerArticle(\''+_currentTopicId+'\','+a.id+');this.parentElement.style.display=\'none\'">'
-      +'<div style="font-size:11px;font-weight:600;color:var(--white)">'+escHtml(a.title.slice(0,80))+'</div>'
+    return '<div class="tracker-link-result" onclick="linkArticleToCurrentTracker('+a.id+',\''+(a._btype||'news')+'\')">'
+      +'<div style="font-size:11px;font-weight:600;color:var(--white)">'+escHtml((a.title||'').slice(0,90))+'</div>'
       +'<div style="font-size:10px;color:var(--muted)">'+escHtml(a.source||'')+' &bull; '+(a.pub_date||a.pubDate||'')+' &bull; '+rEmoji(a.relevance||0)+' '+(a.relevance||0)+'/10</div>'
       +'</div>';
   }).join('');
 }
 
-async function aiCompareChanges(){
-  var topic = _trackerTopics.find(function(t){return t.id===_currentTopicId;});
-  if(!topic) return;
-  if(!API_BASE){
-    var aiEl = document.getElementById('tracker-ai-comparison');
-    if(aiEl){ aiEl.style.display='block'; aiEl.textContent='Connect your Render backend to use AI features.'; }
-    return;
-  }
-
-  var linkedArts = (topic.linkedArticleIds||[]).map(function(aid){
-    return articles.find(function(a){return a.id===aid;});
-  }).filter(Boolean).sort(function(a,b){
-    return new Date(a.pub_date||a.pubDate||0)-new Date(b.pub_date||b.pubDate||0);
+async function linkArticleToCurrentTracker(articleId, articleType){
+  if(!_currentTrackerId){ showToast('⚠','No Tracker','Open a tracker first.',2500); return; }
+  document.getElementById('tracker-link-results').style.display='none';
+  document.getElementById('tracker-link-search').value='';
+  var resp = await apiFetch('/trackers/'+_currentTrackerId+'/articles', {
+    method:'POST',
+    body: JSON.stringify({article_id:articleId, article_type:articleType||'news'})
   });
-
-  if(linkedArts.length<2){ showToast('&#x26A0;','Need 2+ Articles','Link at least 2 articles to compare changes.',3000); return; }
-
-  var aiEl = document.getElementById('tracker-ai-comparison');
-  if(aiEl){ aiEl.style.display='block'; aiEl.textContent='&#x1F916; Analyzing policy evolution…'; }
-
-  var context = linkedArts.map(function(a,i){
-    return '['+(i+1)+'] '+a.pub_date+': '+a.title+'\nSummary: '+a.summary+'\nWhy it matters: '+(a.why_it_matters||a.whyItMatters||'');
-  }).join('\n\n');
-
-  try {
-    var d = await apiFetch('/ai/chat', {
-      method: 'POST',
-      body: JSON.stringify({
-        messages: [
-          {role:'system', content:'You are a senior Canadian policy analyst. Analyze how a policy issue has evolved over time based on article coverage.'},
-          {role:'user',   content:'Analyze the evolution of this policy topic: "'+topic.name+'"\n\nCompare these articles in chronological order and tell me:\n1. What is NEW or CHANGED in the most recent coverage vs earlier coverage?\n2. How has the policy position shifted?\n3. What should a government relations professional watch for next?\n\nARTICLES:\n'+context+'\n\nBe concise (3-4 sentences per point). Focus on what is genuinely new, not repeated context.'}
-        ],
-        max_tokens: 600
-      })
-    });
-    if(!d || !d.ok) throw new Error((d&&d.detail)||'AI request failed');
-    var reply = (d.content||'').trim();
-    if(aiEl){ aiEl.style.display='block'; aiEl.innerHTML='<strong style="color:var(--cyan);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">&#x1F916; AI: What Changed?</strong><br><br>'+escHtml(reply).replace(/\n/g,'<br>'); }
-  } catch(e){
-    if(aiEl){ aiEl.textContent='Error: '+e.message; }
-    showToast('&#x26A0;','AI Error',e.message,4000);
+  if(resp && resp.ok !== false){
+    showToast(resp.already_linked?'ℹ':'✅', resp.already_linked?'Already linked':'Linked', resp.already_linked?'Article already in this tracker.':'Article added to tracker.',2000);
+    openTrackerDetail(_currentTrackerId);
+    loadTrackers();
   }
 }
 
+// ── "Add to Tracker" picker (from article cards) ─────────────────
+var _pickerArticleId   = null;
+var _pickerArticleType = 'news';
+
+function openTrackerPicker(articleId, articleType, titleText){
+  _pickerArticleId   = articleId;
+  _pickerArticleType = articleType || 'news';
+  var titleEl = document.getElementById('tracker-picker-article-title');
+  if(titleEl) titleEl.textContent = titleText ? (titleText.slice(0,80)+(titleText.length>80?'…':'')) : '';
+  var listEl = document.getElementById('tracker-picker-list');
+  if(listEl){
+    if(!_trackers.length){
+      listEl.innerHTML='<div style="font-size:11px;color:var(--dim)">No trackers yet. Create one first.</div>';
+    } else {
+      listEl.innerHTML = _trackers.map(function(t){
+        return '<div class="tracker-link-result" onclick="linkToPickerTracker('+t.id+')">'
+          +'<div style="font-size:12px;font-weight:600;color:var(--white)">'+escHtml(t.name)+'</div>'
+          +'<div style="font-size:10px;color:var(--muted)">'+_tStatusBadge(t.status)+' &bull; '+t.article_count+' articles</div>'
+          +'</div>';
+      }).join('');
+    }
+  }
+  var picker = document.getElementById('tracker-picker');
+  if(picker) picker.style.display='flex';
+}
+
+function closeTrackerPicker(){
+  var picker = document.getElementById('tracker-picker');
+  if(picker) picker.style.display='none';
+}
+
+async function linkToPickerTracker(trackerId){
+  closeTrackerPicker();
+  if(!_pickerArticleId) return;
+  var resp = await apiFetch('/trackers/'+trackerId+'/articles', {
+    method:'POST',
+    body: JSON.stringify({article_id:_pickerArticleId, article_type:_pickerArticleType})
+  });
+  if(resp && resp.ok !== false){
+    showToast(resp.already_linked?'ℹ':'✅', resp.already_linked?'Already linked':'Added to Tracker',
+      resp.already_linked?'Article already tracked.':'Article added to tracker.',2500);
+    loadTrackers(); // refresh counts
+  } else {
+    showToast('⚠','Error','Could not link article. Check backend connection.',3000);
+  }
+}
+
+// ── New / Edit modal ──────────────────────────────────────────────
+function openTrackerModal(editId){
+  _trackerEditingId = editId || null;
+  var t = editId ? _trackers.find(function(x){return x.id===editId;}) : null;
+  document.getElementById('tracker-modal-title').textContent = t ? 'Edit Tracker' : 'New Tracker';
+  document.getElementById('tm-name').value     = t ? (t.name||'')        : '';
+  document.getElementById('tm-desc').value     = t ? (t.description||'') : '';
+  document.getElementById('tm-keywords').value = t ? (t.keywords||'')    : '';
+  var domSel = document.getElementById('tm-domain');
+  if(domSel) domSel.value = t ? (t.domain||'') : '';
+  var stSel = document.getElementById('tm-status');
+  if(stSel) stSel.value = t ? (t.status||'Active') : 'Active';
+  document.getElementById('tracker-modal').style.display='flex';
+}
+
+function closeTrackerModal(){
+  document.getElementById('tracker-modal').style.display='none';
+  _trackerEditingId=null;
+}
+
+async function saveTrackerModal(){
+  var name = (document.getElementById('tm-name').value||'').trim();
+  if(!name){ showToast('⚠','Name required','Enter a tracker name.',2500); return; }
+  var body = {
+    name:        name,
+    description: (document.getElementById('tm-desc').value||'').trim(),
+    domain:      (document.getElementById('tm-domain').value||'').trim(),
+    status:      (document.getElementById('tm-status').value||'Active'),
+    keywords:    (document.getElementById('tm-keywords').value||'').trim(),
+  };
+  var resp;
+  if(_trackerEditingId){
+    resp = await apiFetch('/trackers/'+_trackerEditingId, {method:'PATCH', body:JSON.stringify(body)});
+  } else {
+    resp = await apiFetch('/trackers', {method:'POST', body:JSON.stringify(body)});
+  }
+  closeTrackerModal();
+  if(resp && resp.ok !== false){
+    showToast('✅', _trackerEditingId?'Updated':'Created', 'Tracker saved.',2000);
+    await loadTrackers();
+    if(!_trackerEditingId && resp.id) openTrackerDetail(resp.id);
+    else if(_currentTrackerId)        openTrackerDetail(_currentTrackerId);
+  } else {
+    showToast('⚠','Error','Could not save tracker.',3000);
+  }
+}
+
+// ── Delete tracker ────────────────────────────────────────────────
+async function deleteCurrentTracker(){
+  if(!_currentTrackerId) return;
+  var t = _trackers.find(function(x){return x.id===_currentTrackerId;});
+  if(!t) return;
+  if(!confirm('Delete tracker "'+t.name+'" and all its linked articles and events? This cannot be undone.')) return;
+  var resp = await apiFetch('/trackers/'+_currentTrackerId, {method:'DELETE'});
+  if(resp && resp.ok !== false){
+    _currentTrackerId=null; _currentTracker=null;
+    showToast('🗑','Deleted','Tracker removed.',2000);
+    await loadTrackers();
+    _showTrackerEmpty();
+  }
+}
+
+// ── Manual events ─────────────────────────────────────────────────
+async function addTrackerEventFromForm(){
+  if(!_currentTrackerId){ showToast('⚠','No Tracker','Open a tracker first.',2500); return; }
+  var title = (document.getElementById('tracker-event-title').value||'').trim();
+  if(!title){ showToast('⚠','Title required','Enter an event title.',2500); return; }
+  var date  = document.getElementById('tracker-event-date').value||'';
+  var note  = (document.getElementById('tracker-event-note').value||'').trim();
+  var resp  = await apiFetch('/trackers/'+_currentTrackerId+'/events', {
+    method:'POST', body:JSON.stringify({title:title, event_date:date, note:note})
+  });
+  if(resp && resp.ok !== false){
+    document.getElementById('tracker-event-title').value='';
+    document.getElementById('tracker-event-date').value='';
+    document.getElementById('tracker-event-note').value='';
+    showToast('✅','Event Added','Manual event recorded.',1800);
+    openTrackerDetail(_currentTrackerId);
+    loadTrackers();
+  }
+}
+
+async function deleteTrackerEventItem(eventId){
+  if(!_currentTrackerId) return;
+  var resp = await apiFetch('/trackers/'+_currentTrackerId+'/events/'+eventId, {method:'DELETE'});
+  if(resp && resp.ok !== false){
+    showToast('🗑','Removed','Event deleted.',1800);
+    openTrackerDetail(_currentTrackerId);
+  }
+}
+
+
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   POLICY TRACKER — PHASE 2 & 3 AI FUNCTIONS
+   ═══════════════════════════════════════════════════════════════════ */
+
+// ── Shared loading helper ─────────────────────────────────────────
+function _trackerAiStart(panelId, loadingId, contentId, metaId, btnId, loadingMsg){
+  var panel   = document.getElementById(panelId);
+  var loading = document.getElementById(loadingId);
+  var content = document.getElementById(contentId);
+  var meta    = document.getElementById(metaId);
+  var btn     = document.getElementById(btnId);
+  if(panel)   panel.style.display   = 'block';
+  if(loading) loading.style.display = 'block';
+  if(content) { content.innerHTML=''; content.style.color=''; }
+  if(meta)    meta.textContent      = '';
+  if(btn)     { btn.disabled=true; btn.dataset.origText=btn.textContent; btn.textContent=loadingMsg; }
+  return { panel:panel, loading:loading, content:content, meta:meta, btn:btn };
+}
+function _trackerAiDone(els, origBtnText){
+  if(els.loading) els.loading.style.display='none';
+  if(els.btn){ els.btn.disabled=false; els.btn.textContent=els.btn.dataset.origText||origBtnText; }
+}
+
+// ── Shared narrative renderer (sections + [N] superscripts) ──────
+function _renderNarrative(text, containerEl){
+  if(!containerEl) return;
+  var sectionHeaders = [
+    'OVERVIEW','TIMELINE NARRATIVE','KEY TENSIONS','INSTITUTIONAL IMPLICATIONS','WHAT TO WATCH',
+    'MISSING VOICES','UNCOVERED POLICY AREAS','UPCOMING CRITICAL DATES',
+    'UNRESOLVED QUESTIONS','RECOMMENDED NEXT ACTIONS',
+  ];
+  var escaped = escHtml(text);
+  sectionHeaders.forEach(function(h){
+    escaped = escaped.replace(new RegExp('(^|<br>)'+h+'(<br>|$)','gm'),
+      function(_, pre, post){
+        return (pre||'')+'<div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;'
+          +'color:var(--cyan);margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid rgba(0,194,255,.2)">'
+          +h+'</div>'+(post||'');
+      });
+  });
+  escaped = escaped
+    .replace(/\[(\d+)\]/g, function(_,n){
+      return '<sup style="color:var(--cyan);font-weight:700;font-size:9px;cursor:default" title="Source ['+n+']">['+n+']</sup>';
+    })
+    .replace(/\n/g,'<br>');
+  containerEl.style.whiteSpace = 'normal';
+  containerEl.innerHTML = escaped;
+}
+
+// ── Phase 2: AI Synthesis ─────────────────────────────────────────
+async function runTrackerSynthesis(){
+  if(!_currentTrackerId){ showToast('\u26a0','No tracker','Open a tracker first.',2500); return; }
+  if(!API_BASE){ showToast('\u26a0','No backend','Connect your Render backend.',2500); return; }
+  var els = _trackerAiStart('tracker-synthesis-panel','tracker-synthesis-loading','tracker-synthesis-content','tracker-synthesis-meta','btn-synthesize','Generating\u2026');
+  try {
+    var resp = await apiFetch('/trackers/'+_currentTrackerId+'/synthesize', {method:'POST'});
+    if(!resp || resp.ok===false) throw new Error((resp&&resp.detail)||'Synthesis failed');
+    _renderNarrative(resp.synthesis||'', els.content);
+    if(els.meta) els.meta.textContent = (resp.article_count||0)+' articles \xb7 '+new Date().toLocaleTimeString();
+  } catch(e){
+    if(els.content){ els.content.style.color='#f87171'; els.content.textContent='Error: '+e.message; }
+    showToast('\u26a0','Synthesis failed',e.message,4000);
+  } finally { _trackerAiDone(els,'\ud83e\udd16 AI Synthesis'); }
+}
+
+// ── Phase 2: Article Suggestions ─────────────────────────────────
+async function runTrackerSuggest(){
+  if(!_currentTrackerId){ showToast('\u26a0','No tracker','Open a tracker first.',2500); return; }
+  if(!API_BASE){ showToast('\u26a0','No backend','Connect your Render backend.',2500); return; }
+  var els = _trackerAiStart('tracker-suggest-panel','tracker-suggest-loading','tracker-suggest-list','tracker-suggest-meta','btn-suggest','Scanning\u2026');
+  try {
+    var resp = await apiFetch('/trackers/'+_currentTrackerId+'/suggest', {method:'POST'});
+    if(!resp || resp.ok===false) throw new Error((resp&&resp.detail)||'Suggestion failed');
+    var suggs = resp.suggestions||[];
+    if(els.meta) els.meta.textContent = suggs.length+' match'+(suggs.length!==1?'es':'')+' found';
+    if(!suggs.length){
+      els.content.innerHTML='<div style="padding:14px 16px;font-size:12px;color:var(--dim)">No strong matches found. Add more keywords to this tracker or trigger a fresh scrape.</div>';
+    } else {
+      els.content.innerHTML = suggs.map(function(s){
+        var sc = s.score>=9?'#f97316':s.score>=7?'#eab308':'#64748b';
+        return '<div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.05)">'
+          +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:6px">'
+          +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:3px">'+escHtml((s.title||'').slice(0,100))+'</div>'
+          +'<div style="font-size:10px;color:var(--muted)">'+escHtml(s.source||'')+' \xb7 '+(s.pub_date||'').slice(0,10)+(s.domain?' \xb7 '+escHtml(s.domain):'')+'</div>'
+          +'</div>'
+          +'<span style="font-size:16px;font-weight:700;color:'+sc+';flex-shrink:0">'+s.score+'<span style="font-size:10px;color:#64748b">/10</span></span>'
+          +'</div>'
+          +'<div style="font-size:11px;color:var(--cyan);margin-bottom:8px;font-style:italic">'+escHtml(s.reason||'')+'</div>'
+          +'<div style="display:flex;gap:6px">'
+          +'<button class="btn btn-primary btn-sm" onclick="acceptTrackerSuggestion('+s.article_id+',this)">+ Add to Tracker</button>'
+          +(s.url?'<a href="'+escHtml(s.url)+'" target="_blank" class="btn btn-ghost btn-sm" style="font-size:10px">Read \u2197</a>':'')
+          +'</div></div>';
+      }).join('');
+    }
+  } catch(e){
+    els.content.innerHTML='<div style="padding:14px;color:#f87171;font-size:12px">Error: '+escHtml(e.message)+'</div>';
+    showToast('\u26a0','Suggestion failed',e.message,4000);
+  } finally { _trackerAiDone(els,'\u2728 Suggest Articles'); }
+}
+
+async function acceptTrackerSuggestion(articleId, btn){
+  if(!_currentTrackerId) return;
+  var resp = await apiFetch('/trackers/'+_currentTrackerId+'/articles',
+    {method:'POST', body:JSON.stringify({article_id:articleId, article_type:'news'})});
+  if(resp && resp.ok!==false){
+    var row = btn.closest ? btn.closest('div[style*="border-bottom"]') : null;
+    if(row){ row.style.opacity='0.4'; btn.textContent='\u2713 Added'; btn.disabled=true; }
+    showToast('\u2705','Added','Article linked to tracker.',2000);
+    loadTrackers(); openTrackerDetail(_currentTrackerId);
+  } else { showToast('\u26a0','Error','Could not link article.',3000); }
+}
+
+// ── Phase 3: Gap Analysis ─────────────────────────────────────────
+async function runTrackerGaps(){
+  if(!_currentTrackerId){ showToast('\u26a0','No tracker','Open a tracker first.',2500); return; }
+  if(!API_BASE){ showToast('\u26a0','No backend','Connect your Render backend.',2500); return; }
+  var els = _trackerAiStart('tracker-gaps-panel','tracker-gaps-loading','tracker-gaps-content','tracker-gaps-meta','btn-gaps','Analysing\u2026');
+  try {
+    var resp = await apiFetch('/trackers/'+_currentTrackerId+'/gaps', {method:'POST'});
+    if(!resp || resp.ok===false) throw new Error((resp&&resp.detail)||'Gap analysis failed');
+    _renderNarrative(resp.gaps||'', els.content);
+    if(els.meta) els.meta.textContent = (resp.article_count||0)+' articles analysed \xb7 '+new Date().toLocaleTimeString();
+  } catch(e){
+    if(els.content){ els.content.style.color='#f87171'; els.content.textContent='Error: '+e.message; }
+    showToast('\u26a0','Gap analysis failed',e.message,4000);
+  } finally { _trackerAiDone(els,'\ud83d\udd0d Gap Analysis'); }
+}
+
+// ── Phase 3: Send Tracker → Briefing Note generator ───────────────
+async function sendTrackerToBriefing(){
+  if(!_currentTrackerId){ showToast('\u26a0','No tracker','Open a tracker first.',2500); return; }
+  if(!API_BASE){ showToast('\u26a0','No backend','Connect your Render backend.',2500); return; }
+  var btn = document.getElementById('btn-to-briefing');
+  if(btn){ btn.disabled=true; btn.textContent='Loading\u2026'; }
+  try {
+    var ctx = await apiFetch('/trackers/'+_currentTrackerId+'/briefing-context');
+    if(!ctx || ctx.ok===false) throw new Error((ctx&&ctx.detail)||'Could not load tracker context');
+
+    // Pre-fill briefing context fields
+    var setField = function(id, val){ var el=document.getElementById(id); if(el&&val) el.value=val; };
+    setField('briefing-title',    ctx.title);
+    setField('briefing-context',  ctx.context);
+    setField('bctx-portfolio',    ctx.portfolio);
+    setField('bctx-jurisdiction', ctx.domain);
+    var statusEl = document.getElementById('bctx-issue-status');
+    if(statusEl && ctx.issue_status) statusEl.value = ctx.issue_status;
+    saveBriefingContext();
+
+    // Pre-select the tracker articles in the briefing pool
+    _briefingSelected.clear();
+    var selected = 0;
+    var missing = [];
+    (ctx.article_ids||[]).forEach(function(item){
+      var type = item.type||'news';
+      var key  = type+':'+item.id;
+      var found = type==='research'
+        ? (_researchArticles||[]).find(function(a){return a.id===item.id;})
+        : articles.find(function(a){return a.id===item.id;});
+      if(found && selected < (_briefingMax||20)){ _briefingSelected.add(key); selected++; }
+      else if(!found) missing.push(item.id);
+    });
+
+    // Navigate to briefing tab and refresh
+    await showTab('briefing');
+    if(typeof renderBriefingArticleList==='function') renderBriefingArticleList();
+    if(typeof renderBriefingSelectedList==='function') renderBriefingSelectedList();
+
+    var msg = selected+' article'+(selected!==1?'s':'')+' selected from tracker';
+    if(missing.length) msg += ' ('+missing.length+' not in current feed)';
+    showToast('\ud83d\udccb','Sent to Briefing', msg, 5000);
+  } catch(e){
+    showToast('\u26a0','Error',e.message,4000);
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent='\ud83d\udccb Send to Briefing'; }
+  }
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    KEYBOARD NAVIGATION

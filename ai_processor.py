@@ -284,55 +284,32 @@ def _build_system_prompt(cfg: dict) -> str:
 
 You analyze news articles and return structured JSON assessments for {institution}.
 
-DOMAIN OPTIONS (pick the single best match, or up to 3 if genuinely warranted — see rules below):
+DOMAIN OPTIONS (return as a JSON array — usually 1 item, up to 3 for genuinely cross-cutting articles):
 Higher Education | Research Funding | Indigenous | Reconciliation | Health | Pharmacare | Budget | Legislation | Infrastructure | Workforce | Consultation | Political | Environment | Housing | Child Care | International | Other
 
-DOMAIN SELECTION RULES — read carefully, this is a precision task, not a thoroughness task:
+DOMAIN ARRAY RULES:
 
-DEFAULT: Return exactly ONE domain. This is correct for the large majority of articles, including
-ones that mention other policy areas in passing. Mentioning something is not the same as being
-about it.
+ONE domain (default): Use for articles that are primarily about one policy area, even if others
+are mentioned in passing.
 
-SECOND DOMAIN — only add a second domain if BOTH are true:
-  (a) The article devotes substantive, specific content to a second policy area — not a passing
-      reference, not background context, but content a reader monitoring that second domain would
-      need to know.
-  (b) Removing the second domain would cause that reader to miss something genuinely actionable.
+TWO domains: Use when the article is substantively about two distinct policy areas and a reader
+monitoring either one would need to see it. This is common for:
+- An Indigenous health funding announcement → ["Indigenous", "Health"]
+- A post-secondary budget cut that affects research → ["Higher Education", "Research Funding"]
+- A pharmacare bill with reconciliation implications → ["Pharmacare", "Indigenous"]
+- A consultation process for a new act → ["Legislation", "Consultation"]
+Ask: "Would a monitor of domain B miss something actionable if I only tagged domain A?" If yes, add B.
 
-  Test: "If I described this article using only the first domain, would anything important be lost?"
-  If no, use one domain. If yes, add the second.
-
-THIRD DOMAIN — this is rare. Only add a third domain if the article is simultaneously and equally
-about three distinct policy areas, each with its own substantive detail (not just three domains
-mentioned, but three domains each individually worth monitoring this article for). A third domain
-should be the exception, not a default extension of "use 2 when in doubt."
-
-  Example that EARNS three domains:
-  "BC announces $200M for Indigenous-led health research partnerships with universities" —
-  this is genuinely Indigenous (governance, who it serves) AND Health (the research subject)
-  AND Research Funding (the funding mechanism itself). All three are equally central; cutting
-  any one loses real information.
-  -> ["Indigenous", "Health", "Research Funding"]
-
-  Example that does NOT earn multiple domains (common failure mode — avoid this):
-  "Federal budget includes modest increases across health, education, and infrastructure
-  spending" — this is fundamentally a BUDGET article. Health/education/infrastructure are
-  line items mentioned in passing, not the substance of the piece.
-  -> ["Budget"]   (NOT ["Budget", "Health", "Higher Education", "Infrastructure"])
-
-  Example of a correct SECOND domain:
-  "Federal research grant cuts will reduce health science lab funding and force universities
-  to cut graduate positions" — this substantively covers both the funding mechanism AND the
-  specific health research impact.
-  -> ["Research Funding", "Health"]
+THREE domains: Rare. Only when three distinct areas are each substantively covered with their own
+detail — not just mentioned. Example: "BC announces $200M for Indigenous-led health research with
+universities" → ["Indigenous", "Health", "Research Funding"]. Each domain has its own mechanism,
+stakeholders, and implications in the article.
 
 HARD LIMITS:
-- Never return more than 3 domains under any circumstances.
-- If you are unsure whether a second or third domain is warranted, do NOT include it. Precision
-  matters more than coverage — a domain filter that over-tags becomes useless for monitoring.
-- Tags (separately) already capture cross-cutting topics like DRIPA, Budget, Reconciliation,
-  Urgent. Do not try to compensate for a single domain choice by adding more domains — use tags
-  for that instead.
+- Never return more than 3 domains.
+- Tags capture cross-cutting themes (DRIPA, Budget, Urgent) — don't add a domain just to match a tag.
+- When genuinely unsure whether a second domain applies, include it — over-tagging by one domain
+  is less harmful than a GR professional missing a relevant article entirely.
 
 JURISDICTION OPTIONS: Federal | BC | Alberta | Ontario | Quebec | Municipal | Pan-Canadian | International
 
@@ -377,14 +354,9 @@ def _build_analysis_prompts(cfg: dict) -> tuple[str, str]:
   "tags": ["<tag1>", "<tag2>"]
 }}
 
-domain is an array — almost always length 1. See DOMAIN SELECTION RULES above before using length 2 or 3.
+domain is a JSON array. Use 1 item for single-domain articles, 2 items when genuinely cross-cutting, 3 items only when all three are substantively covered (rare). See DOMAIN ARRAY RULES above.
 
 TITLE: <TITLE>
-SOURCE: <SOURCE>
-URL: <URL>
-
-ARTICLE TEXT:
-<ARTICLE_TEXT>
 
 Relevance scoring guide:
 9-10: Critical — directly affects {priority_doms}
@@ -419,7 +391,7 @@ If relevance would be 5 or below, return exactly: null"""
   "tags": ["<tag1>", "<tag2>"]
 }}
 
-domain is an array — almost always length 1. See DOMAIN SELECTION RULES above before using length 2 or 3.
+domain is a JSON array. Use 1 item for single-domain articles, 2 items when genuinely cross-cutting, 3 items only when all three are substantively covered (rare). See DOMAIN ARRAY RULES above.
 
 TITLE: <TITLE>
 SOURCE: <SOURCE>
@@ -511,34 +483,41 @@ def _extract_json_from_text(text: str) -> str:
 
 def _normalize_domain(raw) -> str:
     """Normalise the AI's domain field into the comma-separated string format
-    the DB column and frontend already expect (same convention as the tags
-    field, which is stored as ",".join(tags)).
+    the DB column and frontend already expect.
 
-    Accepts either the new array format (["Health", "Research Funding"]) or
-    a legacy single string — the latter covers _default_analysis()'s keyword
-    fallback, which still returns one plain domain string, and guards against
-    the model ignoring the schema and returning a bare string anyway.
+    Accepts three shapes the AI may return:
+      Array   → ["Health", "Research Funding"]         (correct)
+      String  → "Health"                               (single domain)
+      String  → "Health, Research Funding"             (model ignored array schema)
+      String  → "Health,Research Funding"              (same, no space)
 
-    De-dupes (preserving the model's ordering, i.e. primary domain first) and
-    hard-caps at 3 as a safety net in case the model ignores the prompt's
-    own 3-domain limit. Falls back to "Other" if nothing usable comes through.
+    All are normalised to "Health,Research Funding" (no leading/trailing spaces,
+    comma-joined, deduped, hard-capped at 3).
     """
     if isinstance(raw, list):
-        domains = [str(d).strip() for d in raw if str(d).strip()]
+        # Correct array format — each element may itself be a comma-separated
+        # string if the model nested them, so split each element too.
+        parts = []
+        for item in raw:
+            for seg in str(item).split(","):
+                seg = seg.strip()
+                if seg:
+                    parts.append(seg)
     elif isinstance(raw, str) and raw.strip():
-        domains = [raw.strip()]
+        # Model returned a plain string — split on commas so
+        # "Health, Research Funding" becomes ["Health", "Research Funding"]
+        parts = [seg.strip() for seg in raw.split(",") if seg.strip()]
     else:
-        domains = []
+        parts = []
 
     seen: set[str] = set()
-    deduped = []
-    for d in domains:
+    deduped: list[str] = []
+    for d in parts:
         if d not in seen:
             seen.add(d)
             deduped.append(d)
 
     deduped = deduped[:3]  # hard cap — matches the prompt's HARD LIMITS section
-
     return ",".join(deduped) if deduped else "Other"
 
 

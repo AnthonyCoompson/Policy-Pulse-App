@@ -30,6 +30,9 @@ from database import (
     get_articles_missing_pub_date, update_article_pub_date,
     get_scholarly_articles_missing_pub_date, update_scholarly_pub_date,
     get_app_setting, set_app_setting, get_all_app_settings,
+    get_trackers, get_tracker_by_id, create_tracker, update_tracker, delete_tracker,
+    get_tracker_articles, add_tracker_article, remove_tracker_article,
+    get_tracker_events, add_tracker_event, delete_tracker_event,
 )
 from scraper import run_scrape
 from scheduler import start_scheduler
@@ -1514,6 +1517,549 @@ def delete_setting(key: str, _=Depends(require_auth)):
     conn.commit()
     conn.close()
     return {"ok": True}
+
+
+# ── POLICY TRACKERS ───────────────────────────────────────────────────────────
+
+@app.get("/trackers")
+def list_trackers():
+    return {"trackers": get_trackers()}
+
+
+@app.post("/trackers")
+def create_tracker_endpoint(body: dict, _=Depends(require_auth)):
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    new_id = create_tracker(
+        name=name,
+        description=body.get("description", ""),
+        domain=body.get("domain", ""),
+        keywords=body.get("keywords", ""),
+        status=body.get("status", "Active"),
+    )
+    return {"ok": True, "id": new_id}
+
+
+@app.get("/trackers/{tracker_id}")
+def get_tracker_endpoint(tracker_id: int):
+    t = get_tracker_by_id(tracker_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+    t["articles"] = get_tracker_articles(tracker_id)
+    t["events"]   = get_tracker_events(tracker_id)
+    return t
+
+
+@app.patch("/trackers/{tracker_id}")
+def update_tracker_endpoint(tracker_id: int, body: dict, _=Depends(require_auth)):
+    allowed = {"name", "description", "domain", "status", "keywords"}
+    updates = {k: v for k, v in body.items() if k in allowed}
+    if not updates:
+        raise HTTPException(status_code=400, detail=f"Allowed fields: {allowed}")
+    update_tracker(tracker_id, updates)
+    return {"ok": True}
+
+
+@app.delete("/trackers/{tracker_id}")
+def delete_tracker_endpoint(tracker_id: int, _=Depends(require_auth)):
+    delete_tracker(tracker_id)
+    return {"ok": True}
+
+
+# ── TRACKER ARTICLES ──────────────────────────────────────────────────────────
+
+@app.get("/trackers/{tracker_id}/articles")
+def list_tracker_articles(tracker_id: int):
+    return {"articles": get_tracker_articles(tracker_id)}
+
+
+@app.post("/trackers/{tracker_id}/articles")
+def add_article_to_tracker(tracker_id: int, body: dict, _=Depends(require_auth)):
+    article_id   = body.get("article_id")
+    article_type = body.get("article_type", "news")
+    note         = body.get("note", "")
+    if not article_id:
+        raise HTTPException(status_code=400, detail="article_id required")
+    t = get_tracker_by_id(tracker_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+    added = add_tracker_article(tracker_id, int(article_id), article_type, note)
+    return {"ok": True, "added": added, "already_linked": not added}
+
+
+@app.delete("/trackers/{tracker_id}/articles/{article_id}")
+def remove_article_from_tracker(tracker_id: int, article_id: int,
+                                article_type: str = "news", _=Depends(require_auth)):
+    remove_tracker_article(tracker_id, article_id, article_type)
+    return {"ok": True}
+
+
+# ── TRACKER EVENTS ────────────────────────────────────────────────────────────
+
+@app.get("/trackers/{tracker_id}/events")
+def list_tracker_events(tracker_id: int):
+    return {"events": get_tracker_events(tracker_id)}
+
+
+@app.post("/trackers/{tracker_id}/events")
+def add_tracker_event_endpoint(tracker_id: int, body: dict, _=Depends(require_auth)):
+    title = (body.get("title") or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title required")
+    t = get_tracker_by_id(tracker_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+    new_id = add_tracker_event(
+        tracker_id=tracker_id,
+        title=title,
+        event_date=body.get("event_date", ""),
+        note=body.get("note", ""),
+    )
+    return {"ok": True, "id": new_id}
+
+
+@app.delete("/trackers/{tracker_id}/events/{event_id}")
+def delete_tracker_event_endpoint(tracker_id: int, event_id: int,
+                                  _=Depends(require_auth)):
+    delete_tracker_event(event_id)
+    return {"ok": True}
+
+
+# ── TRACKER AI — SYNTHESIS & SUGGESTIONS ─────────────────────────────────────
+
+async def _groq_call(messages: list, max_tokens: int = 1800) -> str:
+    """Internal Groq call shared by synthesize and suggest endpoints."""
+    import httpx
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    if not groq_key:
+        raise HTTPException(
+            status_code=503,
+            detail="GROQ_API_KEY not set — add it in Render environment variables."
+        )
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            json={
+                "model":       "llama-3.3-70b-versatile",
+                "messages":    messages,
+                "max_tokens":  max_tokens,
+                "temperature": 0.3,
+            },
+            headers={
+                "Authorization": f"Bearer {groq_key}",
+                "Content-Type":  "application/json",
+            },
+        )
+        if resp.status_code == 429:
+            raise HTTPException(status_code=429, detail="Groq rate limit — wait and retry.")
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
+
+
+@app.post("/trackers/{tracker_id}/synthesize")
+async def synthesize_tracker(tracker_id: int):
+    """
+    Generate an AI narrative synthesis of the tracker's linked articles and
+    events, presented as a chronological policy brief.
+
+    Returns:
+        { "ok": true, "synthesis": "...", "article_count": N }
+    """
+    t = get_tracker_by_id(tracker_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+
+    linked = get_tracker_articles(tracker_id)
+    events = get_tracker_events(tracker_id)
+
+    if not linked and not events:
+        raise HTTPException(
+            status_code=422,
+            detail="No linked articles or events yet — add some content first."
+        )
+
+    # Build a numbered source list for the AI to reference inline
+    source_lines = []
+    items_for_timeline = []
+
+    for i, a in enumerate(linked, start=1):
+        date  = (a.get("pub_date") or a.get("added_date") or "")[:10]
+        title = a.get("title") or "Untitled"
+        src   = a.get("source") or ""
+        summ  = (a.get("summary") or "")[:400]
+        wim   = (a.get("why_it_matters") or "")[:300]
+        source_lines.append(
+            f"[{i}] {date} | {src}\n"
+            f"    TITLE: {title}\n"
+            f"    SUMMARY: {summ}\n"
+            + (f"    WHY IT MATTERS: {wim}\n" if wim else "")
+        )
+        items_for_timeline.append({"date": date, "label": f"[{i}] {title}"})
+
+    for e in events:
+        items_for_timeline.append({
+            "date":  (e.get("event_date") or e.get("created_date") or "")[:10],
+            "label": f"[EVENT] {e.get('title','')}",
+            "note":  e.get("note", ""),
+        })
+
+    items_for_timeline.sort(key=lambda x: x.get("date") or "")
+
+    tracker_context = (
+        f"Tracker: {t['name']}\n"
+        f"Domain: {t.get('domain','')}\n"
+        f"Status: {t.get('status','Active')}\n"
+        + (f"Description: {t['description']}\n" if t.get("description") else "")
+        + (f"Keywords: {t['keywords']}\n"       if t.get("keywords")    else "")
+    )
+
+    prompt = f"""You are a senior Canadian government relations analyst. 
+Generate a POLICY TIMELINE NARRATIVE for this tracker.
+
+TRACKER CONTEXT:
+{tracker_context}
+
+LINKED SOURCES ({len(linked)} articles):
+{"".join(source_lines)}
+
+MANUAL EVENTS ({len(events)}):
+{chr(10).join(f"- {e.get('event_date','')[:10]} | {e.get('title','')} — {e.get('note','')}" for e in events) or "None"}
+
+INSTRUCTIONS:
+Write a flowing narrative that tells the story of how this policy issue has evolved over time. Structure it as:
+
+OVERVIEW
+2-3 sentences: what this issue is, its current status, and why it matters institutionally.
+
+TIMELINE NARRATIVE
+A chronological account written as connected prose (not a bullet list). Use inline references [N] to cite specific articles. Each paragraph should cover a distinct phase or development. Aim for 3-5 paragraphs.
+
+KEY TENSIONS
+2-3 bullet points naming the core unresolved tensions or competing interests driving this issue.
+
+INSTITUTIONAL IMPLICATIONS
+2-3 concrete action-oriented sentences about what this means for the institution right now. Name specific obligations, deadlines, or decisions triggered.
+
+WHAT TO WATCH
+3 bullet points: specific upcoming dates, decisions, or events that will determine how this issue evolves.
+
+Rules:
+- Every factual claim must cite a source using [N] notation
+- Write for a VP or senior director reading on their phone
+- Be specific — name ministries, legislation, amounts, dates
+- No hedging phrases like "may be relevant" or "could potentially"
+- Current status must reflect the most recent source date"""
+
+    try:
+        synthesis = await _groq_call(
+            messages=[
+                {"role": "system", "content": "You are a concise, precise Canadian policy analyst. Return only the requested narrative — no preamble, no meta-commentary."},
+                {"role": "user",   "content": prompt},
+            ],
+            max_tokens=1800,
+        )
+        return {"ok": True, "synthesis": synthesis, "article_count": len(linked)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Synthesis failed: {str(e)[:200]}")
+
+
+@app.post("/trackers/{tracker_id}/suggest")
+async def suggest_tracker_articles(tracker_id: int):
+    """
+    Ask AI to score all unlinked articles in the database for relevance to
+    this tracker, returning the top matches as suggestions.
+
+    Returns:
+        { "ok": true, "suggestions": [ {article, score, reason}, ... ] }
+    """
+    t = get_tracker_by_id(tracker_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+
+    # Build a set of already-linked article IDs to exclude
+    already_linked = {a["article_id"] for a in get_tracker_articles(tracker_id)}
+
+    # Pull a candidate pool — recent articles across all domains
+    candidates = get_articles(limit=120, offset=0, sort="date")
+
+    # Pre-filter by keyword match to keep the prompt within token limits
+    kws = [k.strip().lower() for k in (t.get("keywords") or "").split(",") if k.strip()]
+    domain = (t.get("domain") or "").lower()
+
+    def _relevance_hint(a: dict) -> int:
+        """Quick keyword pre-score so we send the best 30 candidates to AI."""
+        score = 0
+        hay = " ".join([
+            (a.get("title") or ""), (a.get("summary") or ""),
+            (a.get("domain") or ""), (a.get("tags") or ""),
+        ]).lower()
+        for kw in kws:
+            if kw in hay: score += 3
+        if domain and domain in (a.get("domain") or "").lower():
+            score += 2
+        score += min((a.get("relevance") or 0), 5)
+        return score
+
+    # Exclude already-linked, score the rest, take top 30
+    pool = [a for a in candidates if a.get("id") not in already_linked]
+    pool.sort(key=_relevance_hint, reverse=True)
+    pool = pool[:30]
+
+    if not pool:
+        return {"ok": True, "suggestions": [], "note": "No unlinked candidate articles found."}
+
+    # Build compact article list for the prompt
+    article_lines = "\n".join(
+        f"[{i+1}] (id={a['id']}) {(a.get('pub_date') or '')[:10]} | {a.get('source','')} | "
+        f"rel={a.get('relevance',0)} | domain={a.get('domain','')}\n"
+        f"     TITLE: {a.get('title','')}\n"
+        f"     SUMMARY: {(a.get('summary') or '')[:200]}"
+        for i, a in enumerate(pool)
+    )
+
+    tracker_desc = (
+        f"Tracker: {t['name']}\n"
+        f"Domain: {t.get('domain','')}\n"
+        f"Status: {t.get('status','')}\n"
+        f"Keywords: {t.get('keywords','')}\n"
+        + (f"Description: {t['description']}" if t.get("description") else "")
+    )
+
+    prompt = f"""You are a policy intelligence assistant.
+
+TRACKER TO MATCH AGAINST:
+{tracker_desc}
+
+CANDIDATE ARTICLES (score each for relevance to this tracker):
+{article_lines}
+
+TASK:
+Return a JSON array of the top matches. Only include articles that are genuinely relevant — not every article that tangentially mentions a keyword.
+
+For each match return:
+{{
+  "article_index": <1-based index from the list above>,
+  "article_id": <the id= value>,
+  "score": <integer 1-10, where 10 = directly and substantively about this tracker topic>,
+  "reason": "<one sentence: specifically why this article matters for this tracker>"
+}}
+
+Rules:
+- Only return articles scoring 6 or above
+- Maximum 10 suggestions
+- Be selective — if only 2 articles genuinely match, return 2
+- The reason must be specific to THIS tracker, not generic
+- Return ONLY the JSON array, no other text"""
+
+    try:
+        raw = await _groq_call(
+            messages=[
+                {"role": "system", "content": "You are a precise policy relevance scorer. Return only valid JSON arrays."},
+                {"role": "user",   "content": prompt},
+            ],
+            max_tokens=900,
+        )
+
+        import json, re
+        # Strip markdown fences if present
+        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.MULTILINE)
+        suggestions_raw = json.loads(cleaned)
+
+        # Enrich each suggestion with full article data
+        pool_by_id = {a["id"]: a for a in pool}
+        suggestions = []
+        for s in suggestions_raw:
+            if not isinstance(s, dict): continue
+            aid = s.get("article_id")
+            if not aid or aid in already_linked: continue
+            article = pool_by_id.get(aid)
+            if not article: continue
+            suggestions.append({
+                "article_id":  aid,
+                "score":       int(s.get("score", 6)),
+                "reason":      str(s.get("reason", ""))[:300],
+                "title":       article.get("title", ""),
+                "source":      article.get("source", ""),
+                "pub_date":    article.get("pub_date", ""),
+                "domain":      article.get("domain", ""),
+                "relevance":   article.get("relevance", 0),
+                "summary":     (article.get("summary") or "")[:300],
+                "url":         article.get("url", ""),
+            })
+
+        suggestions.sort(key=lambda x: x["score"], reverse=True)
+        return {"ok": True, "suggestions": suggestions[:10]}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Suggestion failed: {str(e)[:200]}")
+
+
+@app.post("/trackers/{tracker_id}/gaps")
+async def detect_tracker_gaps(tracker_id: int):
+    """
+    Analyse the tracker's linked articles and identify what is missing:
+    which sources haven't been heard from, which related policy areas
+    haven't been covered, what upcoming decisions haven't been tracked,
+    and what questions remain unanswered.
+
+    Returns:
+        { "ok": true, "gaps": "...", "article_count": N }
+    """
+    t = get_tracker_by_id(tracker_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+
+    linked  = get_tracker_articles(tracker_id)
+    events  = get_tracker_events(tracker_id)
+
+    if not linked and not events:
+        raise HTTPException(
+            status_code=422,
+            detail="No linked articles or events yet — add some content first."
+        )
+
+    # Build a compact picture of what we already have
+    source_names   = list({a.get("source", "") for a in linked if a.get("source")})
+    domains_seen   = list({
+        d.strip()
+        for a in linked
+        for d in (a.get("domain") or "").split(",")
+        if d.strip()
+    })
+    date_range = ""
+    dates = sorted([a.get("pub_date","") for a in linked if a.get("pub_date")])
+    if dates:
+        date_range = f"{dates[0][:10]} to {dates[-1][:10]}"
+
+    article_summaries = "\n".join(
+        f"- [{(a.get('pub_date',''))[:10]}] {a.get('source','')} | {a.get('title','')}"
+        for a in sorted(linked, key=lambda x: x.get("pub_date") or "")
+    )
+    event_summaries = "\n".join(
+        f"- [{(e.get('event_date',''))[:10]}] {e.get('title','')}"
+        for e in events
+    ) if events else "None"
+
+    tracker_context = (
+        f"Tracker: {t['name']}\n"
+        f"Domain: {t.get('domain', '')}\n"
+        f"Status: {t.get('status', 'Active')}\n"
+        f"Keywords: {t.get('keywords', '')}\n"
+        + (f"Description: {t['description']}\n" if t.get("description") else "")
+    )
+
+    prompt = f"""You are a senior Canadian government relations analyst conducting an intelligence gap analysis.
+
+TRACKER CONTEXT:
+{tracker_context}
+
+WHAT WE ALREADY HAVE ({len(linked)} articles, {len(events)} events):
+Coverage dates: {date_range or "unknown"}
+Sources heard from: {", ".join(source_names) or "none"}
+Policy domains covered: {", ".join(domains_seen) or "none"}
+
+ARTICLE LIST:
+{article_summaries or "None"}
+
+MANUAL EVENTS:
+{event_summaries}
+
+TASK — Identify what is MISSING from this intelligence picture. Structure your response as:
+
+MISSING VOICES
+Which stakeholders or organizations should have been heard from but haven't appeared in coverage? For each: Name | Why they matter | What position we'd expect from them.
+
+UNCOVERED POLICY AREAS
+Which related policy domains or legislation intersect with this tracker but haven't been covered? Be specific — name the bills, regulations, or policy processes.
+
+UPCOMING CRITICAL DATES
+What dates, deadlines, or decision points are likely approaching that aren't yet captured in the timeline? Include: legislative calendar milestones, consultation windows, budget cycles, board obligations, regulatory review periods.
+
+UNRESOLVED QUESTIONS
+What are the 3-4 most important questions a government relations professional needs answers to right now that this intelligence doesn't yet answer?
+
+RECOMMENDED NEXT ACTIONS
+3-5 concrete steps to close these gaps. Format each as: [Action] — [Who should do it] — [By when].
+
+Rules:
+- Be specific to THIS tracker topic and domain
+- Name specific organizations, ministries, and legislation — not generic categories
+- Focus on what's actionable in the next 30-90 days
+- Do not list gaps we already have covered"""
+
+    try:
+        gaps = await _groq_call(
+            messages=[
+                {"role": "system", "content": "You are a precise Canadian policy intelligence analyst. Return only the requested gap analysis — no preamble."},
+                {"role": "user",   "content": prompt},
+            ],
+            max_tokens=1600,
+        )
+        return {"ok": True, "gaps": gaps, "article_count": len(linked)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gap analysis failed: {str(e)[:200]}")
+
+
+@app.get("/trackers/{tracker_id}/briefing-context")
+async def get_tracker_briefing_context(tracker_id: int):
+    """
+    Return a pre-populated briefing note context payload built from the
+    tracker's linked articles, keywords, domain, status, and description.
+    The frontend uses this to pre-fill the Briefing Note generator and
+    select the tracker's articles in one click.
+
+    Returns:
+        {
+          "ok": true,
+          "title": str,
+          "context": str,
+          "domain": str,
+          "issue_status": str,
+          "portfolio": str,
+          "article_ids": [ {"id": int, "type": "news"|"research"}, ... ]
+        }
+    """
+    t = get_tracker_by_id(tracker_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+
+    linked = get_tracker_articles(tracker_id)
+
+    # Build a sensible default briefing title from the tracker name + status
+    title = f"{t['name']} — {t.get('status', 'Active')} Issue Brief"
+
+    # Build a context sentence from the tracker description + keywords
+    kws = [k.strip() for k in (t.get("keywords") or "").split(",") if k.strip()]
+    context_parts = []
+    if t.get("description"):
+        context_parts.append(t["description"])
+    if kws:
+        context_parts.append(f"Key monitoring terms: {', '.join(kws[:5])}.")
+    context = " ".join(context_parts) if context_parts else f"Policy tracking brief on {t['name']}."
+
+    article_ids = [
+        {"id": a["article_id"], "type": a.get("article_type", "news")}
+        for a in linked
+        if a.get("article_id")
+    ]
+
+    return {
+        "ok":          True,
+        "title":       title,
+        "context":     context,
+        "domain":      t.get("domain", ""),
+        "issue_status": t.get("status", "Active"),
+        "portfolio":   t.get("domain", ""),
+        "keywords":    t.get("keywords", ""),
+        "article_ids": article_ids,
+    }
 
 
 if __name__ == '__main__':

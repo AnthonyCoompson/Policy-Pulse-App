@@ -394,33 +394,79 @@ def scrape_generic(url, source_name, base_url=None):
         return articles
 
     selectors = [
-        "article h2 a", "article h3 a", ".news-item a", ".news-title a",
-        ".views-row a", ".field-content a", "h2.title a", "h3.title a",
-        ".entry-title a", ".post-title a", "h2 a", "h3 a",
+        # ── Semantic / article-wrapped (most reliable, try first) ────────
+        "article h2 a", "article h3 a", "article h4 a",
+        # ── Named CSS patterns common in news/gov CMS ────────────────────
+        ".news-item a", ".news-item h3 a", ".news-item h4 a",
+        ".news-title a", ".news-heading a", ".news-list li a",
+        ".entry-title a", ".post-title a",
+        # ── Drupal Views (BC Gov Newsroom, ministry pages use Drupal) ────
+        ".views-row a", ".views-row h3 a", ".views-row h4 a",
+        ".view-content h3 a", ".view-content h4 a",
+        ".field-content a", ".field-items a",
+        # ── Canada.ca / GCWeb 4.x template ───────────────────────────────
+        # The federal government's standard web template uses these patterns
+        ".feeds-cont li a", ".feeds-cont a",
+        "main ul li > a",                # direct list links in main content
+        ".mwsbodytext ul li a",          # body text list items
+        "h3.gc-thickline a",             # GCWeb article card headings
+        # ── Government research councils (CIHR, NSERC, SSHRC) ────────────
+        # Use table-based layouts on older pages
+        "table td.views-field a",
+        "table.table td a",
+        # ── Heading wrappers (broad but essential fallback) ───────────────
+        "h2.title a", "h3.title a",
+        "h2 a", "h3 a", "h4 a",
     ]
+
+    # Words that indicate navigation/utility links — not news articles
+    _NAV_NOISE = {
+        "home", "about", "contact", "menu", "search", "login", "sign in",
+        "subscribe", "follow us", "share", "back to", "read more", "more news",
+        "all news", "view all", "load more", "next page", "previous page",
+        "français", "english", "skip to", "return to", "print", "email this",
+    }
+
     seen = set()
     for sel in selectors:
-        for el in soup.select(sel)[:20]:
+        for el in soup.select(sel)[:25]:
             title = el.get_text(strip=True)
             href  = el.get("href", "")
-            if not title or len(title) < 15 or href in seen:
+
+            # Length guard: too short = nav, too long = aggregated text blob
+            if not title or len(title) < 15 or len(title) > 300:
                 continue
-            if any(w in title.lower() for w in
-                   ["home", "about", "contact", "menu", "search", "login", "sign in"]):
+            if href in seen:
                 continue
+
+            # Filter navigation noise
+            title_lower = title.lower()
+            if any(noise in title_lower for noise in _NAV_NOISE):
+                continue
+
+            # Resolve relative URLs
             if href and not href.startswith("http"):
                 href = urljoin(base_url or url, href)
-            if href and title:
-                seen.add(href)
-                # pub_date intentionally left None — we will fetch the real
-                # publish date from the article page in Phase 1b.  Using
-                # today's scrape date as a fallback caused all HTML-scraped
-                # articles to show today's date as their "published" date.
-                articles.append({"title": title, "url": href,
-                                 "pub_date": None})
-        if len(articles) >= 12:
+
+            # Skip anchors, javascript links, and mailto
+            if not href or href.startswith(("#", "javascript:", "mailto:")):
+                continue
+
+            seen.add(href)
+            articles.append({"title": title, "url": href, "pub_date": None})
+        if len(articles) >= 15:
             break
-    return articles[:12]
+
+    # Deduplicate by URL (different selectors may hit the same link)
+    seen_urls: set[str] = set()
+    unique: list[dict] = []
+    for art in articles:
+        if art["url"] not in seen_urls:
+            seen_urls.add(art["url"])
+            unique.append(art)
+
+    log.debug(f"  scrape_generic [{source_name}]: {len(unique)} candidate links found")
+    return unique[:15]
 
 
 # ── GOOGLE NEWS ───────────────────────────────────────────────────────────────

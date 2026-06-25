@@ -385,6 +385,38 @@ def init_db():
             key   TEXT PRIMARY KEY NOT NULL,
             value TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS policy_trackers (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            name         TEXT NOT NULL,
+            description  TEXT DEFAULT '',
+            domain       TEXT DEFAULT '',
+            status       TEXT DEFAULT 'Active',
+            keywords     TEXT DEFAULT '',
+            created_date TEXT,
+            updated_date TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS tracker_articles (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            tracker_id   INTEGER NOT NULL REFERENCES policy_trackers(id) ON DELETE CASCADE,
+            article_id   INTEGER,
+            article_type TEXT DEFAULT 'news',
+            added_date   TEXT,
+            note         TEXT DEFAULT ''
+        );
+
+        CREATE TABLE IF NOT EXISTS tracker_events (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            tracker_id INTEGER NOT NULL REFERENCES policy_trackers(id) ON DELETE CASCADE,
+            title      TEXT NOT NULL,
+            event_date TEXT,
+            note       TEXT DEFAULT '',
+            created_date TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_tracker_articles_tracker ON tracker_articles(tracker_id);
+        CREATE INDEX IF NOT EXISTS idx_tracker_events_tracker ON tracker_events(tracker_id);
     """)
 
     # Seed sources if empty
@@ -429,10 +461,11 @@ def init_db():
     except Exception:
         pass  # column already exists
 
-    # ── Migration: add health sources + fix BC Legislature URL ───────────────
+    # ── Migration: add health sources + fix source URLs ─────────────────────────
     # Safe to run on every boot — INSERT OR IGNORE skips already-present rows.
-    # Also fixes the BC Legislature URL from the old navigation page (which
-    # returns no articles) to the actual RSS feed.
+    # Also fixes URLs for sources whose original HTML pages were blocking scrapers
+    # or returning no articles (Hansard session transcripts → Bills RSS;
+    # CIHR/NSERC/SSHRC HTML pages → their public RSS feeds).
     _new_sources = [
         ("Health Canada News",                        "https://www.canada.ca/en/health-canada/news.html",     "Federal", "html"),
         ("BC Ministry of Health",                     "https://news.gov.bc.ca/ministries/health",              "BC",      "html"),
@@ -447,11 +480,22 @@ def init_db():
                 "INSERT OR IGNORE INTO sources (name, url, jurisdiction, scrape_type) VALUES (?,?,?,?)",
                 (name, url, jurisdiction, scrape_type)
             )
-        # Fix BC Legislature URL from the dead navigation page to the RSS feed
-        cur.execute(
-            "UPDATE sources SET url=?, scrape_type=? WHERE name=?",
-            ("https://www.leg.bc.ca/rss/hansard", "rss", "BC Legislature News")
-        )
+
+        # Fix research council HTML pages → RSS feeds (the HTML pages return 403
+        # from Render's IP range; the RSS feeds are openly accessible).
+        _url_fixes = [
+            ("SSHRC News",       "https://www.sshrc-crsh.gc.ca/rss/news-nouvelles-eng.xml",  "rss", "SSHRC — Research News"),
+            ("NSERC News",       "https://www.nserc-crsng.gc.ca/rss/news-eng.xml",            "rss", "NSERC — News Releases"),
+            ("CIHR News",        "https://cihr-irsc.gc.ca/rss/news-eng.xml",                  "rss", "CIHR — News"),
+            # BC Legislature: Hansard (session transcripts) → Bills RSS (actual legislation titles)
+            ("BC Legislature News",  "https://www.leg.bc.ca/rss/bills",                       "rss", "BC Legislature — Bills & Statutes"),
+            ("BC Legislature Hansard","https://www.leg.bc.ca/rss/bills",                      "rss", "BC Legislature — Bills & Statutes"),
+        ]
+        for old_name, new_url, new_type, new_name in _url_fixes:
+            cur.execute(
+                "UPDATE sources SET url=?, scrape_type=?, name=? WHERE name=?",
+                (new_url, new_type, new_name, old_name)
+            )
         conn.commit()
     except Exception:
         pass  # non-fatal if sources table doesn't exist yet (handled by seeding)
@@ -464,16 +508,16 @@ def _seed_sources(cur):
     sources = [
         ("BC Ministry of Post-Secondary Education",    "https://news.gov.bc.ca/ministries/post-secondary-education-and-future-skills", "BC",            "html"),
         ("Government of Canada — Education",           "https://www.canada.ca/en/employment-social-development/news.html",              "Federal",        "html"),
-        ("BC Legislature Hansard",                     "https://www.leg.bc.ca/rss/hansard",                                             "BC",            "rss"),
+        ("BC Legislature — Bills & Statutes",          "https://www.leg.bc.ca/rss/bills",                                               "BC",             "rss"),
         ("BC Indigenous Relations & Reconciliation",   "https://news.gov.bc.ca/ministries/indigenous-relations-reconciliation",          "BC",            "html"),
         ("University Affairs Canada",                  "https://www.universityaffairs.ca/feed/",                                         "Federal",        "rss"),
         ("Burnaby City Hall News",                     "https://www.burnaby.ca/city-hall/news",                                          "Municipal",      "html"),
         ("Higher Education Strategy Associates",       "https://higheredstrategy.com/feed/",                                             "Pan-Canadian",   "rss"),
         ("Innovation Science and Economic Development","https://www.canada.ca/en/innovation-science-economic-development/news.html",     "Federal",        "html"),
         ("BC Government Newsroom",                     "https://news.gov.bc.ca/",                                                        "BC",            "html"),
-        ("SSHRC News",                                 "https://www.sshrc-crsh.gc.ca/news_room-salle_des_nouvelles/latest_news-nouvelles_recentes-eng.aspx", "Federal", "html"),
-        ("NSERC News",                                 "https://www.nserc-crsng.gc.ca/Media-Media/NewsReleases-CommuniquesDePresse_eng.asp", "Federal",   "html"),
-        ("CIHR News",                                  "https://cihr-irsc.gc.ca/e/51999.html",                                           "Federal",        "html"),
+        ("SSHRC — Research News",                      "https://www.sshrc-crsh.gc.ca/rss/news-nouvelles-eng.xml",                        "Federal",        "rss"),
+        ("NSERC — News Releases",                      "https://www.nserc-crsng.gc.ca/rss/news-eng.xml",                                 "Federal",        "rss"),
+        ("CIHR — News",                                "https://cihr-irsc.gc.ca/rss/news-eng.xml",                                       "Federal",        "rss"),
         ("Universities Canada",                        "https://www.univcan.ca/feed/",                                                   "Federal",        "rss"),
         ("First Nations Health Authority",             "https://www.fnha.ca/about/news-and-events/news",                                 "BC",            "html"),
         ("BC First Nations Summit",                    "https://fns.bc.ca/news/",                                                        "BC",            "html"),
@@ -1355,5 +1399,189 @@ def get_all_app_settings() -> dict:
         return {r["key"][8:]: r["value"] for r in rows}
     except Exception:
         return {}
+    finally:
+        conn.close()
+
+# ── POLICY TRACKERS ───────────────────────────────────────────────────────────
+
+def get_trackers() -> list[dict]:
+    """Return all policy trackers with article and event counts."""
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM policy_trackers ORDER BY updated_date DESC"
+        ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["article_count"] = conn.execute(
+                "SELECT COUNT(*) FROM tracker_articles WHERE tracker_id=?", (d["id"],)
+            ).fetchone()[0]
+            d["event_count"] = conn.execute(
+                "SELECT COUNT(*) FROM tracker_events WHERE tracker_id=?", (d["id"],)
+            ).fetchone()[0]
+            result.append(d)
+        return result
+    finally:
+        conn.close()
+
+
+def get_tracker_by_id(tracker_id: int) -> dict | None:
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM policy_trackers WHERE id=?", (tracker_id,)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def create_tracker(name: str, description: str = "", domain: str = "",
+                   keywords: str = "", status: str = "Active") -> int:
+    conn = get_conn()
+    now = datetime.utcnow().isoformat()
+    try:
+        cur = conn.execute(
+            "INSERT INTO policy_trackers (name, description, domain, status, keywords, created_date, updated_date) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (name.strip(), description.strip(), domain.strip(), status, keywords.strip(), now, now)
+        )
+        new_id = cur.lastrowid
+        conn.commit()
+        return new_id
+    finally:
+        conn.close()
+
+
+def update_tracker(tracker_id: int, fields: dict):
+    allowed = {"name", "description", "domain", "status", "keywords"}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return
+    updates["updated_date"] = datetime.utcnow().isoformat()
+    conn = get_conn()
+    try:
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        values = list(updates.values()) + [tracker_id]
+        conn.execute(f"UPDATE policy_trackers SET {set_clause} WHERE id=?", values)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def delete_tracker(tracker_id: int):
+    conn = get_conn()
+    try:
+        conn.execute("DELETE FROM tracker_events WHERE tracker_id=?", (tracker_id,))
+        conn.execute("DELETE FROM tracker_articles WHERE tracker_id=?", (tracker_id,))
+        conn.execute("DELETE FROM policy_trackers WHERE id=?", (tracker_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ── TRACKER ARTICLES ──────────────────────────────────────────────────────────
+
+def get_tracker_articles(tracker_id: int) -> list[dict]:
+    """Return all articles linked to a tracker, joined with article data."""
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT ta.id as link_id, ta.article_id, ta.article_type, ta.added_date, ta.note, "
+            "a.title, a.url, a.source, a.pub_date, a.domain, a.relevance, a.sentiment, a.summary, a.why_it_matters "
+            "FROM tracker_articles ta "
+            "LEFT JOIN articles a ON ta.article_id = a.id AND ta.article_type = 'news' "
+            "WHERE ta.tracker_id = ? ORDER BY COALESCE(a.pub_date, ta.added_date) ASC",
+            (tracker_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def add_tracker_article(tracker_id: int, article_id: int,
+                        article_type: str = "news", note: str = "") -> bool:
+    conn = get_conn()
+    now = datetime.utcnow().isoformat()
+    try:
+        # Prevent duplicates
+        existing = conn.execute(
+            "SELECT id FROM tracker_articles WHERE tracker_id=? AND article_id=? AND article_type=?",
+            (tracker_id, article_id, article_type)
+        ).fetchone()
+        if existing:
+            return False
+        conn.execute(
+            "INSERT INTO tracker_articles (tracker_id, article_id, article_type, added_date, note) "
+            "VALUES (?,?,?,?,?)",
+            (tracker_id, article_id, article_type, now, note)
+        )
+        conn.execute(
+            "UPDATE policy_trackers SET updated_date=? WHERE id=?",
+            (now, tracker_id)
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def remove_tracker_article(tracker_id: int, article_id: int, article_type: str = "news"):
+    conn = get_conn()
+    try:
+        conn.execute(
+            "DELETE FROM tracker_articles WHERE tracker_id=? AND article_id=? AND article_type=?",
+            (tracker_id, article_id, article_type)
+        )
+        conn.execute(
+            "UPDATE policy_trackers SET updated_date=? WHERE id=?",
+            (datetime.utcnow().isoformat(), tracker_id)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ── TRACKER EVENTS ────────────────────────────────────────────────────────────
+
+def get_tracker_events(tracker_id: int) -> list[dict]:
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM tracker_events WHERE tracker_id=? ORDER BY event_date ASC",
+            (tracker_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def add_tracker_event(tracker_id: int, title: str,
+                      event_date: str = "", note: str = "") -> int:
+    conn = get_conn()
+    now = datetime.utcnow().isoformat()
+    try:
+        cur = conn.execute(
+            "INSERT INTO tracker_events (tracker_id, title, event_date, note, created_date) "
+            "VALUES (?,?,?,?,?)",
+            (tracker_id, title.strip(), event_date.strip(), note.strip(), now)
+        )
+        new_id = cur.lastrowid
+        conn.execute(
+            "UPDATE policy_trackers SET updated_date=? WHERE id=?",
+            (now, tracker_id)
+        )
+        conn.commit()
+        return new_id
+    finally:
+        conn.close()
+
+
+def delete_tracker_event(event_id: int):
+    conn = get_conn()
+    try:
+        conn.execute("DELETE FROM tracker_events WHERE id=?", (event_id,))
+        conn.commit()
     finally:
         conn.close()
