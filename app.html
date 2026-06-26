@@ -1177,7 +1177,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-cyan" onclick="fixLinks()">🔧 Fix Broken Links</button>
           <button class="btn btn-ghost btn-sm" onclick="detectDuplicates()">&#x1F50D; Find Dupes</button>
-          <button class="btn btn-primary" onclick="addSource()">+ Add Source</button>
+          <button class="btn btn-primary" onclick="openAddSourceModal()">+ Add Source</button>
         </div>
       </div>
       <div id="fix-links-result" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:12px;border:1px solid rgba(0,194,255,0.2);background:rgba(0,194,255,0.05);color:var(--cyan)"></div>
@@ -1185,6 +1185,51 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         <thead><tr><th>Source</th><th>URL</th><th>Jurisdiction</th><th>Type</th><th>Status</th><th>Last Scraped</th><th>Articles</th><th></th></tr></thead>
         <tbody id="sources-tbody"></tbody>
       </table></div>
+    </div>
+
+    <!-- Add Source modal -->
+    <div id="add-source-modal" style="display:none;position:fixed;inset:0;z-index:9200;background:rgba(0,0,0,.6);align-items:center;justify-content:center">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;width:100%;max-width:500px;margin:20px">
+        <div style="font-weight:700;font-size:15px;color:var(--white);margin-bottom:16px">Add News Source</div>
+        <div style="display:grid;gap:10px">
+          <div>
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Source name *</label>
+            <input class="filter-input" id="asrc-name" placeholder="e.g. Health Canada News" style="width:100%">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">URL * <span style="color:var(--dim)">(full URL including https://)</span></label>
+            <input class="filter-input" id="asrc-url" placeholder="https://www.canada.ca/en/health-canada/news.html" style="width:100%" oninput="autoDetectScrapeType(this.value)">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Jurisdiction</label>
+              <select class="filter-select" id="asrc-juris" style="width:100%">
+                <option value="Federal">Federal</option>
+                <option value="BC" selected>BC</option>
+                <option value="Alberta">Alberta</option>
+                <option value="Ontario">Ontario</option>
+                <option value="Municipal">Municipal</option>
+                <option value="Pan-Canadian">Pan-Canadian</option>
+                <option value="International">International</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Scrape type <span id="asrc-type-hint" style="color:var(--cyan)"></span></label>
+              <select class="filter-select" id="asrc-type" style="width:100%">
+                <option value="html">HTML</option>
+                <option value="rss">RSS / Atom feed</option>
+              </select>
+            </div>
+          </div>
+          <div id="asrc-rss-hint" style="display:none;font-size:11px;color:var(--cyan);padding:8px 10px;background:rgba(0,194,255,.06);border-radius:6px;border:1px solid rgba(0,194,255,.2)">
+            💡 RSS feeds are more reliable than HTML scraping. If the source has a feed URL (ends in <code>/feed/</code>, <code>.rss</code>, <code>.xml</code>) use that instead.
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">
+          <button class="btn btn-ghost" onclick="closeAddSourceModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="submitAddSource()">Add Source</button>
+        </div>
+      </div>
     </div>
 
     <!-- ═══ NEWS SCRAPER FILTER SETTINGS PANEL ═══ -->
@@ -5887,6 +5932,7 @@ function renderSources(){
       + '<td><div style="display:flex;gap:4px">'
       + '<button class="btn '+(active?'btn-red':'btn-green')+' btn-sm" onclick="toggleSourceApi('+s.id+')">'+(active?'Pause':'Activate')+'</button>'
       + '<button class="btn btn-ghost btn-sm" onclick="checkSourceReachability('+s.id+',this)" title="Test if this URL is reachable" style="font-size:10px">&#x1F50D;</button>'
+      + '<button class="btn btn-ghost btn-sm" onclick="deleteSourceApi('+s.id+',\''+escHtml(s.name||'').replace(/'/g,"\\'")+'\')" title="Delete this source permanently" style="font-size:10px;color:#f87171">&#x1F5D1;</button>'
       + '</div></td>'
       + '</tr>';
   }).join('');
@@ -5916,7 +5962,75 @@ async function checkSourceReachability(id, btn){
     showToast('&#x274C;','Unreachable','URL returned: '+resp.status+'. Consider updating this source URL.',4000);
   }
 }
-function addSource(){const name=prompt('Source name:');if(!name)return;const url=prompt('URL:');if(!url)return;const jur=prompt('Jurisdiction (Federal/BC/Municipal):')||'Federal';sources.push({id:Date.now(),name,url,jurisdiction:jur,active:true,lastScraped:'Never',count:0});renderSources();}
+// ── Add Source modal ──────────────────────────────────────────────
+function openAddSourceModal(){
+  document.getElementById('asrc-name').value = '';
+  document.getElementById('asrc-url').value  = '';
+  document.getElementById('asrc-juris').value = 'BC';
+  document.getElementById('asrc-type').value  = 'html';
+  document.getElementById('asrc-type-hint').textContent = '';
+  document.getElementById('asrc-rss-hint').style.display = 'none';
+  document.getElementById('add-source-modal').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('asrc-name').focus(); }, 50);
+}
+function closeAddSourceModal(){
+  document.getElementById('add-source-modal').style.display = 'none';
+}
+function autoDetectScrapeType(url){
+  var lower = url.toLowerCase();
+  var isRss = /\.(rss|xml|atom)$/.test(lower) || lower.includes('/feed') || lower.includes('/rss');
+  var typeEl = document.getElementById('asrc-type');
+  var hintEl = document.getElementById('asrc-type-hint');
+  var rssHint = document.getElementById('asrc-rss-hint');
+  if(isRss){
+    if(typeEl) typeEl.value = 'rss';
+    if(hintEl) hintEl.textContent = '(auto-detected RSS)';
+    if(rssHint) rssHint.style.display = 'block';
+  } else {
+    if(typeEl) typeEl.value = 'html';
+    if(hintEl) hintEl.textContent = '';
+    if(rssHint) rssHint.style.display = 'none';
+  }
+}
+async function submitAddSource(){
+  var name  = (document.getElementById('asrc-name').value||'').trim();
+  var url   = (document.getElementById('asrc-url').value||'').trim();
+  var juris = document.getElementById('asrc-juris').value || 'Federal';
+  var type  = document.getElementById('asrc-type').value  || 'html';
+  if(!name){ showToast('⚠','Name required','Enter a source name.',2500); return; }
+  if(!url || !url.startsWith('http')){ showToast('⚠','URL required','Enter a full URL starting with https://',2500); return; }
+
+  var resp = await apiFetch('/sources', {
+    method: 'POST',
+    body: JSON.stringify({name:name, url:url, jurisdiction:juris, scrape_type:type})
+  });
+  if(resp && resp.id){
+    closeAddSourceModal();
+    showToast('✅','Source Added','"'+name+'" added and will be scraped on the next run.',3000);
+    // Reload sources from backend so article_count and last_scraped are accurate
+    var d = await apiFetch('/sources');
+    if(d && d.sources) sources = d.sources;
+    renderSources();
+  } else {
+    var detail = (resp && resp.detail) || 'Could not add source.';
+    showToast('⚠','Error',detail,4000);
+  }
+}
+
+// ── Delete Source ─────────────────────────────────────────────────
+async function deleteSourceApi(id, name){
+  if(!confirm('Delete source "'+name+'"?\n\nThis removes it from the backend permanently. Existing scraped articles are kept.')) return;
+  var resp = await apiFetch('/sources/'+id, {method:'DELETE'});
+  if(resp && resp.ok !== false){
+    sources = sources.filter(function(s){ return s.id !== id; });
+    renderSources();
+    showToast('🗑','Source Deleted','"'+name+'" removed.',2500);
+  } else {
+    showToast('⚠','Error','Could not delete source. Check backend connection.',3000);
+  }
+}
+
+function addSource(){ openAddSourceModal(); } // legacy alias
 
 function renderWatchlist(){document.getElementById('watchlist-tags').innerHTML=watchlist.map(k=>`<span class="kw-tag">${k}<span class="kw-remove" onclick="removeKeyword('${k}')">×</span></span>`).join('');}
 /* addKeyword/removeKeyword: see async versions above */
@@ -6678,31 +6792,56 @@ async function fixLinks(){
   for(var i = 0; i < sources.length; i++){
     var s = sources[i];
     try {
-      var resp = await apiFetch('/sources/' + s.id + '/check', { method: 'GET' });
+      var resp = await apiFetch('/sources/' + s.id + '/check');
       if(resp && resp.reachable){
         ok.push(s.name);
       } else {
-        broken.push({ name: s.name, status: (resp && resp.status) || 'unreachable' });
+        broken.push({ id: s.id, name: s.name, status: (resp && resp.status) || 'unreachable', active: s.active });
       }
     } catch(e) {
       errors.push(s.name);
     }
-    // Update progress as each check completes
     resultEl.innerHTML = '<span class="spin" style="display:inline-block;margin-right:6px">&#8635;</span> Checked ' + (i+1) + ' of ' + sources.length + '…';
   }
 
   if(broken.length === 0 && errors.length === 0){
     resultEl.style.color = 'var(--green)';
     resultEl.innerHTML   = '✓ All ' + ok.length + ' source links are reachable.';
-    showToast('✅', 'Links OK', 'All ' + ok.length + ' sources responded successfully.', 4000);
+    showToast('✅','Links OK','All ' + ok.length + ' sources responded successfully.',4000);
   } else {
-    var brokenNames = broken.map(function(b){ return b.name + ' (' + b.status + ')'; });
-    resultEl.style.color = '#fb7185';
-    resultEl.innerHTML   = '⚠ ' + broken.length + ' unreachable: <strong>' + brokenNames.join(', ') + '</strong>'
-      + (errors.length ? ' · ' + errors.length + ' check error(s)' : '');
-    showToast('⚠️', 'Broken Links Found', broken.length + ' source(s) could not be reached.', 5000);
+    var brokenList = broken.map(function(b){
+      return '<span style="color:#f87171">'+escHtml(b.name)+'</span>'
+        + ' <span style="color:var(--dim);font-size:10px">('+escHtml(String(b.status))+')</span>';
+    }).join(', ');
+
+    resultEl.style.color = 'var(--text)';
+    resultEl.innerHTML   = '<strong style="color:#fb7185">⚠ '+broken.length+' unreachable:</strong> '
+      + brokenList
+      + '<br><span style="font-size:10px;color:var(--dim);margin-top:6px;display:block">'
+      + '403 errors from government sites are usually server-side IP restrictions on Render\'s range, not broken URLs. '
+      + 'Connection errors mean the URL itself is wrong. '
+      + 'Sources that consistently return 0 articles after scraping can safely be paused or deleted.'
+      + '</span>'
+      + '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'
+      + '<button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="pauseAllBroken(['+broken.map(function(b){return b.id;}).join(',')+'])">Pause all unreachable</button>'
+      + '<button class="btn btn-ghost btn-sm" style="font-size:10px;color:var(--dim)" onclick="document.getElementById(\'fix-links-result\').style.display=\'none\'">Dismiss</button>'
+      + '</div>';
+    showToast('⚠️','Broken Links Found',broken.length+' source(s) could not be reached.',5000);
   }
-  setTimeout(function(){ resultEl.style.display = 'none'; }, 10000);
+}
+
+async function pauseAllBroken(ids){
+  var paused = 0;
+  for(var i=0; i<ids.length; i++){
+    var s = sources.find(function(x){ return x.id===ids[i]; });
+    if(s && s.active){
+      var resp = await apiFetch('/sources/'+ids[i]+'/toggle', {method:'PATCH'});
+      if(resp && resp.ok!==false){ s.active=false; paused++; }
+    }
+  }
+  renderSources();
+  document.getElementById('fix-links-result').style.display='none';
+  showToast('⏸','Paused '+paused+' sources','They will be skipped on the next scrape. Re-activate any you want to keep.',4000);
 }
 
 /* TRAY */
