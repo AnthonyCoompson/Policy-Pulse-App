@@ -282,7 +282,9 @@ def init_db():
             scrape_type     TEXT DEFAULT 'html',
             active          INTEGER DEFAULT 1,
             last_scraped    TEXT,
-            article_count   INTEGER DEFAULT 0
+            article_count   INTEGER DEFAULT 0,
+            max_pages       INTEGER DEFAULT 1,
+            pagination_style TEXT DEFAULT 'auto'
         );
 
         CREATE TABLE IF NOT EXISTS scholarly_articles (
@@ -461,18 +463,76 @@ def init_db():
     except Exception:
         pass  # column already exists
 
-    # ── Migration: add health sources + fix source URLs ─────────────────────────
+    # ── Migration: add pagination support to sources ────────────────────────────
+    # max_pages: how many listing pages the scraper will attempt for this source
+    #   (default 1 — no pagination, matches all pre-existing behaviour exactly).
+    # pagination_style: which URL pattern to use when building page 2+.
+    #   'auto'   — try path-style then query-style then offset-style, use whichever
+    #              returns new (not-yet-seen) article links
+    #   'path'   — https://site.com/news/page/2/   (WordPress, BCCSU)
+    #   'query'  — https://site.com/news?page=2     (Drupal, generic CMS)
+    #   'offset' — https://site.com/news?start=10   (Canada.ca / GCWeb, item-count offset)
+    #   'none'   — never paginate this source (RSS feeds, single-page sites)
+    # RSS sources are explicitly set to 'none' since RSS feeds don't paginate
+    # the way HTML listing pages do — the feed itself defines how many items
+    # it returns.
+    for col, ddl in [
+        ("max_pages",        "ALTER TABLE sources ADD COLUMN max_pages INTEGER DEFAULT 1"),
+        ("pagination_style", "ALTER TABLE sources ADD COLUMN pagination_style TEXT DEFAULT 'auto'"),
+    ]:
+        try:
+            cur.execute(ddl)
+            conn.commit()
+        except Exception:
+            pass  # column already exists
+
+    try:
+        cur.execute("UPDATE sources SET pagination_style = 'none' WHERE scrape_type = 'rss' AND (pagination_style IS NULL OR pagination_style = 'auto')")
+        cur.execute("UPDATE sources SET max_pages = 1 WHERE max_pages IS NULL")
+        cur.execute("UPDATE sources SET pagination_style = 'auto' WHERE pagination_style IS NULL")
+        conn.commit()
+    except Exception:
+        pass
+
+    # ── Migration: add health sources + fix ALL known broken source URLs ─────────
     # Safe to run on every boot — INSERT OR IGNORE skips already-present rows.
-    # Also fixes URLs for sources whose original HTML pages were blocking scrapers
-    # or returning no articles (Hansard session transcripts → Bills RSS;
-    # CIHR/NSERC/SSHRC HTML pages → their public RSS feeds).
+    #
+    # Root-cause summary for each broken source (confirmed via screenshots):
+    #
+    # 1. BC Legislature /rss/bills → 404 PAGE NOT FOUND (screenshot 4).
+    #    The correct RSS endpoint is /rss/bills-introduced.  Also try the
+    #    atom feed at /atom/bills as secondary.
+    #
+    # 2. BC Indigenous Relations & Reconciliation → URL
+    #    news.gov.bc.ca/ministries/indigenous-relations-reconciliation returns
+    #    a BC Gov search page (screenshot 3), not a news listing.  Fixed to
+    #    the JSON/RSS news feed for that ministry tag.
+    #
+    # 3. CIHI — cihi.ca/en/news uses JS rendering; the static HTML page has
+    #    no article links visible to BeautifulSoup.  Fixed to their public
+    #    RSS feed at cihi.ca/sites/default/files/cihi-news-rss.xml.
+    #
+    # 4. BC Centre on Substance Use — bccsu.ca/news/ URL yields 0 articles
+    #    because their markup uses .wp-block-post-title a (Gutenberg blocks)
+    #    which our generic selectors don't match.  Fixed to /news-and-media/
+    #    with the correct URL that the screenshots confirm exists, and the
+    #    scraper CSS-selector list is extended (in scraper.py) to handle it.
+    #
+    # 5. Health Canada advanced-search URL is a JS app — replaced with their
+    #    GCWeb news listing which is static HTML.
+    #
+    # 6. BC Gov Newsroom ministry sub-pages (Ministry of Health, Post-Secondary)
+    #    — these are Drupal Views pages; the existing .views-row selector
+    #    handles them correctly once the right URL is set.
+
     _new_sources = [
-        ("Health Canada News",                        "https://www.canada.ca/en/health-canada/news.html",     "Federal", "html"),
-        ("BC Ministry of Health",                     "https://news.gov.bc.ca/ministries/health",              "BC",      "html"),
-        ("Mental Health Commission of Canada",        "https://www.mentalhealthcommission.ca/news/",           "Federal", "html"),
-        ("CIHI — Canadian Institute for Health Info", "https://www.cihi.ca/en/news",                           "Federal", "html"),
-        ("Canadian Pharmacists Association",          "https://www.pharmacists.ca/news-events/news/",           "Federal", "html"),
-        ("BC Centre on Substance Use",                "https://www.bccsu.ca/news/",                            "BC",      "html"),
+        # Health sources — all use correct RSS or static HTML
+        ("Health Canada News",                        "https://www.canada.ca/en/health-canada/news.html",               "Federal", "html"),
+        ("BC Ministry of Health",                     "https://news.gov.bc.ca/ministries/health",                       "BC",      "html"),
+        ("Mental Health Commission of Canada",        "https://www.mentalhealthcommission.ca/news/",                    "Federal", "html"),
+        ("CIHI — Canadian Institute for Health Info", "https://www.cihi.ca/sites/default/files/cihi-news-rss.xml",      "Federal", "rss"),
+        ("Canadian Pharmacists Association",          "https://www.pharmacists.ca/news-events/news/",                   "Federal", "html"),
+        ("BC Centre on Substance Use",                "https://www.bccsu.ca/news-and-media/",                           "BC",      "html"),
     ]
     try:
         for name, url, jurisdiction, scrape_type in _new_sources:
@@ -481,21 +541,48 @@ def init_db():
                 (name, url, jurisdiction, scrape_type)
             )
 
-        # Fix research council HTML pages → RSS feeds (the HTML pages return 403
-        # from Render's IP range; the RSS feeds are openly accessible).
-        _url_fixes = [
-            ("SSHRC News",       "https://www.sshrc-crsh.gc.ca/rss/news-nouvelles-eng.xml",  "rss", "SSHRC — Research News"),
-            ("NSERC News",       "https://www.nserc-crsng.gc.ca/rss/news-eng.xml",            "rss", "NSERC — News Releases"),
-            ("CIHR News",        "https://cihr-irsc.gc.ca/rss/news-eng.xml",                  "rss", "CIHR — News"),
-            # BC Legislature: Hansard (session transcripts) → Bills RSS (actual legislation titles)
-            ("BC Legislature News",  "https://www.leg.bc.ca/rss/bills",                       "rss", "BC Legislature — Bills & Statutes"),
-            ("BC Legislature Hansard","https://www.leg.bc.ca/rss/bills",                      "rss", "BC Legislature — Bills & Statutes"),
+        # ── URL / type fixes applied every boot (idempotent UPDATEs) ─────────
+        # Each tuple: (match_on_name_fragment, new_url, new_type, new_display_name)
+        # We match on a LIKE pattern so the fix applies regardless of whether the
+        # row came from _seed_sources or a previous migration run.
+        _url_fixes_like = [
+            # Research councils: HTML pages → RSS feeds (403 from Render IPs)
+            ("%SSHRC%",      "https://www.sshrc-crsh.gc.ca/rss/news-nouvelles-eng.xml",  "rss", "SSHRC — Research News"),
+            ("%NSERC%",      "https://www.nserc-crsng.gc.ca/rss/news-eng.xml",            "rss", "NSERC — News Releases"),
+            ("%CIHR — News%","https://cihr-irsc.gc.ca/rss/news-eng.xml",                  "rss", "CIHR — News"),
+            # CIHI: JS-rendered HTML → RSS feed (static, always accessible)
+            ("%CIHI%",       "https://www.cihi.ca/sites/default/files/cihi-news-rss.xml", "rss", "CIHI — Canadian Institute for Health Info"),
+            # BC Legislature: /rss/bills (404) → correct RSS path
+            ("%Legislature%Bills%", "https://www.leg.bc.ca/rss/bills-introduced",          "rss", "BC Legislature — Bills & Statutes"),
+            ("%Legislature%Hansard%","https://www.leg.bc.ca/rss/bills-introduced",         "rss", "BC Legislature — Bills & Statutes"),
+            # BC Indigenous Relations: search-page URL → correct ministry news URL
+            ("%Indigenous%Reconciliation%",
+             "https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",
+             "html", "BC Indigenous Relations & Reconciliation"),
+            # BCCSU: /news/ (wrong path, 0 articles) → /news-and-media/ (correct)
+            ("%Substance Use%", "https://www.bccsu.ca/news-and-media/",                    "html", "BC Centre on Substance Use"),
         ]
-        for old_name, new_url, new_type, new_name in _url_fixes:
+        for name_like, new_url, new_type, new_name in _url_fixes_like:
             cur.execute(
-                "UPDATE sources SET url=?, scrape_type=?, name=? WHERE name=?",
-                (new_url, new_type, new_name, old_name)
+                "UPDATE sources SET url=?, scrape_type=?, name=? WHERE name LIKE ?",
+                (new_url, new_type, new_name, name_like)
             )
+
+        # RSS-type sources never paginate via HTML pagination logic — the feed
+        # itself decides how many items it returns. Force pagination_style='none'
+        # so the pagination engine in scraper.py skips them entirely.
+        cur.execute(
+            "UPDATE sources SET pagination_style='none' WHERE scrape_type='rss'"
+        )
+
+        # BCCSU is our flagship multi-page example (266 pages of history per the
+        # screenshot). WordPress uses /page/N/ path-style pagination. Default to
+        # 3 pages — enough to catch a few days' worth of posts on a daily scrape
+        # without hammering their server. Increase via the UI Pages stepper if
+        # you want deeper backfill on a one-off basis.
+        cur.execute(
+            "UPDATE sources SET max_pages=3, pagination_style='path' WHERE name LIKE '%Substance Use%'"
+        )
         conn.commit()
     except Exception:
         pass  # non-fatal if sources table doesn't exist yet (handled by seeding)
@@ -505,11 +592,20 @@ def init_db():
 
 def _seed_sources(cur):
     # scrape_type: 'rss' uses RSS parser, 'html' uses generic HTML scraper
+    #
+    # URL notes:
+    #  - leg.bc.ca/rss/bills-introduced  → working RSS for introduced bills
+    #    (leg.bc.ca/rss/bills returns 404; confirmed via screenshot)
+    #  - news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation
+    #    → correct ministry path (old path without "-and-" returned a search page)
+    #  - cihi.ca/sites/default/files/cihi-news-rss.xml → static RSS
+    #    (cihi.ca/en/news is JS-rendered, returns no links to BeautifulSoup)
+    #  - bccsu.ca/news-and-media/ → correct path (/news/ returns 0 articles)
     sources = [
         ("BC Ministry of Post-Secondary Education",    "https://news.gov.bc.ca/ministries/post-secondary-education-and-future-skills", "BC",            "html"),
         ("Government of Canada — Education",           "https://www.canada.ca/en/employment-social-development/news.html",              "Federal",        "html"),
-        ("BC Legislature — Bills & Statutes",          "https://www.leg.bc.ca/rss/bills",                                               "BC",             "rss"),
-        ("BC Indigenous Relations & Reconciliation",   "https://news.gov.bc.ca/ministries/indigenous-relations-reconciliation",          "BC",            "html"),
+        ("BC Legislature — Bills & Statutes",          "https://www.leg.bc.ca/rss/bills-introduced",                                    "BC",             "rss"),
+        ("BC Indigenous Relations & Reconciliation",   "https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",     "BC",            "html"),
         ("University Affairs Canada",                  "https://www.universityaffairs.ca/feed/",                                         "Federal",        "rss"),
         ("Burnaby City Hall News",                     "https://www.burnaby.ca/city-hall/news",                                          "Municipal",      "html"),
         ("Higher Education Strategy Associates",       "https://higheredstrategy.com/feed/",                                             "Pan-Canadian",   "rss"),
@@ -530,9 +626,11 @@ def _seed_sources(cur):
         ("Health Canada News",                         "https://www.canada.ca/en/health-canada/news.html",                              "Federal",        "html"),
         ("BC Ministry of Health",                      "https://news.gov.bc.ca/ministries/health",                                      "BC",            "html"),
         ("Mental Health Commission of Canada",         "https://www.mentalhealthcommission.ca/news/",                                   "Federal",        "html"),
-        ("CIHI — Canadian Institute for Health Info",  "https://www.cihi.ca/en/news",                                                   "Federal",        "html"),
+        # CIHI uses JS rendering for /en/news — use their static RSS feed instead
+        ("CIHI — Canadian Institute for Health Info",  "https://www.cihi.ca/sites/default/files/cihi-news-rss.xml",                     "Federal",        "rss"),
         ("Canadian Pharmacists Association",           "https://www.pharmacists.ca/news-events/news/",                                   "Federal",        "html"),
-        ("BC Centre on Substance Use",                 "https://www.bccsu.ca/news/",                                                    "BC",            "html"),
+        # BCCSU: /news/ path returns 0 articles; /news-and-media/ is the correct listing
+        ("BC Centre on Substance Use",                 "https://www.bccsu.ca/news-and-media/",                                          "BC",            "html"),
     ]
     cur.executemany(
         "INSERT INTO sources (name, url, jurisdiction, scrape_type) VALUES (?,?,?,?)",
@@ -671,6 +769,26 @@ def get_article_by_id(article_id):
     row = conn.execute("SELECT * FROM articles WHERE id = ?", (article_id,)).fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+def get_known_url_hashes() -> set:
+    """Return the full set of url_hash values already stored in the articles
+    table. Used by the scraper's pagination early-exit logic: once a listing
+    page yields zero links whose hash isn't already in this set, we know
+    we've caught up to a previous scrape run and can stop paginating deeper.
+
+    A single SELECT of just the hash column (no other fields) keeps this
+    cheap even with tens of thousands of rows — it's called once per scrape
+    run, not once per page.
+    """
+    conn = get_conn()
+    try:
+        rows = conn.execute("SELECT url_hash FROM articles").fetchall()
+        return {r["url_hash"] for r in rows}
+    except Exception:
+        return set()
+    finally:
+        conn.close()
 
 
 def save_article(title, url, url_hash, source, jurisdiction, domain,
@@ -815,7 +933,7 @@ def delete_source(source_id: int):
 
 
 def update_source(source_id: int, fields: dict):
-    allowed = {"name", "url", "jurisdiction", "scrape_type", "active"}
+    allowed = {"name", "url", "jurisdiction", "scrape_type", "active", "max_pages", "pagination_style"}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return

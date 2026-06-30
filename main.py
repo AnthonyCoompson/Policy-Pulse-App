@@ -404,10 +404,18 @@ def toggle_source_endpoint(source_id: int, _=Depends(require_auth)):
 
 @app.patch("/sources/{source_id}")
 def edit_source(source_id: int, body: dict, _=Depends(require_auth)):
-    allowed = {"name", "url", "jurisdiction", "scrape_type", "active"}
+    allowed = {"name", "url", "jurisdiction", "scrape_type", "active", "max_pages", "pagination_style"}
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
         raise HTTPException(status_code=400, detail=f"Allowed fields: {allowed}")
+    if "max_pages" in updates:
+        try:
+            mp = int(updates["max_pages"])
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="max_pages must be an integer")
+        updates["max_pages"] = max(1, min(30, mp))  # hard cap at 30 pages — protects source servers
+    if "pagination_style" in updates and updates["pagination_style"] not in ("auto", "path", "query", "offset", "none"):
+        raise HTTPException(status_code=400, detail="pagination_style must be one of: auto, path, query, offset, none")
     update_source(source_id, updates)
     return {"ok": True}
 
@@ -416,6 +424,65 @@ def edit_source(source_id: int, body: dict, _=Depends(require_auth)):
 def remove_source(source_id: int, _=Depends(require_auth)):
     delete_source(source_id)
     return {"ok": True}
+
+
+@app.post("/sources/{source_id}/backfill")
+def backfill_source(source_id: int, body: dict, background_tasks: BackgroundTasks, _=Depends(require_auth)):
+    """One-off deep historical crawl for a single source.
+
+    Unlike permanently raising a source's max_pages (which affects every
+    future daily scrape), this temporarily pages deeper for a single run —
+    useful right after adding a multi-page source like BCCSU, to pull in a
+    batch of history beyond what the normal max_pages setting would reach
+    on an ongoing basis. The source's stored max_pages/pagination_style are
+    restored to their original values once the backfill completes.
+
+    Body: { "pages": 15 }  — how many pages to attempt for this one run
+                              (hard-capped at 30, same as the regular
+                              max_pages validation).
+    """
+    from database import get_conn
+
+    pages = int(body.get("pages", 10))
+    pages = max(1, min(30, pages))
+
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM sources WHERE id = ?", (source_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    source = dict(row)
+    if source.get("scrape_type") == "rss":
+        raise HTTPException(status_code=400, detail="Backfill only applies to HTML sources — RSS feeds don't paginate this way.")
+
+    background_tasks.add_task(_run_backfill_bg, source, pages)
+    return {"ok": True, "message": f"Backfill started — fetching up to {pages} pages for '{source['name']}' in the background."}
+
+
+def _run_backfill_bg(source: dict, pages: int):
+    import logging as _log
+    from database import get_known_url_hashes, get_exclusion_keywords, update_source_scraped
+    from scraper import scrape_generic_paginated, _base_url, _process_and_save
+    log = _log.getLogger(__name__)
+
+    name = source["name"]
+    url  = source["url"]
+    log.info(f"[backfill] Starting deep crawl for '{name}': up to {pages} pages")
+    try:
+        known_hashes = get_known_url_hashes()
+        exclusions   = get_exclusion_keywords()
+        raw = scrape_generic_paginated(
+            url, name, base_url=_base_url(url),
+            max_pages=pages,
+            pagination_style=source.get("pagination_style") or "auto",
+            known_url_hashes=known_hashes,
+        )
+        added, _ = _process_and_save(raw, source, exclusions=exclusions)
+        update_source_scraped(name, added)
+        log.info(f"[backfill] Done for '{name}': {added} new articles added from up to {pages} pages")
+    except Exception as e:
+        log.error(f"[backfill] Failed for '{name}': {e}", exc_info=True)
 
 
 # ── RESEARCH SOURCES ──────────────────────────────────────────────────────────
@@ -1055,8 +1122,86 @@ def get_scholarly_scrape_log(limit: int = Query(20)):
 
 # ── SOURCE REACHABILITY ───────────────────────────────────────────────────────
 
-@app.get("/sources/{source_id}/check")
-def check_source_reachability(source_id: int):
+@app.post("/sources/fix-all")
+def fix_all_sources(_=Depends(require_auth)):
+    """Re-apply all known URL fixes to the sources table.
+
+    Calling this endpoint has the same effect as redeploying — it runs the
+    same LIKE-pattern UPDATE statements from init_db() so existing rows get
+    their URLs corrected immediately without a restart.
+    """
+    from database import get_conn
+    conn = get_conn()
+    fixed = []
+    _url_fixes_like = [
+        ("%SSHRC%",      "https://www.sshrc-crsh.gc.ca/rss/news-nouvelles-eng.xml",  "rss", "SSHRC — Research News"),
+        ("%NSERC%",      "https://www.nserc-crsng.gc.ca/rss/news-eng.xml",            "rss", "NSERC — News Releases"),
+        ("%CIHR — News%","https://cihr-irsc.gc.ca/rss/news-eng.xml",                  "rss", "CIHR — News"),
+        ("%CIHI%",       "https://www.cihi.ca/sites/default/files/cihi-news-rss.xml", "rss", "CIHI — Canadian Institute for Health Info"),
+        ("%Legislature%Bills%", "https://www.leg.bc.ca/rss/bills-introduced",          "rss", "BC Legislature — Bills & Statutes"),
+        ("%Legislature%Hansard%","https://www.leg.bc.ca/rss/bills-introduced",         "rss", "BC Legislature — Bills & Statutes"),
+        ("%Indigenous%Reconciliation%",
+         "https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",
+         "html", "BC Indigenous Relations & Reconciliation"),
+        ("%Substance Use%", "https://www.bccsu.ca/news-and-media/",                    "html", "BC Centre on Substance Use"),
+    ]
+    try:
+        for name_like, new_url, new_type, new_name in _url_fixes_like:
+            result = conn.execute(
+                "UPDATE sources SET url=?, scrape_type=?, name=? WHERE name LIKE ?",
+                (new_url, new_type, new_name, name_like)
+            )
+            if result.rowcount and result.rowcount > 0:
+                fixed.append(new_name)
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True, "fixed": fixed, "count": len(fixed),
+            "message": "Source URLs updated. Run a scrape now to fetch articles from fixed sources."}
+
+
+@app.get("/sources/diagnose")
+def diagnose_sources():
+    """Check all active sources for reachability and return a per-source report.
+
+    Useful for quickly spotting which sources are returning 404 / 403 / timeout
+    without having to check the scrape log line by line.
+    Checks up to 30 sources concurrently using threads.
+    """
+    import requests as req_lib
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    sources = get_sources()
+    active = [s for s in sources if s.get("active")]
+
+    def _check(s):
+        try:
+            r = req_lib.head(s["url"], timeout=8, allow_redirects=True,
+                             headers={"User-Agent": "PolicyPulse/1.0 link-checker"})
+            return {
+                "id": s["id"], "name": s["name"], "url": s["url"],
+                "type": s.get("scrape_type", "html"),
+                "status": r.status_code,
+                "reachable": r.status_code < 400,
+            }
+        except req_lib.exceptions.Timeout:
+            return {"id": s["id"], "name": s["name"], "url": s["url"],
+                    "type": s.get("scrape_type","html"), "status": "timeout", "reachable": False}
+        except Exception as e:
+            return {"id": s["id"], "name": s["name"], "url": s["url"],
+                    "type": s.get("scrape_type","html"), "status": str(e)[:60], "reachable": False}
+
+    results = []
+    with ThreadPoolExecutor(max_workers=min(10, len(active))) as ex:
+        futures = {ex.submit(_check, s): s for s in active}
+        for f in as_completed(futures):
+            results.append(f.result())
+
+    results.sort(key=lambda x: (x["reachable"], x["name"]))
+    broken = [r for r in results if not r["reachable"]]
+    ok     = [r for r in results if r["reachable"]]
+    return {"checked": len(results), "broken": len(broken),
+            "ok": len(ok), "results": results}
     import requests as req_lib
     from database import get_conn
     conn = get_conn()

@@ -1,6 +1,9 @@
 """
-PolicyPulse Scraper v4
+PolicyPulse Scraper v5
 - Sources driven by DB table (scrape_type column decides RSS vs HTML)
+- Multi-page pagination support per source (max_pages + pagination_style
+  columns), with early-exit once a page yields only already-known articles.
+  See scrape_generic_paginated() for the full design rationale.
 - Fuzzy title deduplication via rapidfuzz before any AI calls are made
 - User-Agent rotation + exponential backoff retry on page fetches
 - Batch AI processing: articles > 3 use asyncio.gather for concurrent calls
@@ -25,7 +28,7 @@ from rapidfuzz import fuzz
 from database import (
     save_article, get_sources, log_scrape,
     update_source_scraped, get_watchlist_keywords, 
-    get_exclusion_keywords,
+    get_exclusion_keywords, get_known_url_hashes,
 )
 from ai_processor import analyze_article, analyze_articles_batch, quick_relevance_score
 
@@ -374,24 +377,14 @@ def scrape_rss(url, source_name, extra_tag=None):
 
 # ── HTML SCRAPING — retry + UA rotation on initial page fetch ─────────────────
 
-def scrape_generic(url, source_name, base_url=None):
+def _extract_articles_from_soup(soup, url, source_name, base_url=None):
+    """Pull candidate article links out of a single listing page's soup.
+
+    This is the parsing logic previously inlined in scrape_generic() — split
+    out so the pagination orchestrator (scrape_generic_paginated) can call it
+    once per page without duplicating the selector list or the noise filter.
+    """
     articles = []
-    soup = None
-
-    for attempt in range(3):
-        headers = {**HEADERS, "User-Agent": USER_AGENTS[attempt % len(USER_AGENTS)]}
-        try:
-            resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
-            resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, "html.parser")
-            break
-        except requests.RequestException as e:
-            log.warning(f"scrape_generic attempt {attempt+1}/3 [{source_name}]: {e}")
-            if attempt < 2:
-                time.sleep(2 ** attempt)
-
-    if soup is None:
-        return articles
 
     selectors = [
         # ── Semantic / article-wrapped (most reliable, try first) ────────
@@ -400,20 +393,43 @@ def scrape_generic(url, source_name, base_url=None):
         ".news-item a", ".news-item h3 a", ".news-item h4 a",
         ".news-title a", ".news-heading a", ".news-list li a",
         ".entry-title a", ".post-title a",
+        # ── WordPress Gutenberg block editor (BCCSU, many NGO sites) ─────
+        # Post titles rendered via Gutenberg use wp-block-post-title
+        ".wp-block-post-title a",
+        ".wp-block-post-title",          # sometimes the <a> IS the title el
+        ".wp-block-query .wp-block-post-title a",
+        ".wp-block-query li a",
+        ".wp-block-query h2 a", ".wp-block-query h3 a",
+        # Classic WordPress themes
+        ".post-title a", ".entry-title a",
         # ── Drupal Views (BC Gov Newsroom, ministry pages use Drupal) ────
         ".views-row a", ".views-row h3 a", ".views-row h4 a",
         ".view-content h3 a", ".view-content h4 a",
         ".field-content a", ".field-items a",
-        # ── Canada.ca / GCWeb 4.x template ───────────────────────────────
+        ".view-content .views-field-title a",
+        # ── Canada.ca / GCWeb 4.x & 5.x template ─────────────────────────
         # The federal government's standard web template uses these patterns
         ".feeds-cont li a", ".feeds-cont a",
-        "main ul li > a",                # direct list links in main content
-        ".mwsbodytext ul li a",          # body text list items
-        "h3.gc-thickline a",             # GCWeb article card headings
+        "main ul li > a",                    # direct list links in main content
+        ".mwsbodytext ul li a",              # body text list items
+        "h3.gc-thickline a",                 # GCWeb article card headings
+        ".gc-card h3 a", ".gc-card h2 a",   # GCWeb 5.x card components
+        ".card-title a",                     # Bootstrap-based GOC pages
+        # ── CIHI / health research council pages ─────────────────────────
+        ".news-listing a", ".news-listing h3 a",
+        ".news-listing h2 a",
+        ".results-list h3 a", ".results-list h2 a",
+        # ── BC Gov newsroom / ministry sub-pages ─────────────────────────
+        ".article-list a", ".article-list h3 a",
+        ".news-releases a", ".news-releases h3 a",
         # ── Government research councils (CIHR, NSERC, SSHRC) ────────────
         # Use table-based layouts on older pages
         "table td.views-field a",
         "table.table td a",
+        # ── Generic list patterns used by NGO / think-tank sites ─────────
+        "ul.post-list li a", "ul.article-list li a",
+        ".post-list h2 a", ".post-list h3 a",
+        ".archive-list h2 a", ".archive-list h3 a",
         # ── Heading wrappers (broad but essential fallback) ───────────────
         "h2.title a", "h3.title a",
         "h2 a", "h3 a", "h4 a",
@@ -425,11 +441,19 @@ def scrape_generic(url, source_name, base_url=None):
         "subscribe", "follow us", "share", "back to", "read more", "more news",
         "all news", "view all", "load more", "next page", "previous page",
         "français", "english", "skip to", "return to", "print", "email this",
+        "donate", "donate now", "register", "sign up", "terms of use",
+        "privacy policy", "accessibility", "sitemap", "careers",
     }
+
+    # Base domain of the listing page — we only keep links that stay on the
+    # same domain.  This prevents navigation links pointing to external sites
+    # (e.g. social media share URLs) from polluting the candidate list.
+    from urllib.parse import urlparse as _urlparse
+    _listing_domain = _urlparse(base_url or url).netloc.lower()
 
     seen = set()
     for sel in selectors:
-        for el in soup.select(sel)[:25]:
+        for el in soup.select(sel)[:30]:   # raised from 25 → 30 per selector
             title = el.get_text(strip=True)
             href  = el.get("href", "")
 
@@ -452,9 +476,19 @@ def scrape_generic(url, source_name, base_url=None):
             if not href or href.startswith(("#", "javascript:", "mailto:")):
                 continue
 
+            # Skip links that leave the source domain entirely
+            # (e.g. Twitter/Facebook share buttons, external media partners)
+            _href_domain = _urlparse(href).netloc.lower()
+            if _listing_domain and _href_domain and _href_domain != _listing_domain:
+                # Allow sub-domain variations (e.g. www.bccsu.ca vs bccsu.ca)
+                _base_listing = ".".join(_listing_domain.split(".")[-2:])
+                _base_href    = ".".join(_href_domain.split(".")[-2:])
+                if _base_listing != _base_href:
+                    continue
+
             seen.add(href)
             articles.append({"title": title, "url": href, "pub_date": None})
-        if len(articles) >= 15:
+        if len(articles) >= 20:   # raised from 15 → 20 so paginated sites yield more
             break
 
     # Deduplicate by URL (different selectors may hit the same link)
@@ -465,8 +499,217 @@ def scrape_generic(url, source_name, base_url=None):
             seen_urls.add(art["url"])
             unique.append(art)
 
-    log.debug(f"  scrape_generic [{source_name}]: {len(unique)} candidate links found")
-    return unique[:15]
+    return unique[:20]
+
+
+def _fetch_listing_page(url, source_name):
+    """Fetch and parse a single listing page with retry + UA rotation.
+
+    Returns a BeautifulSoup object, or None if all attempts failed.
+    Shared by scrape_generic() and the pagination orchestrator so retry
+    behaviour is identical for page 1 and page N.
+    """
+    for attempt in range(3):
+        headers = {**HEADERS, "User-Agent": USER_AGENTS[attempt % len(USER_AGENTS)]}
+        try:
+            resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            return BeautifulSoup(resp.text, "html.parser")
+        except requests.RequestException as e:
+            log.warning(f"_fetch_listing_page attempt {attempt+1}/3 [{source_name}] {url[:70]}: {e}")
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    return None
+
+
+def scrape_generic(url, source_name, base_url=None):
+    """Single-page HTML scrape — unchanged behaviour for sources with
+    max_pages=1 (the default for every source unless explicitly configured
+    otherwise). Kept as a thin wrapper around the shared fetch + parse
+    helpers so existing callers and tests are unaffected."""
+    soup = _fetch_listing_page(url, source_name)
+    if soup is None:
+        return []
+    result = _extract_articles_from_soup(soup, url, source_name, base_url=base_url)
+    log.debug(f"  scrape_generic [{source_name}]: {len(result)} candidate links found")
+    return result
+
+
+# ── PAGINATION — URL BUILDERS ─────────────────────────────────────────────────
+# Each builder takes the page-1 URL and a 1-indexed page number (page_num=1
+# always returns the original URL unchanged) and returns the URL to fetch for
+# that page. Three distinct styles cover the overwhelming majority of CMS
+# platforms encountered among government, university, and NGO sites:
+#
+#   path   — WordPress (BCCSU and most NGOs): /news/page/2/
+#   query  — Drupal / generic CMS: ?page=2  (Drupal page param is 0-indexed
+#            internally but we expose 1-indexed page_num to keep this
+#            consistent with the other two builders, converting internally)
+#   offset — Canada.ca / GCWeb item-offset pagination: ?start=10
+#
+# 'auto' tries all three in turn during the first multi-page fetch and
+# remembers whichever one actually changed the page content (see
+# scrape_generic_paginated). This means a source can be left on 'auto'
+# indefinitely without ever being told which CMS it runs.
+
+def _build_page_url_path(base_url: str, page_num: int) -> str:
+    """WordPress-style path pagination: example.com/news/ -> example.com/news/page/2/"""
+    if page_num <= 1:
+        return base_url
+    trimmed = base_url.rstrip("/")
+    return f"{trimmed}/page/{page_num}/"
+
+
+def _build_page_url_query(base_url: str, page_num: int) -> str:
+    """Drupal/generic query-param pagination: example.com/news?page=1 (0-indexed internally)."""
+    if page_num <= 1:
+        return base_url
+    sep = "&" if "?" in base_url else "?"
+    return f"{base_url}{sep}page={page_num - 1}"
+
+
+def _build_page_url_offset(base_url: str, page_num: int, items_per_page: int = 10) -> str:
+    """Canada.ca/GCWeb item-offset pagination: example.com/news?start=10"""
+    if page_num <= 1:
+        return base_url
+    sep = "&" if "?" in base_url else "?"
+    offset = (page_num - 1) * items_per_page
+    return f"{base_url}{sep}start={offset}"
+
+
+_PAGE_URL_BUILDERS = {
+    "path":   _build_page_url_path,
+    "query":  _build_page_url_query,
+    "offset": _build_page_url_offset,
+}
+
+
+def scrape_generic_paginated(url, source_name, base_url=None,
+                             max_pages: int = 1, pagination_style: str = "auto",
+                             known_url_hashes: set | None = None):
+    """Paginated HTML scrape with early-exit on already-known articles.
+
+    This is the entry point used by run_scrape() for any source with
+    max_pages > 1. Sources left at the default max_pages=1 go through
+    scrape_generic() exactly as before — zero behaviour change for the
+    ~25 single-page sources already configured.
+
+    Early-exit logic (the key cost-control mechanism):
+      After the FIRST page, every subsequent page is checked against
+      known_url_hashes (the set of url_hash values already in the articles
+      table). If a page contributes zero new URLs, pagination stops
+      immediately — we assume everything past this point has already been
+      seen on a prior scrape run. This means a daily scrape of a 266-page
+      site like BCCSU typically only ever fetches page 1, because new posts
+      since yesterday almost always fit on the first page. Pagination only
+      goes deeper than page 1 on the very first run (or after a long gap),
+      which is exactly when you want a deeper catch-up fetch.
+
+    pagination_style='auto' tries path, then query, then offset on page 2,
+    keeping whichever builder returns at least one link not already present
+    on page 1. If none produce new links, pagination stops after page 1
+    (same behaviour as max_pages=1).
+
+    Args:
+        url:               Page 1 URL (exactly as stored in the sources table).
+        source_name:       For logging.
+        base_url:          Used to resolve relative hrefs (same as scrape_generic).
+        max_pages:         Upper bound on how many pages to attempt.
+        pagination_style:  'path' | 'query' | 'offset' | 'auto' | 'none'.
+        known_url_hashes:  Set of url_hash values already in the DB, used for
+                            early-exit. If None, early-exit is skipped (every
+                            page up to max_pages is always fetched) — callers
+                            should always pass this in production use.
+
+    Returns:
+        List of article dicts (same shape as scrape_generic), deduplicated
+        across all pages fetched.
+    """
+    if pagination_style == "none" or max_pages <= 1:
+        return scrape_generic(url, source_name, base_url=base_url)
+
+    known_url_hashes = known_url_hashes or set()
+    all_articles: list[dict] = []
+    seen_urls: set[str] = set()
+    resolved_style = pagination_style  # 'auto' gets pinned to a concrete style below
+
+    # ── Page 1 — identical to the non-paginated path ──────────────────────────
+    soup = _fetch_listing_page(url, source_name)
+    if soup is None:
+        return []
+    page1_articles = _extract_articles_from_soup(soup, url, source_name, base_url=base_url)
+    for art in page1_articles:
+        if art["url"] not in seen_urls:
+            seen_urls.add(art["url"])
+            all_articles.append(art)
+
+    if max_pages <= 1 or not page1_articles:
+        return all_articles
+
+    # ── Pages 2..max_pages ──────────────────────────────────────────────────
+    for page_num in range(2, max_pages + 1):
+
+        if resolved_style == "auto":
+            # Try each builder until one yields at least one URL not seen on
+            # page 1. Once resolved, stick with that builder for the rest of
+            # this run (and log it so a human can hardcode it later via the
+            # Pages/Style UI control instead of re-discovering it every time).
+            found_style = None
+            for style_name, builder in _PAGE_URL_BUILDERS.items():
+                candidate_url = builder(url, page_num)
+                candidate_soup = _fetch_listing_page(candidate_url, f"{source_name} (auto-detect {style_name})")
+                if candidate_soup is None:
+                    continue
+                candidate_articles = _extract_articles_from_soup(
+                    candidate_soup, candidate_url, source_name, base_url=base_url
+                )
+                new_on_this_page = [a for a in candidate_articles if a["url"] not in seen_urls]
+                if new_on_this_page:
+                    found_style = style_name
+                    page_articles = candidate_articles
+                    break
+                time.sleep(0.5)  # be polite between auto-detect probe attempts
+            if found_style is None:
+                log.info(f"  [paginate] {source_name}: no pagination style produced new links at page {page_num} — stopping")
+                break
+            resolved_style = found_style
+            log.info(f"  [paginate] {source_name}: auto-detected pagination style = '{resolved_style}'")
+        else:
+            builder = _PAGE_URL_BUILDERS.get(resolved_style)
+            if builder is None:
+                log.warning(f"  [paginate] {source_name}: unknown pagination_style '{resolved_style}' — stopping")
+                break
+            page_url = builder(url, page_num)
+            page_soup = _fetch_listing_page(page_url, source_name)
+            if page_soup is None:
+                log.info(f"  [paginate] {source_name}: page {page_num} fetch failed — stopping")
+                break
+            page_articles = _extract_articles_from_soup(page_soup, page_url, source_name, base_url=base_url)
+
+        new_on_this_page = [a for a in page_articles if a["url"] not in seen_urls]
+
+        if not new_on_this_page:
+            log.info(f"  [paginate] {source_name}: page {page_num} had no new links — stopping (all already seen)")
+            break
+
+        # Early-exit: if every new link on this page is already in the DB,
+        # we've caught up to content we processed on a previous scrape run.
+        # No point fetching page_num+1 — it will be even older.
+        unseen_in_db = [a for a in new_on_this_page
+                        if hashlib.sha256(a["url"].encode()).hexdigest() not in known_url_hashes]
+        for art in new_on_this_page:
+            seen_urls.add(art["url"])
+            all_articles.append(art)
+
+        if known_url_hashes and not unseen_in_db:
+            log.info(f"  [paginate] {source_name}: page {page_num} was entirely already-known articles — stopping early "
+                      f"(caught up to previous scrape)")
+            break
+
+        time.sleep(DELAY_BETWEEN_SOURCES)
+
+    log.info(f"  [paginate] {source_name}: {len(all_articles)} total candidate links across pages")
+    return all_articles
 
 
 # ── GOOGLE NEWS ───────────────────────────────────────────────────────────────
@@ -508,20 +751,40 @@ def run_scrape():
     all_errors       = []
     all_new_articles: list[dict] = []   # collects every newly-inserted article
 
+    # Loaded once per run (not per source) — pagination early-exit checks
+    # candidate URLs against this set so a multi-page source like BCCSU stops
+    # fetching deeper pages the moment it hits content already in the DB.
+    known_url_hashes = get_known_url_hashes()
+    log.info(f"Known article hashes loaded for pagination early-exit: {len(known_url_hashes)}")
+
     sources = get_sources()
     for source in [s for s in sources if s["active"]]:
-        name        = source["name"]
-        url         = source["url"]
-        scrape_type = source.get("scrape_type", "html")
-        log.info(f"Scraping [{scrape_type.upper()}]: {name}")
+        name             = source["name"]
+        url              = source["url"]
+        scrape_type      = source.get("scrape_type", "html")
+        max_pages        = int(source.get("max_pages") or 1)
+        pagination_style = source.get("pagination_style") or "auto"
+        log.info(f"Scraping [{scrape_type.upper()}]: {name}"
+                 + (f" (max_pages={max_pages}, style={pagination_style})" if max_pages > 1 else ""))
         try:
             if scrape_type == "rss":
                 raw = scrape_rss(url, name)
+            elif max_pages > 1 and pagination_style != "none":
+                raw = scrape_generic_paginated(
+                    url, name, base_url=_base_url(url),
+                    max_pages=max_pages, pagination_style=pagination_style,
+                    known_url_hashes=known_url_hashes,
+                )
             else:
                 raw = scrape_generic(url, name, base_url=_base_url(url))
             added, new_arts = _process_and_save(raw, source, exclusions=exclusions)
             total_added += added
             all_new_articles.extend(new_arts)
+            # Newly-saved articles become "known" immediately so a later
+            # source in this same run (or the Google News pass below) won't
+            # re-trigger pagination on the same content if it shares a URL.
+            for art in new_arts:
+                known_url_hashes.add(hashlib.sha256(art["url"].encode()).hexdigest())
             update_source_scraped(name, added)
             log.info(f"  -> {added} new articles")
         except Exception as e:
