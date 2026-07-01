@@ -1178,7 +1178,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
           <button class="btn btn-cyan" onclick="fixLinks()">🔧 Fix Broken Links</button>
           <button class="btn btn-ghost btn-sm" onclick="detectDuplicates()">&#x1F50D; Find Dupes</button>
           <button class="btn btn-gold btn-sm" onclick="fixAllSourceUrls()" title="Apply known URL fixes for BCCSU, CIHI, BC Legislature, and BC Indigenous Relations">&#x1F527; Fix All Source URLs</button>
-          <button class="btn btn-ghost btn-sm" onclick="diagnoseSources()" title="Check all active sources for reachability">&#x1F4CB; Diagnose All</button>
+          <button class="btn btn-ghost btn-sm" onclick="diagnoseSources()" title="Run a full diagnostic — fetches and parses every source to explain exactly why each is or isn't producing articles">&#x1F4CB; Diagnose All</button>
           <button class="btn btn-primary" onclick="openAddSourceModal()">+ Add Source</button>
         </div>
       </div>
@@ -1186,9 +1186,12 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
 
       <!-- Diagnose results panel -->
       <div id="source-diagnose-result" style="display:none;margin-bottom:14px;padding:14px 16px;background:rgba(11,24,41,0.8);border:1px solid var(--border);border-radius:8px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
           <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)">&#x1F4CB; Source Diagnostic Report</div>
-          <button onclick="document.getElementById('source-diagnose-result').style.display='none'" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px">&#x2715;</button>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="btn btn-gold btn-sm" onclick="downloadDiagnosePdf()" id="diagnose-pdf-btn" style="font-size:10px;padding:3px 10px">&#x1F4C4; Download PDF Report</button>
+            <button onclick="document.getElementById('source-diagnose-result').style.display='none'" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px">&#x2715;</button>
+          </div>
         </div>
         <div id="source-diagnose-summary" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
         <div id="source-diagnose-broken" style="margin-bottom:10px"></div>
@@ -6980,6 +6983,27 @@ async function fixAllSourceUrls(){
 
 /* ── Diagnose All Sources ────────────────────────────────────────────────── */
 var _diagnoseOkVisible = false;
+var _lastDiagnoseReport = null;
+
+var REASON_LABELS = {
+  unreachable:       '&#x1F534; Unreachable',
+  http_error:        '&#x1F534; HTTP Error',
+  js_rendered:       '&#x1F7E0; JavaScript-Rendered (no static content)',
+  rss_parse_error:   '&#x1F7E0; Invalid RSS/Atom Feed',
+  no_selector_match: '&#x1F7E1; No Matching Selector Pattern',
+  rss_empty:         '&#x1F7E1; RSS Feed Empty',
+  filtered_out:      '&#x1F7E1; All Links Filtered Out',
+};
+var REASON_COLORS = {
+  unreachable:       '#f87171',
+  http_error:        '#f87171',
+  js_rendered:        '#fb923c',
+  rss_parse_error:    '#fb923c',
+  no_selector_match:  '#facc15',
+  rss_empty:          '#facc15',
+  filtered_out:       '#facc15',
+};
+var REASON_ORDER = ['unreachable','http_error','js_rendered','rss_parse_error','no_selector_match','rss_empty','filtered_out'];
 
 async function diagnoseSources(){
   if(!API_BASE){
@@ -6991,68 +7015,67 @@ async function diagnoseSources(){
   var broken  = document.getElementById('source-diagnose-broken');
   var okDiv   = document.getElementById('source-diagnose-ok');
   var showOkBtn = document.getElementById('source-diagnose-show-ok');
+  var pdfBtn = document.getElementById('diagnose-pdf-btn');
 
   panel.style.display = 'block';
-  summary.innerHTML = '<span class="spin" style="display:inline-block;margin-right:6px">&#8635;</span> Checking all active sources…';
+  if(pdfBtn) pdfBtn.disabled = true;
+  summary.innerHTML = '<span class="spin" style="display:inline-block;margin-right:6px">&#8635;</span> Running full diagnostic — fetching and parsing every active source, this can take 20–60 seconds…';
   broken.innerHTML = '';
   if(okDiv) okDiv.innerHTML = '';
   _diagnoseOkVisible = false;
   if(showOkBtn) showOkBtn.textContent = '&#x25BC; Show working sources';
 
   var d = await apiFetch('/sources/diagnose');
+  if(pdfBtn) pdfBtn.disabled = false;
   if(!d){
     summary.innerHTML = '<span style="color:var(--red)">&#x26A0; Could not reach backend.</span>';
     return;
   }
+  _lastDiagnoseReport = d;
 
-  var all     = d.results || [];
-  var brokenList = all.filter(function(r){ return !r.reachable; });
-  var okList     = all.filter(function(r){ return r.reachable; });
+  var all = d.results || [];
+  var brokenList = all.filter(function(r){ return !r.healthy; });
+  var okList     = all.filter(function(r){ return r.healthy; });
 
   summary.innerHTML = '<strong style="color:var(--white)">'+d.checked+'</strong> sources checked &nbsp;&bull;&nbsp; '
     +'<strong style="color:'+(brokenList.length?'#f87171':'var(--green)')+'">'+brokenList.length+' broken</strong> &nbsp;&bull;&nbsp; '
     +'<strong style="color:var(--green)">'+okList.length+' working</strong>';
 
-  // Status colour helper
-  function _statusCol(r){
-    var s = r.status;
-    if(s===200) return 'var(--green)';
-    if(s===403||s===429) return '#f59e0b';
-    if(s===404) return '#f87171';
-    if(s==='timeout') return '#f59e0b';
-    return '#f87171';
-  }
-  function _statusNote(r){
-    if(r.status===403) return '403 — blocked (Render IP); switch to RSS if available';
-    if(r.status===404) return '404 — URL is wrong or page was moved';
-    if(r.status===429) return '429 — rate limited';
-    if(r.status==='timeout') return 'Timeout — server too slow or unreachable';
-    return String(r.status);
-  }
-
   if(!brokenList.length){
-    broken.innerHTML = '<div style="font-size:12px;color:var(--green);padding:6px 0">&#x2713; All sources are reachable!</div>';
+    broken.innerHTML = '<div style="font-size:12px;color:var(--green);padding:6px 0">&#x2713; Every source is producing usable articles!</div>';
   } else {
-    broken.innerHTML = '<div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#f87171;margin-bottom:8px">&#x26A0; Broken / Unreachable</div>'
-      + brokenList.map(function(r){
-          return '<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)">'
-            +'<div style="flex:1;min-width:0">'
-            +'<div style="font-size:12px;font-weight:600;color:var(--white)">'+escHtml(r.name)+'</div>'
-            +'<div style="font-size:10px;color:var(--muted);font-family:\'IBM Plex Mono\',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(r.url)+'</div>'
-            +'<div style="font-size:10px;color:'+_statusCol(r)+';margin-top:2px">'+_statusNote(r)+'</div>'
-            +'</div>'
-            +'<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(244,63,94,.12);color:#f87171;white-space:nowrap;flex-shrink:0">'+escHtml(String(r.status))+'</span>'
-            +'</div>';
-        }).join('');
+    var html = '';
+    REASON_ORDER.forEach(function(reason){
+      var group = brokenList.filter(function(r){ return r.reason === reason; });
+      if(!group.length) return;
+      var col = REASON_COLORS[reason] || '#f87171';
+      html += '<div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:'+col+';margin:14px 0 8px">'
+        + (REASON_LABELS[reason]||reason) + ' &mdash; ' + group.length + '</div>';
+      html += group.map(function(r){
+        return '<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)">'
+          +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:12px;font-weight:600;color:var(--white)">'+escHtml(r.name)+' <span style="font-weight:400;color:var(--dim);font-size:10px">['+escHtml(r.jurisdiction||'')+']</span></div>'
+          +'<div style="font-size:10px;color:var(--muted);font-family:\'IBM Plex Mono\',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(r.url)+'</div>'
+          +'<div style="font-size:11px;color:'+col+';margin-top:3px;line-height:1.5">'+escHtml(r.detail||'')+'</div>'
+          +'</div>'
+          +'<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(244,63,94,.12);color:#f87171;white-space:nowrap;flex-shrink:0">'+escHtml(String(r.status))+'</span>'
+          +'</div>';
+      }).join('');
+    });
+    broken.innerHTML = html;
   }
 
   okDiv.innerHTML = '<div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--green);margin-bottom:8px">&#x2713; Working</div>'
     + okList.map(function(r){
+        var sampleHtml = (r.article_sample && r.article_sample.length)
+          ? '<div style="font-size:9px;color:var(--dim);font-style:italic;margin-top:2px">e.g. "'+escHtml(r.article_sample[0])+'"</div>'
+          : '';
         return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.03)">'
           +'<span style="font-size:11px;font-weight:700;color:var(--green);min-width:36px;text-align:center">'+r.status+'</span>'
           +'<div style="flex:1;min-width:0">'
           +'<div style="font-size:11px;font-weight:600;color:var(--text)">'+escHtml(r.name)+'</div>'
           +'<div style="font-size:9px;color:var(--dim);font-family:\'IBM Plex Mono\',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(r.url)+'</div>'
+          +sampleHtml
           +'</div>'
           +'</div>';
       }).join('');
@@ -7067,6 +7090,38 @@ function toggleDiagnoseOk(){
   var btn   = document.getElementById('source-diagnose-show-ok');
   if(okDiv) okDiv.style.display = _diagnoseOkVisible ? 'block' : 'none';
   if(btn) btn.textContent = _diagnoseOkVisible ? '&#x25B2; Hide working sources' : '&#x25BC; Show working sources';
+}
+
+/* ── Download diagnostic report as PDF ───────────────────────────────────── */
+async function downloadDiagnosePdf(){
+  if(!API_BASE){
+    showToast('&#x26A0;','No Backend','Connect your Render backend first.',4000);
+    return;
+  }
+  if(!_lastDiagnoseReport){
+    showToast('&#x26A0;','Run Diagnostic First','Click "Diagnose All" first, then download the PDF.',3500);
+    return;
+  }
+  var btn = document.getElementById('diagnose-pdf-btn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Generating…'; }
+  showToast('&#x1F4C4;','Generating PDF','Building your source diagnostic report…',3000);
+  try {
+    var headers = {};
+    if(_PP_API_KEY) headers['Authorization'] = 'Bearer ' + _PP_API_KEY;
+    var resp = await fetch(API_BASE + '/sources/diagnose/pdf', { headers: headers });
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    var blob = await resp.blob();
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = 'PolicyPulse-Source-Diagnostic-' + new Date().toISOString().slice(0,10) + '.pdf';
+    link.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 8000);
+    showToast('&#x2705;','PDF Downloaded','Source diagnostic report saved.',3000);
+  } catch(e){
+    showToast('&#x26A0;','PDF Generation Failed', e.message, 4000);
+  }
+  if(btn){ btn.disabled = false; btn.innerHTML = '&#x1F4C4; Download PDF Report'; }
 }
 
 /* TRAY */

@@ -277,7 +277,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS sources (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             name            TEXT NOT NULL,
-            url             TEXT NOT NULL,
+            url             TEXT NOT NULL UNIQUE,
             jurisdiction    TEXT,
             scrape_type     TEXT DEFAULT 'html',
             active          INTEGER DEFAULT 1,
@@ -426,6 +426,62 @@ def init_db():
     if cur.fetchone()[0] == 0:
         _seed_sources(cur)
 
+    # ── Migration: dedupe sources table + enforce uniqueness going forward ──────
+    # Root cause of the duplicate-source bug: every backend restart previously
+    # ran `INSERT OR IGNORE INTO sources (...)` for a fixed list of sources, but
+    # the table had no UNIQUE constraint on name or url. INSERT OR IGNORE only
+    # skips a row when a UNIQUE/PRIMARY KEY constraint would be violated — with
+    # none present, every single boot inserted a fresh duplicate row. On Render's
+    # free tier (which restarts on every deploy and after idle spin-down), this
+    # silently multiplied "BC Centre on Substance Use" etc. into 5+ copies.
+    #
+    # Fix has two parts:
+    #   1. One-time cleanup below: group existing rows by url, keep the row with
+    #      the highest article_count (most "established" copy — preserves scrape
+    #      history rather than arbitrarily keeping row #1), delete the rest.
+    #   2. A UNIQUE index on sources.url so this can never recur — every future
+    #      INSERT OR IGNORE will correctly no-op against an existing URL instead
+    #      of creating a duplicate. (CREATE TABLE's inline UNIQUE only applies to
+    #      brand-new databases; a CREATE UNIQUE INDEX is what retroactively
+    #      enforces it on a table that already existed before this migration.)
+    try:
+        dupe_groups = cur.execute("""
+            SELECT url, COUNT(*) as n FROM sources GROUP BY url HAVING n > 1
+        """).fetchall()
+        total_removed = 0
+        for grp in dupe_groups:
+            dupe_url = grp["url"]
+            rows = cur.execute(
+                "SELECT id, article_count, last_scraped FROM sources WHERE url = ? ORDER BY article_count DESC, id ASC",
+                (dupe_url,)
+            ).fetchall()
+            if len(rows) <= 1:
+                continue
+            keep_id = rows[0]["id"]
+            remove_ids = [r["id"] for r in rows[1:]]
+            for rid in remove_ids:
+                cur.execute("DELETE FROM sources WHERE id = ?", (rid,))
+            total_removed += len(remove_ids)
+        if total_removed:
+            import logging as _dedupe_log
+            _dedupe_log.getLogger(__name__).info(
+                f"[startup migration] Removed {total_removed} duplicate source rows across {len(dupe_groups)} URLs"
+            )
+        conn.commit()
+    except Exception as e:
+        import logging as _dedupe_log
+        _dedupe_log.getLogger(__name__).warning(f"Source dedup migration error: {e}")
+
+    try:
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_url_unique ON sources(url)")
+        conn.commit()
+    except Exception as e:
+        # If this fails it usually means a duplicate slipped through the dedup
+        # pass above (e.g. a URL with trailing-slash variants) — non-fatal,
+        # dedup will catch it again next boot once the offending row is fixed.
+        import logging as _dedupe_log
+        _dedupe_log.getLogger(__name__).warning(f"Could not create unique index on sources.url: {e}")
+
     # Seed research sources if empty
     cur.execute("SELECT COUNT(*) FROM research_sources")
     if cur.fetchone()[0] == 0:
@@ -563,10 +619,20 @@ def init_db():
             ("%Substance Use%", "https://www.bccsu.ca/news-and-media/",                    "html", "BC Centre on Substance Use"),
         ]
         for name_like, new_url, new_type, new_name in _url_fixes_like:
-            cur.execute(
-                "UPDATE sources SET url=?, scrape_type=?, name=? WHERE name LIKE ?",
-                (new_url, new_type, new_name, name_like)
-            )
+            try:
+                cur.execute(
+                    "UPDATE sources SET url=?, scrape_type=?, name=? WHERE name LIKE ?",
+                    (new_url, new_type, new_name, name_like)
+                )
+            except Exception as e:
+                # Most likely cause: this UPDATE would collide with another
+                # row's URL (e.g. a different LIKE pattern already pointed a
+                # row at the same RSS feed). Skip this one fix rather than
+                # aborting the rest of the migration loop.
+                import logging as _fix_log
+                _fix_log.getLogger(__name__).warning(
+                    f"Could not apply URL fix for '{name_like}' → {new_url}: {e}"
+                )
 
         # RSS-type sources never paginate via HTML pagination logic — the feed
         # itself decides how many items it returns. Force pagination_style='none'
