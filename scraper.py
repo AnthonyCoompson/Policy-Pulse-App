@@ -346,30 +346,66 @@ def _parse_date(raw: str) -> str | None:
 # ── RSS SCRAPING — no retry needed, feeds are stable ─────────────────────────
 
 def scrape_rss(url, source_name, extra_tag=None):
+    """Scrape an RSS 2.0 or Atom 1.0 feed.
+
+    Handles both formats:
+    - RSS 2.0:  <item><title>, <link>url</link>, <pubDate>
+    - Atom 1.0: <entry><title>, <link href="url"/>, <published>/<updated>
+
+    The canada.ca Atom feeds (.atom URLs) use Atom 1.0 format where <link>
+    is a self-closing tag with an href attribute — NOT text content.
+    BeautifulSoup's xml parser returns the href correctly via .get("href"),
+    but .get_text() returns "" on a self-closing tag, so we must try href first.
+    """
     articles = []
     try:
         resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
-        soup = BeautifulSoup(resp.content, "xml")
+        soup  = BeautifulSoup(resp.content, "xml")
+        # RSS 2.0 uses <item>, Atom 1.0 uses <entry>
         items = soup.find_all("item") or soup.find_all("entry")
-        for item in items[:20]:
+        for item in items[:25]:
             title_el = item.find("title")
-            link_el  = item.find("link")
-            pub_el   = (item.find("pubDate") or item.find("published") or item.find("updated"))
             if not title_el:
                 continue
-            title    = title_el.get_text(strip=True)
-            link     = (link_el.get_text(strip=True) or link_el.get("href", "")) if link_el else ""
+            title = title_el.get_text(strip=True)
+            if not title or len(title) < 5:
+                continue
+
+            # Link extraction — handles three variants:
+            # 1. RSS <link>https://...</link>  → get_text()
+            # 2. Atom <link href="https://..."/> → .get("href")
+            # 3. Atom <link rel="alternate" href="..."/> — find the alternate link
+            link = ""
+            link_el = item.find("link", rel="alternate") or item.find("link")
+            if link_el:
+                # Try href attribute first (Atom), then text content (RSS)
+                link = link_el.get("href", "") or link_el.get_text(strip=True)
+            if not link:
+                # Some Atom feeds use <id> as the canonical URL
+                id_el = item.find("id")
+                if id_el:
+                    candidate = id_el.get_text(strip=True)
+                    if candidate.startswith("http"):
+                        link = candidate
+
+            if not link:
+                continue
+
+            # Date extraction — RSS uses pubDate, Atom uses published or updated
             pub_date = datetime.utcnow().date().isoformat()
+            pub_el   = (item.find("pubDate") or item.find("published")
+                        or item.find("updated") or item.find("dc:date"))
             if pub_el:
                 parsed = _parse_date(pub_el.get_text(strip=True))
                 if parsed:
                     pub_date = parsed
-            if title and link and len(title) > 10:
-                art = {"title": title, "url": link, "pub_date": pub_date}
-                if extra_tag:
-                    art["forced_tag"] = extra_tag
-                articles.append(art)
+
+            art = {"title": title, "url": link, "pub_date": pub_date}
+            if extra_tag:
+                art["forced_tag"] = extra_tag
+            articles.append(art)
+
     except Exception as e:
         log.warning(f"RSS error [{source_name}]: {e}")
     return articles

@@ -417,21 +417,27 @@ def create_source(body: dict, _=Depends(require_auth)):
 
 @app.post("/sources/fix-all")
 def fix_all_sources(_=Depends(require_auth)):
-    """Re-apply all known URL fixes to the sources table."""
+    """Re-apply all known URL fixes to the sources table immediately."""
     from database import get_conn
     conn = get_conn()
     fixed = []
     _url_fixes_like = [
-        ("%SSHRC%",      "https://www.sshrc-crsh.gc.ca/rss/news-nouvelles-eng.xml",  "rss", "SSHRC — Research News"),
-        ("%NSERC%",      "https://www.nserc-crsng.gc.ca/rss/news-eng.xml",            "rss", "NSERC — News Releases"),
-        ("%CIHR — News%","https://cihr-irsc.gc.ca/rss/news-eng.xml",                  "rss", "CIHR — News"),
-        ("%CIHI%",       "https://www.cihi.ca/sites/default/files/cihi-news-rss.xml", "rss", "CIHI — Canadian Institute for Health Info"),
-        ("%Legislature%Bills%",  "https://www.leg.bc.ca/rss/bills-introduced",         "rss", "BC Legislature — Bills & Statutes"),
-        ("%Legislature%Hansard%","https://www.leg.bc.ca/rss/bills-introduced",         "rss", "BC Legislature — Bills & Statutes"),
+        ("%SSHRC%",              "https://www.sshrc-crsh.gc.ca/rss/news-nouvelles-eng.xml",                          "rss",  "SSHRC — Research News"),
+        ("%NSERC%",              "https://www.nserc-crsng.gc.ca/rss/news-eng.xml",                                    "rss",  "NSERC — News Releases"),
+        ("%CIHR — News%",        "https://www.cihr-irsc.gc.ca/rss/news-eng.xml",                                      "rss",  "CIHR — News"),
+        ("%CIHI%",               "https://www.cihi.ca/sites/default/files/cihi-news-rss.xml",                         "rss",  "CIHI — Canadian Institute for Health Info"),
+        ("%Legislature%Bills%",  "https://www.leg.bc.ca/rss/news",                                                    "rss",  "BC Legislature — News & Hansard"),
+        ("%Legislature%Hansard%","https://www.leg.bc.ca/rss/news",                                                    "rss",  "BC Legislature — News & Hansard"),
         ("%Indigenous%Reconciliation%",
-         "https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",
-         "html", "BC Indigenous Relations & Reconciliation"),
-        ("%Substance Use%", "https://www.bccsu.ca/news-and-media/", "html", "BC Centre on Substance Use"),
+         "https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",                                  "html", "BC Indigenous Relations & Reconciliation"),
+        ("%Substance Use%",      "https://www.bccsu.ca/news-and-media/",                                              "html", "BC Centre on Substance Use"),
+        ("%Health Canada%",      "https://www.canada.ca/en/health-canada/news.atom",                                  "rss",  "Health Canada News"),
+        ("%Innovation Science%", "https://www.canada.ca/en/innovation-science-economic-development/news.atom",        "rss",  "Innovation Science and Economic Development"),
+        ("%Crown-Indigenous%",   "https://www.canada.ca/en/crown-indigenous-relations-northern-affairs/news.atom",    "rss",  "Crown-Indigenous Relations Canada"),
+        ("%Canada%Education%",   "https://www.canada.ca/en/employment-social-development/news.atom",                  "rss",  "Government of Canada — Education"),
+        ("%Mental Health Commission%", "https://www.mentalhealthcommission.ca/feed/",                                 "rss",  "Mental Health Commission of Canada"),
+        ("%Public Service Agency%",    "https://news.gov.bc.ca/ministries/public-service-agency",                    "html", "BC Public Service Agency"),
+        ("%Burnaby%",                  "https://www.burnaby.ca/news",                                                "html", "Burnaby City Hall News"),
     ]
     try:
         for name_like, new_url, new_type, new_name in _url_fixes_like:
@@ -441,11 +447,13 @@ def fix_all_sources(_=Depends(require_auth)):
             )
             if result.rowcount and result.rowcount > 0:
                 fixed.append(new_name)
+        # Ensure RSS sources never use HTML pagination
+        conn.execute("UPDATE sources SET pagination_style='none' WHERE scrape_type='rss'")
         conn.commit()
     finally:
         conn.close()
     return {"ok": True, "fixed": fixed, "count": len(fixed),
-            "message": "Source URLs updated. Run a scrape now to fetch articles from fixed sources."}
+            "message": "Source URLs updated. Run a scrape to test."}
 
 
 @app.get("/sources/diagnose")
@@ -620,119 +628,157 @@ def diagnose_sources_pdf(include_paused: bool = Query(False), _=Depends(require_
 
 
 def _build_diagnostic_pdf(report: dict) -> bytes:
-    """Render the source diagnostic report as a formatted PDF using reportlab."""
+    """Render the source diagnostic report as a formatted PDF using reportlab.
+
+    Key fix: ParagraphStyle must NOT be created with a lambda that hardcodes
+    parent=styles['Normal'] and then also receive parent= as a kwarg at the
+    call site — Python raises 'got multiple values for keyword argument parent'.
+    All styles are now created explicitly with no lambda shortcut.
+
+    URLs are passed through _safe_para() which wraps them in a <font> tag
+    and escapes angle brackets / ampersands to prevent reportlab XML parser
+    crashes on URLs containing query strings or special characters.
+    """
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.units import inch
     from reportlab.lib import colors
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    )
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    import io
+    import io, html as _html
 
-    REASON_LABELS = {
-        "unreachable":       "UNREACHABLE — connection failed / timed out",
-        "http_error":        "HTTP ERROR — 404 / 403 / 5xx",
-        "js_rendered":       "JS-RENDERED — no static HTML content",
-        "rss_parse_error":   "INVALID RSS — not parseable as XML",
-        "no_selector_match": "NO SELECTOR MATCH — markup not recognised",
-        "rss_empty":         "RSS EMPTY — feed has zero items",
-        "filtered_out":      "FILTERED — all links filtered out",
+    def _safe(text: str) -> str:
+        """Escape XML special chars so reportlab's para parser doesn't choke."""
+        return _html.escape(str(text or ""), quote=False)
+
+    def _safe_url(url: str) -> str:
+        """Wrap URL in a breakable span — long URLs overflow fixed-width columns."""
+        return f'<font color="#1d4ed8">{_safe(url)}</font>'
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter,
+        topMargin=0.65*inch, bottomMargin=0.65*inch,
+        leftMargin=0.65*inch, rightMargin=0.65*inch,
+    )
+    base = getSampleStyleSheet()["Normal"]
+
+    # ── Define every style explicitly — NO lambda with hardcoded parent ──────
+    title_s  = ParagraphStyle("pp_title",  parent=base, fontSize=20,
+                               fontName="Helvetica-Bold",
+                               textColor=colors.HexColor("#003366"), spaceAfter=4)
+    sub_s    = ParagraphStyle("pp_sub",    parent=base, fontSize=10,
+                               textColor=colors.HexColor("#6b8aaa"), spaceAfter=6)
+    meta_s   = ParagraphStyle("pp_meta",   parent=base, fontSize=9,
+                               textColor=colors.HexColor("#94a3b8"), spaceAfter=16)
+
+    # Section headers — one per reason colour
+    def _sec(name, hex_col):
+        return ParagraphStyle(f"pp_sec_{name}", parent=base, fontSize=11,
+                              fontName="Helvetica-Bold", spaceBefore=18, spaceAfter=6,
+                              textColor=colors.HexColor(hex_col),
+                              borderPad=4, leading=14)
+
+    sec_red    = _sec("red",    "#dc2626")
+    sec_orange = _sec("orange", "#c2410c")
+    sec_yellow = _sec("yellow", "#92400e")
+    sec_green  = _sec("green",  "#047857")
+
+    name_s   = ParagraphStyle("pp_name",   parent=base, fontSize=10,
+                               fontName="Helvetica-Bold",
+                               textColor=colors.HexColor("#0f1f35"), spaceAfter=1)
+    url_s    = ParagraphStyle("pp_url",    parent=base, fontSize=8,
+                               textColor=colors.HexColor("#1d4ed8"),
+                               wordWrap="CJK", spaceAfter=2)
+    detail_s = ParagraphStyle("pp_detail", parent=base, fontSize=9,
+                               textColor=colors.HexColor("#374151"), spaceAfter=2,
+                               leading=13)
+    sample_s = ParagraphStyle("pp_sample", parent=base, fontSize=8,
+                               fontName="Helvetica-Oblique",
+                               textColor=colors.HexColor("#6b7280"), spaceAfter=8)
+    footer_s = ParagraphStyle("pp_footer", parent=base, fontSize=8,
+                               textColor=colors.HexColor("#9ca3af"))
+
+    REASON_META = {
+        "unreachable":       ("UNREACHABLE — Connection Failed / Timed Out",       sec_red),
+        "http_error":        ("HTTP ERROR — 404 / 403 / 5xx Response",             sec_red),
+        "js_rendered":       ("JS-RENDERED — No Static HTML Content",              sec_orange),
+        "rss_parse_error":   ("INVALID RSS — Feed Not Parseable as XML",           sec_orange),
+        "no_selector_match": ("NO SELECTOR MATCH — Markup Pattern Not Recognised", sec_yellow),
+        "rss_empty":         ("RSS EMPTY — Feed Returned Zero Items",              sec_yellow),
+        "filtered_out":      ("FILTERED — All Links Filtered Out",                 sec_yellow),
     }
-    REASON_COLORS_HEX = {
-        "unreachable":       "#dc2626",
-        "http_error":        "#dc2626",
-        "js_rendered":       "#ea580c",
-        "rss_parse_error":   "#ea580c",
-        "no_selector_match": "#ca8a04",
-        "rss_empty":         "#ca8a04",
-        "filtered_out":      "#ca8a04",
-    }
-
-    buf    = io.BytesIO()
-    doc    = SimpleDocTemplate(buf, pagesize=letter,
-                               topMargin=0.6*inch, bottomMargin=0.6*inch,
-                               leftMargin=0.6*inch, rightMargin=0.6*inch)
-    styles = getSampleStyleSheet()
-
-    S = lambda name, **kw: ParagraphStyle(name, parent=styles["Normal"], **kw)
-    title_s   = S("T", fontSize=20, fontName="Helvetica-Bold",
-                  textColor=colors.HexColor("#003366"), spaceAfter=4)
-    sub_s     = S("Su", fontSize=10, textColor=colors.HexColor("#6b8aaa"), spaceAfter=18)
-    sec_s     = S("Se", fontSize=12, fontName="Helvetica-Bold", spaceBefore=16, spaceAfter=8)
-    name_s    = S("N",  fontSize=10, fontName="Helvetica-Bold",
-                  textColor=colors.HexColor("#0f1f35"))
-    url_s     = S("U",  fontSize=8,  textColor=colors.HexColor("#1d4ed8"))
-    detail_s  = S("D",  fontSize=9,  textColor=colors.HexColor("#334d6b"), spaceAfter=2)
-    sample_s  = S("Sa", fontSize=8,  textColor=colors.HexColor("#6b8aaa"),
-                  fontName="Helvetica-Oblique")
-    footer_s  = S("F",  fontSize=8,  textColor=colors.HexColor("#94a3b8"))
-
-    story = [
-        Paragraph("PolicyPulse — Source Diagnostic Report", title_s),
-        Paragraph(f"Generated {report.get('generated_at','')[:16].replace('T',' ')} UTC", sub_s),
-    ]
-
-    # Summary table
-    summary_data = [["Sources Checked", "Healthy", "Broken"],
-                    [str(report["checked"]), str(report["healthy"]), str(report["broken"])]]
-    tbl = Table(summary_data, colWidths=[1.8*inch]*3)
-    tbl.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0), (-1,0), colors.HexColor("#f0f4f8")),
-        ("FONTNAME",      (0,0), (-1,0), "Helvetica-Bold"),
-        ("FONTNAME",      (0,1), (-1,1), "Helvetica-Bold"),
-        ("FONTSIZE",      (0,0), (-1,0), 11),
-        ("FONTSIZE",      (0,1), (-1,1), 16),
-        ("ALIGN",         (0,0), (-1,-1), "CENTER"),
-        ("TEXTCOLOR",     (1,1), (1,1), colors.HexColor("#047857")),
-        ("TEXTCOLOR",     (2,1), (2,1), colors.HexColor("#dc2626") if report["broken"] else colors.HexColor("#047857")),
-        ("GRID",          (0,0), (-1,-1), 0.5, colors.HexColor("#e2e8f0")),
-        ("TOPPADDING",    (0,0), (-1,-1), 8),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 8),
-    ]))
-    story += [tbl, Spacer(1, 20)]
-
-    results = report.get("results", [])
     REASON_ORDER = ["unreachable", "http_error", "js_rendered", "rss_parse_error",
                     "no_selector_match", "rss_empty", "filtered_out"]
 
+    results     = report.get("results", [])
+    generated   = report.get("generated_at", "")[:16].replace("T", " ")
+
+    # ── Story ────────────────────────────────────────────────────────────────
+    story = [
+        Paragraph("PolicyPulse — Source Diagnostic Report", title_s),
+        Paragraph(f"Generated {generated} UTC", sub_s),
+        Paragraph(
+            f"{report.get('checked',0)} sources checked &nbsp;·&nbsp; "
+            f"<font color='#047857'>{report.get('healthy',0)} healthy</font> &nbsp;·&nbsp; "
+            f"<font color='#dc2626'>{report.get('broken',0)} broken</font>",
+            meta_s,
+        ),
+        HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#e5e7eb"),
+                   spaceAfter=12),
+    ]
+
+    # ── Broken groups ────────────────────────────────────────────────────────
     for reason in REASON_ORDER:
         group = [r for r in results if r["reason"] == reason]
         if not group:
             continue
-        col   = colors.HexColor(REASON_COLORS_HEX.get(reason, "#334d6b"))
-        label = REASON_LABELS.get(reason, reason)
-        story.append(Paragraph(f"{label} — {len(group)} source(s)",
-                               S(f"h_{reason}", parent=sec_s, textColor=col,
-                                 fontSize=12, fontName="Helvetica-Bold",
-                                 spaceBefore=16, spaceAfter=8)))
+        label, sec_style = REASON_META.get(reason, (reason.upper(), sec_yellow))
+        story.append(Paragraph(f"{label} ({len(group)})", sec_style))
         for r in group:
-            story += [
-                Paragraph(f"{r['name']}  [{r['jurisdiction']}]", name_s),
-                Paragraph(r["url"], url_s),
-                Paragraph(r["detail"], detail_s),
-                Spacer(1, 8),
-            ]
+            juris = _safe(r.get("jurisdiction", ""))
+            story.append(Paragraph(
+                f"{_safe(r['name'])}  "
+                f"<font color='#9ca3af' size='8'>[{juris}]</font>",
+                name_s,
+            ))
+            story.append(Paragraph(r["url"], url_s))
+            story.append(Paragraph(_safe(r.get("detail", "")), detail_s))
+            story.append(Spacer(1, 6))
 
+    # ── Healthy group ────────────────────────────────────────────────────────
     healthy_group = [r for r in results if r["reason"] == "healthy"]
     if healthy_group:
-        story.append(Paragraph(f"HEALTHY — {len(healthy_group)} source(s)",
-                               S("h_ok", parent=sec_s, textColor=colors.HexColor("#047857"),
-                                 fontSize=12, fontName="Helvetica-Bold",
-                                 spaceBefore=16, spaceAfter=8)))
+        story.append(Paragraph(f"HEALTHY — Working Correctly ({len(healthy_group)})", sec_green))
         for r in healthy_group:
-            story += [
-                Paragraph(f"{r['name']}  [{r['jurisdiction']}]", name_s),
-                Paragraph(r["url"], url_s),
-                Paragraph(r["detail"], detail_s),
-            ]
-            if r.get("article_sample"):
-                story.append(Paragraph('Sample: ' + ' | '.join(r["article_sample"]), sample_s))
-            story.append(Spacer(1, 8))
+            juris = _safe(r.get("jurisdiction", ""))
+            story.append(Paragraph(
+                f"{_safe(r['name'])}  "
+                f"<font color='#9ca3af' size='8'>[{juris}]</font>",
+                name_s,
+            ))
+            story.append(Paragraph(r["url"], url_s))
+            story.append(Paragraph(_safe(r.get("detail", "")), detail_s))
+            samples = r.get("article_sample") or []
+            if samples:
+                story.append(Paragraph(
+                    "e.g. " + _safe(samples[0][:100]),
+                    sample_s,
+                ))
+            story.append(Spacer(1, 6))
 
     story += [
-        Spacer(1, 16),
-        Paragraph("PolicyPulse Intelligence Platform — Source Diagnostic Report. "
-                  "Re-run from News & Articles → Sources → Diagnose All.", footer_s),
+        Spacer(1, 20),
+        HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#e5e7eb"),
+                   spaceAfter=6),
+        Paragraph(
+            "PolicyPulse Intelligence Platform · Source Diagnostic Report · "
+            "Re-run from News &amp; Articles → Sources → Diagnose All.",
+            footer_s,
+        ),
     ]
+
     doc.build(story)
     return buf.getvalue()
 
