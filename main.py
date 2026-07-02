@@ -376,6 +376,15 @@ def scrape_status():
 
 
 # ── SOURCES ───────────────────────────────────────────────────────────────────
+# ROUTING ORDER IS CRITICAL IN FASTAPI.
+# Literal paths (/sources/fix-all, /sources/diagnose, /sources/diagnose/pdf)
+# MUST be registered BEFORE wildcard paths (/sources/{source_id}) — FastAPI
+# matches routes top-to-bottom and a {source_id} pattern will eat any literal
+# segment that comes after it.  The previous ordering had fix-all and diagnose
+# registered after the {source_id} wildcard, causing every call to
+# GET /sources/diagnose to be matched as GET /sources/{source_id}/check with
+# source_id="diagnose" → 422 Unprocessable Entity (int parse failure) or 404,
+# which apiFetch threw on → returned null → "Could not reach backend".
 
 @app.get("/sources")
 def list_sources():
@@ -398,11 +407,337 @@ def create_source(body: dict, _=Depends(require_auth)):
     except sqlite3.IntegrityError:
         raise HTTPException(
             status_code=409,
-            detail=f"A source with this exact URL already exists. Check the Sources table — "
-                   f"duplicate URLs are no longer allowed."
+            detail="A source with this exact URL already exists. Check the Sources table — "
+                   "duplicate URLs are no longer allowed."
         )
     return {"ok": True, "id": new_id}
 
+
+# ── Literal-path source routes (MUST come before {source_id} wildcards) ───────
+
+@app.post("/sources/fix-all")
+def fix_all_sources(_=Depends(require_auth)):
+    """Re-apply all known URL fixes to the sources table."""
+    from database import get_conn
+    conn = get_conn()
+    fixed = []
+    _url_fixes_like = [
+        ("%SSHRC%",      "https://www.sshrc-crsh.gc.ca/rss/news-nouvelles-eng.xml",  "rss", "SSHRC — Research News"),
+        ("%NSERC%",      "https://www.nserc-crsng.gc.ca/rss/news-eng.xml",            "rss", "NSERC — News Releases"),
+        ("%CIHR — News%","https://cihr-irsc.gc.ca/rss/news-eng.xml",                  "rss", "CIHR — News"),
+        ("%CIHI%",       "https://www.cihi.ca/sites/default/files/cihi-news-rss.xml", "rss", "CIHI — Canadian Institute for Health Info"),
+        ("%Legislature%Bills%",  "https://www.leg.bc.ca/rss/bills-introduced",         "rss", "BC Legislature — Bills & Statutes"),
+        ("%Legislature%Hansard%","https://www.leg.bc.ca/rss/bills-introduced",         "rss", "BC Legislature — Bills & Statutes"),
+        ("%Indigenous%Reconciliation%",
+         "https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",
+         "html", "BC Indigenous Relations & Reconciliation"),
+        ("%Substance Use%", "https://www.bccsu.ca/news-and-media/", "html", "BC Centre on Substance Use"),
+    ]
+    try:
+        for name_like, new_url, new_type, new_name in _url_fixes_like:
+            result = conn.execute(
+                "UPDATE sources SET url=?, scrape_type=?, name=? WHERE name LIKE ?",
+                (new_url, new_type, new_name, name_like)
+            )
+            if result.rowcount and result.rowcount > 0:
+                fixed.append(new_name)
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True, "fixed": fixed, "count": len(fixed),
+            "message": "Source URLs updated. Run a scrape now to fetch articles from fixed sources."}
+
+
+@app.get("/sources/diagnose")
+def diagnose_sources(include_paused: bool = Query(False)):
+    """Run a full per-source diagnostic using the real scraper parsing logic.
+
+    Returns one result per source explaining exactly why it is or isn't
+    producing articles — not just an HTTP status code.  Seven possible reasons:
+      healthy | unreachable | http_error | js_rendered |
+      no_selector_match | rss_empty | rss_parse_error
+
+    Client-side note: this endpoint fetches and parses every active source
+    (up to 26 sources × 15s timeout each) using a thread pool, so it can take
+    30-90 seconds on a cold Render instance.  The frontend uses a dedicated
+    120s timeout (not the default 15s apiFetch timeout) for this call.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import requests as req_lib
+    from scraper import (
+        _fetch_listing_page, _extract_articles_from_soup, _base_url,
+        USER_AGENTS, HEADERS, REQUEST_TIMEOUT,
+    )
+    from bs4 import BeautifulSoup
+
+    all_sources = get_sources()
+    targets = all_sources if include_paused else [s for s in all_sources if s.get("active")]
+
+    def _diagnose_rss(s):
+        url = s["url"]
+        try:
+            resp = req_lib.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+        except req_lib.exceptions.Timeout:
+            return {"reason": "unreachable",
+                    "detail": "Request timed out before any response was received.",
+                    "status": "timeout", "article_sample": []}
+        except req_lib.exceptions.RequestException as e:
+            return {"reason": "unreachable", "detail": str(e)[:160],
+                    "status": "error", "article_sample": []}
+
+        if resp.status_code >= 400:
+            msg = ("The URL is likely wrong or the page has moved." if resp.status_code == 404
+                   else "The source may be blocking PolicyPulse's IP or rate-limiting it."
+                   if resp.status_code in (403, 429) else "Check the URL is correct.")
+            return {"reason": "http_error",
+                    "detail": f"Server returned HTTP {resp.status_code}. {msg}",
+                    "status": resp.status_code, "article_sample": []}
+
+        try:
+            soup = BeautifulSoup(resp.content, "xml")
+            items = soup.find_all("item") or soup.find_all("entry")
+        except Exception as e:
+            return {"reason": "rss_parse_error",
+                    "detail": f"Response was not valid RSS/Atom XML: {str(e)[:120]}",
+                    "status": resp.status_code, "article_sample": []}
+
+        if not items:
+            return {"reason": "rss_empty",
+                    "detail": "Feed loaded and parsed correctly but contains zero items.",
+                    "status": resp.status_code, "article_sample": []}
+
+        sample = [it.find("title").get_text(strip=True)[:90]
+                  for it in items[:3] if it.find("title")]
+        return {"reason": "healthy", "detail": f"{len(items)} item(s) found in feed.",
+                "status": resp.status_code, "article_sample": sample}
+
+    def _diagnose_html(s):
+        url  = s["url"]
+        base = _base_url(url)
+        try:
+            resp = req_lib.get(url, headers={**HEADERS, "User-Agent": USER_AGENTS[0]},
+                               timeout=REQUEST_TIMEOUT)
+        except req_lib.exceptions.Timeout:
+            return {"reason": "unreachable",
+                    "detail": "Request timed out before any response was received.",
+                    "status": "timeout", "article_sample": []}
+        except req_lib.exceptions.RequestException as e:
+            return {"reason": "unreachable", "detail": str(e)[:160],
+                    "status": "error", "article_sample": []}
+
+        if resp.status_code >= 400:
+            msg = ("The URL is likely wrong or the page has moved." if resp.status_code == 404
+                   else "The source may be blocking PolicyPulse's IP or rate-limiting it."
+                   if resp.status_code in (403, 429) else "Check the URL is correct.")
+            return {"reason": "http_error",
+                    "detail": f"Server returned HTTP {resp.status_code}. {msg}",
+                    "status": resp.status_code, "article_sample": []}
+
+        soup          = BeautifulSoup(resp.text, "html.parser")
+        body_text_len = len(soup.get_text(strip=True))
+        tag_count     = len(soup.find_all(True))
+        articles      = _extract_articles_from_soup(soup, url, s["name"], base_url=base)
+
+        if articles:
+            return {"reason": "healthy",
+                    "detail": f"{len(articles)} candidate article link(s) found on page 1.",
+                    "status": resp.status_code,
+                    "article_sample": [a["title"][:90] for a in articles[:3]]}
+
+        if body_text_len < 600 and tag_count < 80:
+            return {"reason": "js_rendered",
+                    "detail": (f"Page returned HTTP {resp.status_code} but only {body_text_len} "
+                               f"characters of visible text and {tag_count} HTML tags — strongly "
+                               f"suggests content is rendered by JavaScript after page load. "
+                               f"PolicyPulse's static HTML fetcher never executes JS. "
+                               f"Look for an RSS/Atom feed for this source instead."),
+                    "status": resp.status_code, "article_sample": []}
+
+        return {"reason": "no_selector_match",
+                "detail": (f"Page loaded ({len(resp.text):,} bytes, {tag_count} tags) but none "
+                           f"of PolicyPulse's ~35 CSS selector patterns matched any article links. "
+                           f"This site uses markup PolicyPulse doesn't yet recognise — it needs a "
+                           f"custom selector added in scraper.py."),
+                "status": resp.status_code, "article_sample": []}
+
+    def _diagnose(s):
+        try:
+            result = _diagnose_rss(s) if s.get("scrape_type") == "rss" else _diagnose_html(s)
+        except Exception as e:
+            result = {"reason": "unreachable",
+                      "detail": f"Unexpected error: {str(e)[:160]}",
+                      "status": "error", "article_sample": []}
+        return {
+            "id": s["id"], "name": s["name"], "url": s["url"],
+            "type": s.get("scrape_type", "html"),
+            "jurisdiction": s.get("jurisdiction", ""),
+            "max_pages": s.get("max_pages", 1),
+            "active": bool(s.get("active")),
+            "healthy":   result["reason"] == "healthy",
+            "reachable": result["reason"] in ("healthy", "rss_empty", "no_selector_match", "filtered_out"),
+            "reason":    result["reason"],
+            "detail":    result["detail"],
+            "status":    result["status"],
+            "article_sample": result["article_sample"],
+        }
+
+    results = []
+    with ThreadPoolExecutor(max_workers=min(8, max(1, len(targets)))) as ex:
+        futures = {ex.submit(_diagnose, s): s for s in targets}
+        for f in as_completed(futures):
+            results.append(f.result())
+
+    reason_order = {"unreachable": 0, "http_error": 1, "js_rendered": 2,
+                    "rss_parse_error": 3, "no_selector_match": 4,
+                    "rss_empty": 5, "filtered_out": 6, "healthy": 7}
+    results.sort(key=lambda x: (reason_order.get(x["reason"], 9), x["name"]))
+
+    healthy = [r for r in results if r["healthy"]]
+    broken  = [r for r in results if not r["healthy"]]
+    return {
+        "checked": len(results), "healthy": len(healthy), "broken": len(broken),
+        "by_reason": {k: sum(1 for r in broken if r["reason"] == k)
+                      for k in reason_order if any(r["reason"] == k for r in broken)},
+        "results":   results,
+        "generated_at": datetime.utcnow().isoformat(),
+    }
+
+
+@app.get("/sources/diagnose/pdf")
+def diagnose_sources_pdf(include_paused: bool = Query(False), _=Depends(require_auth)):
+    """Run the full diagnostic and return a downloadable PDF report."""
+    from fastapi.responses import StreamingResponse
+    import io
+    report   = diagnose_sources(include_paused=include_paused)
+    pdf_bytes = _build_diagnostic_pdf(report)
+    buf = io.BytesIO(pdf_bytes)
+    buf.seek(0)
+    filename = f"policypulse-source-diagnostic-{datetime.utcnow().strftime('%Y-%m-%d-%H%M')}.pdf"
+    return StreamingResponse(
+        buf, media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+def _build_diagnostic_pdf(report: dict) -> bytes:
+    """Render the source diagnostic report as a formatted PDF using reportlab."""
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.units import inch
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    import io
+
+    REASON_LABELS = {
+        "unreachable":       "UNREACHABLE — connection failed / timed out",
+        "http_error":        "HTTP ERROR — 404 / 403 / 5xx",
+        "js_rendered":       "JS-RENDERED — no static HTML content",
+        "rss_parse_error":   "INVALID RSS — not parseable as XML",
+        "no_selector_match": "NO SELECTOR MATCH — markup not recognised",
+        "rss_empty":         "RSS EMPTY — feed has zero items",
+        "filtered_out":      "FILTERED — all links filtered out",
+    }
+    REASON_COLORS_HEX = {
+        "unreachable":       "#dc2626",
+        "http_error":        "#dc2626",
+        "js_rendered":       "#ea580c",
+        "rss_parse_error":   "#ea580c",
+        "no_selector_match": "#ca8a04",
+        "rss_empty":         "#ca8a04",
+        "filtered_out":      "#ca8a04",
+    }
+
+    buf    = io.BytesIO()
+    doc    = SimpleDocTemplate(buf, pagesize=letter,
+                               topMargin=0.6*inch, bottomMargin=0.6*inch,
+                               leftMargin=0.6*inch, rightMargin=0.6*inch)
+    styles = getSampleStyleSheet()
+
+    S = lambda name, **kw: ParagraphStyle(name, parent=styles["Normal"], **kw)
+    title_s   = S("T", fontSize=20, fontName="Helvetica-Bold",
+                  textColor=colors.HexColor("#003366"), spaceAfter=4)
+    sub_s     = S("Su", fontSize=10, textColor=colors.HexColor("#6b8aaa"), spaceAfter=18)
+    sec_s     = S("Se", fontSize=12, fontName="Helvetica-Bold", spaceBefore=16, spaceAfter=8)
+    name_s    = S("N",  fontSize=10, fontName="Helvetica-Bold",
+                  textColor=colors.HexColor("#0f1f35"))
+    url_s     = S("U",  fontSize=8,  textColor=colors.HexColor("#1d4ed8"))
+    detail_s  = S("D",  fontSize=9,  textColor=colors.HexColor("#334d6b"), spaceAfter=2)
+    sample_s  = S("Sa", fontSize=8,  textColor=colors.HexColor("#6b8aaa"),
+                  fontName="Helvetica-Oblique")
+    footer_s  = S("F",  fontSize=8,  textColor=colors.HexColor("#94a3b8"))
+
+    story = [
+        Paragraph("PolicyPulse — Source Diagnostic Report", title_s),
+        Paragraph(f"Generated {report.get('generated_at','')[:16].replace('T',' ')} UTC", sub_s),
+    ]
+
+    # Summary table
+    summary_data = [["Sources Checked", "Healthy", "Broken"],
+                    [str(report["checked"]), str(report["healthy"]), str(report["broken"])]]
+    tbl = Table(summary_data, colWidths=[1.8*inch]*3)
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0), (-1,0), colors.HexColor("#f0f4f8")),
+        ("FONTNAME",      (0,0), (-1,0), "Helvetica-Bold"),
+        ("FONTNAME",      (0,1), (-1,1), "Helvetica-Bold"),
+        ("FONTSIZE",      (0,0), (-1,0), 11),
+        ("FONTSIZE",      (0,1), (-1,1), 16),
+        ("ALIGN",         (0,0), (-1,-1), "CENTER"),
+        ("TEXTCOLOR",     (1,1), (1,1), colors.HexColor("#047857")),
+        ("TEXTCOLOR",     (2,1), (2,1), colors.HexColor("#dc2626") if report["broken"] else colors.HexColor("#047857")),
+        ("GRID",          (0,0), (-1,-1), 0.5, colors.HexColor("#e2e8f0")),
+        ("TOPPADDING",    (0,0), (-1,-1), 8),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 8),
+    ]))
+    story += [tbl, Spacer(1, 20)]
+
+    results = report.get("results", [])
+    REASON_ORDER = ["unreachable", "http_error", "js_rendered", "rss_parse_error",
+                    "no_selector_match", "rss_empty", "filtered_out"]
+
+    for reason in REASON_ORDER:
+        group = [r for r in results if r["reason"] == reason]
+        if not group:
+            continue
+        col   = colors.HexColor(REASON_COLORS_HEX.get(reason, "#334d6b"))
+        label = REASON_LABELS.get(reason, reason)
+        story.append(Paragraph(f"{label} — {len(group)} source(s)",
+                               S(f"h_{reason}", parent=sec_s, textColor=col,
+                                 fontSize=12, fontName="Helvetica-Bold",
+                                 spaceBefore=16, spaceAfter=8)))
+        for r in group:
+            story += [
+                Paragraph(f"{r['name']}  [{r['jurisdiction']}]", name_s),
+                Paragraph(r["url"], url_s),
+                Paragraph(r["detail"], detail_s),
+                Spacer(1, 8),
+            ]
+
+    healthy_group = [r for r in results if r["reason"] == "healthy"]
+    if healthy_group:
+        story.append(Paragraph(f"HEALTHY — {len(healthy_group)} source(s)",
+                               S("h_ok", parent=sec_s, textColor=colors.HexColor("#047857"),
+                                 fontSize=12, fontName="Helvetica-Bold",
+                                 spaceBefore=16, spaceAfter=8)))
+        for r in healthy_group:
+            story += [
+                Paragraph(f"{r['name']}  [{r['jurisdiction']}]", name_s),
+                Paragraph(r["url"], url_s),
+                Paragraph(r["detail"], detail_s),
+            ]
+            if r.get("article_sample"):
+                story.append(Paragraph('Sample: ' + ' | '.join(r["article_sample"]), sample_s))
+            story.append(Spacer(1, 8))
+
+    story += [
+        Spacer(1, 16),
+        Paragraph("PolicyPulse Intelligence Platform — Source Diagnostic Report. "
+                  "Re-run from News & Articles → Sources → Diagnose All.", footer_s),
+    ]
+    doc.build(story)
+    return buf.getvalue()
+
+
+# ── Per-source wildcard routes (MUST come after all literal /sources/* routes) ─
 
 @app.patch("/sources/{source_id}/toggle")
 def toggle_source_endpoint(source_id: int, _=Depends(require_auth)):
@@ -422,9 +757,11 @@ def edit_source(source_id: int, body: dict, _=Depends(require_auth)):
             mp = int(updates["max_pages"])
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail="max_pages must be an integer")
-        updates["max_pages"] = max(1, min(30, mp))  # hard cap at 30 pages — protects source servers
-    if "pagination_style" in updates and updates["pagination_style"] not in ("auto", "path", "query", "offset", "none"):
-        raise HTTPException(status_code=400, detail="pagination_style must be one of: auto, path, query, offset, none")
+        updates["max_pages"] = max(1, min(30, mp))
+    if "pagination_style" in updates and updates["pagination_style"] not in (
+            "auto", "path", "query", "offset", "none"):
+        raise HTTPException(status_code=400,
+                            detail="pagination_style must be one of: auto, path, query, offset, none")
     try:
         update_source(source_id, updates)
     except sqlite3.IntegrityError:
@@ -439,37 +776,23 @@ def remove_source(source_id: int, _=Depends(require_auth)):
 
 
 @app.post("/sources/{source_id}/backfill")
-def backfill_source(source_id: int, body: dict, background_tasks: BackgroundTasks, _=Depends(require_auth)):
-    """One-off deep historical crawl for a single source.
-
-    Unlike permanently raising a source's max_pages (which affects every
-    future daily scrape), this temporarily pages deeper for a single run —
-    useful right after adding a multi-page source like BCCSU, to pull in a
-    batch of history beyond what the normal max_pages setting would reach
-    on an ongoing basis. The source's stored max_pages/pagination_style are
-    restored to their original values once the backfill completes.
-
-    Body: { "pages": 15 }  — how many pages to attempt for this one run
-                              (hard-capped at 30, same as the regular
-                              max_pages validation).
-    """
+def backfill_source(source_id: int, body: dict, background_tasks: BackgroundTasks,
+                    _=Depends(require_auth)):
+    """One-off deep historical crawl for a single source without permanently changing max_pages."""
     from database import get_conn
-
-    pages = int(body.get("pages", 10))
-    pages = max(1, min(30, pages))
-
-    conn = get_conn()
-    row = conn.execute("SELECT * FROM sources WHERE id = ?", (source_id,)).fetchone()
+    pages = max(1, min(30, int(body.get("pages", 10))))
+    conn  = get_conn()
+    row   = conn.execute("SELECT * FROM sources WHERE id = ?", (source_id,)).fetchone()
     conn.close()
     if not row:
         raise HTTPException(status_code=404, detail="Source not found")
-
     source = dict(row)
     if source.get("scrape_type") == "rss":
-        raise HTTPException(status_code=400, detail="Backfill only applies to HTML sources — RSS feeds don't paginate this way.")
-
+        raise HTTPException(status_code=400,
+                            detail="Backfill only applies to HTML sources — RSS feeds don't paginate this way.")
     background_tasks.add_task(_run_backfill_bg, source, pages)
-    return {"ok": True, "message": f"Backfill started — fetching up to {pages} pages for '{source['name']}' in the background."}
+    return {"ok": True,
+            "message": f"Backfill started — fetching up to {pages} pages for '{source['name']}' in the background."}
 
 
 def _run_backfill_bg(source: dict, pages: int):
@@ -477,27 +800,42 @@ def _run_backfill_bg(source: dict, pages: int):
     from database import get_known_url_hashes, get_exclusion_keywords, update_source_scraped
     from scraper import scrape_generic_paginated, _base_url, _process_and_save
     log = _log.getLogger(__name__)
-
     name = source["name"]
-    url  = source["url"]
     log.info(f"[backfill] Starting deep crawl for '{name}': up to {pages} pages")
     try:
-        known_hashes = get_known_url_hashes()
-        exclusions   = get_exclusion_keywords()
-        raw = scrape_generic_paginated(
-            url, name, base_url=_base_url(url),
+        raw   = scrape_generic_paginated(
+            source["url"], name, base_url=_base_url(source["url"]),
             max_pages=pages,
             pagination_style=source.get("pagination_style") or "auto",
-            known_url_hashes=known_hashes,
+            known_url_hashes=get_known_url_hashes(),
         )
-        added, _ = _process_and_save(raw, source, exclusions=exclusions)
+        added, _ = _process_and_save(raw, source, exclusions=get_exclusion_keywords())
         update_source_scraped(name, added)
-        log.info(f"[backfill] Done for '{name}': {added} new articles added from up to {pages} pages")
+        log.info(f"[backfill] Done for '{name}': {added} new articles from up to {pages} pages")
     except Exception as e:
         log.error(f"[backfill] Failed for '{name}': {e}", exc_info=True)
 
 
-# ── RESEARCH SOURCES ──────────────────────────────────────────────────────────
+@app.get("/sources/{source_id}/check")
+def check_source_reachability(source_id: int):
+    import requests as req_lib
+    from database import get_conn
+    conn = get_conn()
+    row  = conn.execute("SELECT url FROM sources WHERE id = ?", (source_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Source not found")
+    url = row["url"]
+    try:
+        r = req_lib.head(url, timeout=8, allow_redirects=True,
+                         headers={"User-Agent": "PolicyPulse/1.0 link-checker"})
+        return {"reachable": r.status_code < 400, "status": r.status_code, "url": url}
+    except req_lib.exceptions.Timeout:
+        return {"reachable": False, "status": "timeout", "url": url}
+    except Exception as e:
+        return {"reachable": False, "status": str(e)[:80], "url": url}
+
+
 
 @app.get("/research-sources")
 def list_research_sources():
@@ -1130,391 +1468,6 @@ def get_scholarly_scrape_log(limit: int = Query(20)):
     ).fetchall()
     conn.close()
     return {"log": [dict(r) for r in rows]}
-
-
-# ── SOURCE REACHABILITY ───────────────────────────────────────────────────────
-
-@app.post("/sources/fix-all")
-def fix_all_sources(_=Depends(require_auth)):
-    """Re-apply all known URL fixes to the sources table.
-
-    Calling this endpoint has the same effect as redeploying — it runs the
-    same LIKE-pattern UPDATE statements from init_db() so existing rows get
-    their URLs corrected immediately without a restart.
-    """
-    from database import get_conn
-    conn = get_conn()
-    fixed = []
-    _url_fixes_like = [
-        ("%SSHRC%",      "https://www.sshrc-crsh.gc.ca/rss/news-nouvelles-eng.xml",  "rss", "SSHRC — Research News"),
-        ("%NSERC%",      "https://www.nserc-crsng.gc.ca/rss/news-eng.xml",            "rss", "NSERC — News Releases"),
-        ("%CIHR — News%","https://cihr-irsc.gc.ca/rss/news-eng.xml",                  "rss", "CIHR — News"),
-        ("%CIHI%",       "https://www.cihi.ca/sites/default/files/cihi-news-rss.xml", "rss", "CIHI — Canadian Institute for Health Info"),
-        ("%Legislature%Bills%", "https://www.leg.bc.ca/rss/bills-introduced",          "rss", "BC Legislature — Bills & Statutes"),
-        ("%Legislature%Hansard%","https://www.leg.bc.ca/rss/bills-introduced",         "rss", "BC Legislature — Bills & Statutes"),
-        ("%Indigenous%Reconciliation%",
-         "https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",
-         "html", "BC Indigenous Relations & Reconciliation"),
-        ("%Substance Use%", "https://www.bccsu.ca/news-and-media/",                    "html", "BC Centre on Substance Use"),
-    ]
-    try:
-        for name_like, new_url, new_type, new_name in _url_fixes_like:
-            result = conn.execute(
-                "UPDATE sources SET url=?, scrape_type=?, name=? WHERE name LIKE ?",
-                (new_url, new_type, new_name, name_like)
-            )
-            if result.rowcount and result.rowcount > 0:
-                fixed.append(new_name)
-        conn.commit()
-    finally:
-        conn.close()
-    return {"ok": True, "fixed": fixed, "count": len(fixed),
-            "message": "Source URLs updated. Run a scrape now to fetch articles from fixed sources."}
-
-
-@app.get("/sources/diagnose")
-def diagnose_sources(include_paused: bool = Query(False)):
-    """Run a full diagnostic pass against every source.
-
-    Unlike a simple HEAD-request reachability check, this actually invokes
-    the real scraper parsing logic (scrape_rss / scrape_generic) against each
-    source and reports the TRUE reason a source is contributing 0 articles:
-
-      - unreachable        : connection failed / timed out before any HTML was returned
-      - http_error         : page loaded but returned 4xx/5xx
-      - js_rendered        : page returned 200 but contains no parseable links —
-                              almost always because content is rendered client-side
-                              (the static HTML PolicyPulse fetches is just an empty shell)
-      - no_selector_match  : page has real HTML content but none of the scraper's
-                              CSS selectors matched anything — the site's markup
-                              isn't one PolicyPulse currently recognises
-      - filtered_out       : selectors found links, but every one was filtered by
-                              the exclusion-keyword list or domain-scoping guard
-      - rss_empty          : RSS/Atom feed parsed successfully but contained zero <item>/<entry>
-      - rss_parse_error    : URL returned content but it isn't valid RSS/Atom XML
-      - healthy            : found at least one usable article link
-
-    This is what powers both the in-app Source Diagnostic Report panel and
-    the downloadable PDF diagnostic report.
-    """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    import requests as req_lib
-    from scraper import (
-        _fetch_listing_page, _extract_articles_from_soup, _base_url,
-        USER_AGENTS, HEADERS, REQUEST_TIMEOUT,
-    )
-    from bs4 import BeautifulSoup
-
-    all_sources = get_sources()
-    targets = all_sources if include_paused else [s for s in all_sources if s.get("active")]
-
-    def _diagnose_rss(s):
-        url = s["url"]
-        try:
-            resp = req_lib.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
-        except req_lib.exceptions.Timeout:
-            return {"reason": "unreachable", "detail": "Request timed out before any response was received.",
-                    "status": "timeout", "article_sample": []}
-        except req_lib.exceptions.RequestException as e:
-            return {"reason": "unreachable", "detail": str(e)[:160], "status": "error", "article_sample": []}
-
-        if resp.status_code >= 400:
-            return {"reason": "http_error",
-                    "detail": f"Server returned HTTP {resp.status_code}. "
-                              + ("The URL is likely wrong or the page has moved." if resp.status_code == 404
-                                 else "The source may be blocking PolicyPulse's IP or rate-limiting it." if resp.status_code in (403, 429)
-                                 else "Check the URL is correct."),
-                    "status": resp.status_code, "article_sample": []}
-
-        try:
-            soup = BeautifulSoup(resp.content, "xml")
-            items = soup.find_all("item") or soup.find_all("entry")
-        except Exception as e:
-            return {"reason": "rss_parse_error", "detail": f"Response was not valid RSS/Atom XML: {str(e)[:120]}",
-                    "status": resp.status_code, "article_sample": []}
-
-        if not items:
-            return {"reason": "rss_empty", "detail": "Feed loaded and parsed correctly but contains zero items. "
-                                                      "The feed may be temporarily empty, or the URL may point to the wrong feed.",
-                    "status": resp.status_code, "article_sample": []}
-
-        sample = []
-        for it in items[:3]:
-            t = it.find("title")
-            if t:
-                sample.append(t.get_text(strip=True)[:90])
-        return {"reason": "healthy", "detail": f"{len(items)} item(s) found in feed.",
-                "status": resp.status_code, "article_sample": sample}
-
-    def _diagnose_html(s):
-        url = s["url"]
-        base = _base_url(url)
-        try:
-            resp = req_lib.get(url, headers={**HEADERS, "User-Agent": USER_AGENTS[0]}, timeout=REQUEST_TIMEOUT)
-        except req_lib.exceptions.Timeout:
-            return {"reason": "unreachable", "detail": "Request timed out before any response was received.",
-                    "status": "timeout", "article_sample": []}
-        except req_lib.exceptions.RequestException as e:
-            return {"reason": "unreachable", "detail": str(e)[:160], "status": "error", "article_sample": []}
-
-        if resp.status_code >= 400:
-            return {"reason": "http_error",
-                    "detail": f"Server returned HTTP {resp.status_code}. "
-                              + ("The URL is likely wrong or the page has moved." if resp.status_code == 404
-                                 else "The source may be blocking PolicyPulse's IP or rate-limiting it." if resp.status_code in (403, 429)
-                                 else "Check the URL is correct."),
-                    "status": resp.status_code, "article_sample": []}
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-        html_len = len(resp.text)
-
-        # Distinguish "genuinely empty page" from "JS-rendered shell": a page
-        # under ~3KB of body text with very few tags is almost always a JS app
-        # shell rather than real server-rendered HTML.
-        body_text_len = len(soup.get_text(strip=True))
-        tag_count = len(soup.find_all(True))
-
-        articles = _extract_articles_from_soup(soup, url, s["name"], base_url=base)
-
-        if articles:
-            return {"reason": "healthy", "detail": f"{len(articles)} candidate article link(s) found on page 1.",
-                    "status": resp.status_code, "article_sample": [a["title"][:90] for a in articles[:3]]}
-
-        if body_text_len < 600 and tag_count < 80:
-            return {"reason": "js_rendered",
-                    "detail": f"Page returned HTTP {resp.status_code} but only {body_text_len} characters of visible "
-                              f"text and {tag_count} HTML tags were present — this strongly suggests the article list "
-                              f"is rendered by JavaScript after page load, which PolicyPulse's scraper (a static HTML "
-                              f"fetcher) never executes. Look for an RSS/Atom feed for this source instead, or a "
-                              f"public API.",
-                    "status": resp.status_code, "article_sample": []}
-
-        return {"reason": "no_selector_match",
-                "detail": f"Page loaded normally ({html_len:,} bytes, {tag_count} tags) but none of PolicyPulse's "
-                          f"~35 known CSS selector patterns matched any article links. This site's markup uses a "
-                          f"pattern PolicyPulse doesn't recognise yet — it needs a custom selector added in "
-                          f"scraper.py's _extract_articles_from_soup().",
-                "status": resp.status_code, "article_sample": []}
-
-    def _diagnose(s):
-        try:
-            if s.get("scrape_type") == "rss":
-                result = _diagnose_rss(s)
-            else:
-                result = _diagnose_html(s)
-        except Exception as e:
-            result = {"reason": "unreachable", "detail": f"Unexpected error during diagnosis: {str(e)[:160]}",
-                       "status": "error", "article_sample": []}
-        return {
-            "id": s["id"], "name": s["name"], "url": s["url"],
-            "type": s.get("scrape_type", "html"),
-            "jurisdiction": s.get("jurisdiction", ""),
-            "max_pages": s.get("max_pages", 1),
-            "active": bool(s.get("active")),
-            "reachable": result["reason"] in ("healthy", "rss_empty", "no_selector_match", "filtered_out"),
-            "healthy": result["reason"] == "healthy",
-            "reason": result["reason"],
-            "detail": result["detail"],
-            "status": result["status"],
-            "article_sample": result["article_sample"],
-        }
-
-    results = []
-    with ThreadPoolExecutor(max_workers=min(10, max(1, len(targets)))) as ex:
-        futures = {ex.submit(_diagnose, s): s for s in targets}
-        for f in as_completed(futures):
-            results.append(f.result())
-
-    reason_order = {"unreachable": 0, "http_error": 1, "js_rendered": 2, "rss_parse_error": 3,
-                     "no_selector_match": 4, "rss_empty": 5, "filtered_out": 6, "healthy": 7}
-    results.sort(key=lambda x: (reason_order.get(x["reason"], 9), x["name"]))
-
-    healthy = [r for r in results if r["healthy"]]
-    broken  = [r for r in results if not r["healthy"]]
-
-    by_reason = {}
-    for r in broken:
-        by_reason.setdefault(r["reason"], []).append(r)
-
-    return {
-        "checked":    len(results),
-        "healthy":    len(healthy),
-        "broken":     len(broken),
-        "by_reason":  {k: len(v) for k, v in by_reason.items()},
-        "results":    results,
-        "generated_at": datetime.utcnow().isoformat(),
-    }
-
-
-@app.get("/sources/diagnose/pdf")
-def diagnose_sources_pdf(include_paused: bool = Query(False), _=Depends(require_auth)):
-    """Run the same diagnostic as /sources/diagnose and return it as a
-    downloadable PDF report, suitable for sharing or filing away as a record
-    of source health at a point in time.
-    """
-    from fastapi.responses import StreamingResponse
-    import io
-
-    report = diagnose_sources(include_paused=include_paused)
-    pdf_bytes = _build_diagnostic_pdf(report)
-    buf = io.BytesIO(pdf_bytes)
-    buf.seek(0)
-    filename = f"policypulse-source-diagnostic-{datetime.utcnow().strftime('%Y-%m-%d-%H%M')}.pdf"
-    return StreamingResponse(
-        buf, media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
-
-
-def _build_diagnostic_pdf(report: dict) -> bytes:
-    """Render the source diagnostic report as a PDF using reportlab.
-
-    Layout: summary header with pass/fail counts, then a grouped breakdown —
-    one section per failure reason — followed by a final section listing
-    healthy sources. Each row shows source name, URL, jurisdiction, and the
-    plain-English detail explaining the diagnosis.
-    """
-    from reportlab.lib.pagesizes import letter
-    from reportlab.lib.units import inch
-    from reportlab.lib import colors
-    from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
-    )
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    import io
-
-    REASON_LABELS = {
-        "unreachable":       "🔴 Unreachable (connection failed / timed out)",
-        "http_error":        "🔴 HTTP Error (404 / 403 / 5xx)",
-        "js_rendered":       "🟠 JavaScript-Rendered Page (no static HTML content)",
-        "rss_parse_error":   "🟠 Invalid RSS/Atom Feed",
-        "no_selector_match": "🟡 No Matching Selector Pattern",
-        "rss_empty":         "🟡 RSS Feed Empty",
-        "filtered_out":      "🟡 All Links Filtered Out",
-    }
-    REASON_COLORS = {
-        "unreachable":       colors.HexColor("#dc2626"),
-        "http_error":        colors.HexColor("#dc2626"),
-        "js_rendered":       colors.HexColor("#ea580c"),
-        "rss_parse_error":   colors.HexColor("#ea580c"),
-        "no_selector_match": colors.HexColor("#ca8a04"),
-        "rss_empty":         colors.HexColor("#ca8a04"),
-        "filtered_out":      colors.HexColor("#ca8a04"),
-    }
-
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf, pagesize=letter,
-        topMargin=0.6*inch, bottomMargin=0.6*inch,
-        leftMargin=0.6*inch, rightMargin=0.6*inch,
-    )
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle("PPTitle", parent=styles["Title"], fontSize=20,
-                                  textColor=colors.HexColor("#003366"), spaceAfter=4)
-    sub_style = ParagraphStyle("PPSub", parent=styles["Normal"], fontSize=10,
-                                textColor=colors.HexColor("#6b8aaa"), spaceAfter=18)
-    section_style = ParagraphStyle("PPSection", parent=styles["Heading2"], fontSize=12,
-                                    spaceBefore=16, spaceAfter=8)
-    name_style = ParagraphStyle("PPName", parent=styles["Normal"], fontSize=10, fontName="Helvetica-Bold",
-                                 textColor=colors.HexColor("#0f1f35"))
-    url_style = ParagraphStyle("PPUrl", parent=styles["Normal"], fontSize=8,
-                                textColor=colors.HexColor("#1d4ed8"))
-    detail_style = ParagraphStyle("PPDetail", parent=styles["Normal"], fontSize=9,
-                                   textColor=colors.HexColor("#334d6b"), spaceAfter=2)
-    sample_style = ParagraphStyle("PPSample", parent=styles["Normal"], fontSize=8,
-                                   textColor=colors.HexColor("#6b8aaa"), fontName="Helvetica-Oblique")
-
-    story = []
-    story.append(Paragraph("PolicyPulse — Source Diagnostic Report", title_style))
-    gen_at = report.get("generated_at", "")[:16].replace("T", " ")
-    story.append(Paragraph(f"Generated {gen_at} UTC", sub_style))
-
-    # ── Summary table ──────────────────────────────────────────────────────
-    summary_data = [
-        ["Sources Checked", "Healthy", "Broken"],
-        [str(report["checked"]), str(report["healthy"]), str(report["broken"])],
-    ]
-    summary_table = Table(summary_data, colWidths=[1.8*inch]*3)
-    summary_table.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#f0f4f8")),
-        ("FONTNAME",   (0,0), (-1,0), "Helvetica-Bold"),
-        ("FONTSIZE",   (0,0), (-1,-1), 11),
-        ("ALIGN",      (0,0), (-1,-1), "CENTER"),
-        ("TEXTCOLOR",  (1,1), (1,1), colors.HexColor("#047857")),
-        ("TEXTCOLOR",  (2,1), (2,1), colors.HexColor("#dc2626") if report["broken"] else colors.HexColor("#047857")),
-        ("FONTSIZE",   (0,1), (-1,1), 16),
-        ("FONTNAME",   (0,1), (-1,1), "Helvetica-Bold"),
-        ("GRID",       (0,0), (-1,-1), 0.5, colors.HexColor("#e2e8f0")),
-        ("TOPPADDING", (0,0), (-1,-1), 8),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 8),
-    ]))
-    story.append(summary_table)
-    story.append(Spacer(1, 20))
-
-    results = report.get("results", [])
-
-    # ── Broken sources, grouped by reason ───────────────────────────────────
-    reason_order = ["unreachable", "http_error", "js_rendered", "rss_parse_error",
-                     "no_selector_match", "rss_empty", "filtered_out"]
-    for reason in reason_order:
-        group = [r for r in results if r["reason"] == reason]
-        if not group:
-            continue
-        label = REASON_LABELS.get(reason, reason)
-        col   = REASON_COLORS.get(reason, colors.HexColor("#334d6b"))
-        sec_style = ParagraphStyle(f"sec_{reason}", parent=section_style, textColor=col)
-        story.append(Paragraph(f"{label} — {len(group)} source(s)", sec_style))
-        for r in group:
-            story.append(Paragraph(f"{r['name']}  <font color='#94a3b8'>[{r['jurisdiction']}]</font>", name_style))
-            story.append(Paragraph(r["url"], url_style))
-            story.append(Paragraph(r["detail"], detail_style))
-            story.append(Spacer(1, 8))
-
-    # ── Healthy sources ──────────────────────────────────────────────────────
-    healthy_group = [r for r in results if r["reason"] == "healthy"]
-    if healthy_group:
-        story.append(Paragraph(f"🟢 Healthy — {len(healthy_group)} source(s)", section_style))
-        for r in healthy_group:
-            story.append(Paragraph(f"{r['name']}  <font color='#94a3b8'>[{r['jurisdiction']}]</font>", name_style))
-            story.append(Paragraph(r["url"], url_style))
-            story.append(Paragraph(r["detail"], detail_style))
-            if r.get("article_sample"):
-                sample_txt = " &bull; ".join(r["article_sample"])
-                story.append(Paragraph(f"Sample: {sample_txt}", sample_style))
-            story.append(Spacer(1, 8))
-
-    story.append(Spacer(1, 16))
-    footer_style = ParagraphStyle("PPFooter", parent=styles["Normal"], fontSize=8,
-                                   textColor=colors.HexColor("#94a3b8"))
-    story.append(Paragraph(
-        "PolicyPulse Intelligence Platform — Source Diagnostic Report. "
-        "Re-run this report any time from News & Articles → Sources → Diagnose All.",
-        footer_style
-    ))
-
-    doc.build(story)
-    return buf.getvalue()
-
-
-@app.get("/sources/{source_id}/check")
-def check_source_reachability(source_id: int):
-    import requests as req_lib
-    from database import get_conn
-    conn = get_conn()
-    row = conn.execute("SELECT url FROM sources WHERE id = ?", (source_id,)).fetchone()
-    conn.close()
-    if not row:
-        raise HTTPException(status_code=404, detail="Source not found")
-    url = row["url"]
-    try:
-        r = req_lib.head(url, timeout=8, allow_redirects=True,
-                         headers={"User-Agent": "PolicyPulse/1.0 link-checker"})
-        reachable = r.status_code < 400
-        return {"reachable": reachable, "status": r.status_code, "url": url}
-    except req_lib.exceptions.Timeout:
-        return {"reachable": False, "status": "timeout", "url": url}
-    except Exception as e:
-        return {"reachable": False, "status": str(e)[:80], "url": url}
 
 
 # ── ARTICLE PRUNING ───────────────────────────────────────────────────────────

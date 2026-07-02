@@ -7025,7 +7025,29 @@ async function diagnoseSources(){
   _diagnoseOkVisible = false;
   if(showOkBtn) showOkBtn.textContent = '&#x25BC; Show working sources';
 
-  var d = await apiFetch('/sources/diagnose');
+  // Use a dedicated fetch with a 120s timeout — NOT apiFetch() which caps
+  // GET requests at 15s. The diagnostic actually fetches and parses every
+  // source (up to 26 × 15s each via the backend thread pool), so the client
+  // must wait long enough. 120s is comfortable for Render's free tier.
+  var diagnoseController = new AbortController();
+  var diagnoseTimer = setTimeout(function(){ diagnoseController.abort(); }, 120000);
+  var fetchHeaders = {'Content-Type':'application/json'};
+  if(_PP_API_KEY) fetchHeaders['Authorization'] = 'Bearer ' + _PP_API_KEY;
+  var d = null;
+  try {
+    var resp = await fetch(API_BASE + '/sources/diagnose', {headers: fetchHeaders, signal: diagnoseController.signal});
+    clearTimeout(diagnoseTimer);
+    if(resp.ok) d = await resp.json();
+  } catch(e) {
+    clearTimeout(diagnoseTimer);
+    if(e.name === 'AbortError'){
+      summary.innerHTML = '<span style="color:var(--red)">&#x26A0; Diagnostic timed out after 120s. Your backend may be overloaded — try again or reduce the number of active sources.</span>';
+    } else {
+      summary.innerHTML = '<span style="color:var(--red)">&#x26A0; Could not reach backend: ' + escHtml(e.message) + '</span>';
+    }
+    if(pdfBtn) pdfBtn.disabled = false;
+    return;
+  }
   if(pdfBtn) pdfBtn.disabled = false;
   if(!d){
     summary.innerHTML = '<span style="color:var(--red)">&#x26A0; Could not reach backend.</span>';
@@ -7098,28 +7120,36 @@ async function downloadDiagnosePdf(){
     showToast('&#x26A0;','No Backend','Connect your Render backend first.',4000);
     return;
   }
-  if(!_lastDiagnoseReport){
-    showToast('&#x26A0;','Run Diagnostic First','Click "Diagnose All" first, then download the PDF.',3500);
-    return;
-  }
   var btn = document.getElementById('diagnose-pdf-btn');
-  if(btn){ btn.disabled = true; btn.textContent = 'Generating…'; }
-  showToast('&#x1F4C4;','Generating PDF','Building your source diagnostic report…',3000);
+  if(btn){ btn.disabled = true; btn.textContent = 'Generating PDF…'; }
+  showToast('&#x1F4C4;','Generating PDF','Running full diagnostic and building report — this takes 30–90 seconds…',8000);
+
+  var headers = {'Content-Type':'application/json'};
+  if(_PP_API_KEY) headers['Authorization'] = 'Bearer ' + _PP_API_KEY;
+
+  // 150s timeout — PDF endpoint runs the full diagnostic pass THEN renders
+  // the PDF, so it takes longer than the JSON endpoint alone.
+  var controller = new AbortController();
+  var timer = setTimeout(function(){ controller.abort(); }, 150000);
+
   try {
-    var headers = {};
-    if(_PP_API_KEY) headers['Authorization'] = 'Bearer ' + _PP_API_KEY;
-    var resp = await fetch(API_BASE + '/sources/diagnose/pdf', { headers: headers });
-    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    var resp = await fetch(API_BASE + '/sources/diagnose/pdf', {headers: headers, signal: controller.signal});
+    clearTimeout(timer);
+    if(!resp.ok) throw new Error('HTTP ' + resp.status + ' — ' + (await resp.text()).slice(0,120));
     var blob = await resp.blob();
-    var url = URL.createObjectURL(blob);
+    var url  = URL.createObjectURL(blob);
     var link = document.createElement('a');
     link.href = url;
     link.download = 'PolicyPulse-Source-Diagnostic-' + new Date().toISOString().slice(0,10) + '.pdf';
     link.click();
     setTimeout(function(){ URL.revokeObjectURL(url); }, 8000);
     showToast('&#x2705;','PDF Downloaded','Source diagnostic report saved.',3000);
-  } catch(e){
-    showToast('&#x26A0;','PDF Generation Failed', e.message, 4000);
+  } catch(e) {
+    clearTimeout(timer);
+    var msg = e.name === 'AbortError'
+      ? 'PDF generation timed out (150s). Try running Diagnose All first, then download.'
+      : e.message;
+    showToast('&#x26A0;','PDF Failed', msg, 5000);
   }
   if(btn){ btn.disabled = false; btn.innerHTML = '&#x1F4C4; Download PDF Report'; }
 }
