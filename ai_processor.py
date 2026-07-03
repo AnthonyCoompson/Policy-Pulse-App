@@ -157,64 +157,141 @@ def _parse_extra_terms(raw: str) -> list[str]:
 # ai_extra_low_terms keys in scraper_config (comma-separated strings).
 
 HIGH_RELEVANCE_TERMS: list[str] = [
-    # Indigenous policy
+    # ── Indigenous policy ────────────────────────────────────────────────
     "indigenous", "first nations", "métis", "inuit", "reconciliation",
     "dripa", "undrip", "trc", "ocap", "fnha", "crown-indigenous",
     "residential school", "land rights", "treaty", "nation-to-nation",
     "self-determination", "inherent rights",
-    # Post-secondary & research
+    # ── Post-secondary & research ────────────────────────────────────────
     "post-secondary", "university", "college", "tuition", "campus",
     "sshrc", "nserc", "cihr", "tri-council", "research", "academic",
     "graduate", "scholarship", "endowment", "accreditation",
-    # Government & policy
+    # ── Government & policy ──────────────────────────────────────────────
     "federal", "provincial", "legislation", "bill", "act", "regulation",
     "policy", "budget", "fiscal", "funding", "grant", "investment",
     "government", "ministry", "minister", "senate", "parliament", "hansard",
-    "throne speech", "cabinet", "consultation",
-    # Health
+    "throne speech", "cabinet", "consultation", "announcement",
+    # ── Health — broad ───────────────────────────────────────────────────
     "health", "pharmacare", "healthcare", "mental health", "wellness",
-    "public health", "drug coverage", "opioid", "overdose",
-    # Education & workforce
-    "education", "workforce", "labour", "labor", "employment",
-    "apprenticeship", "childcare", "child care", "early learning",
-    # BC-specific
+    "public health", "drug coverage", "care", "clinical", "hospital",
+    "patient", "treatment", "therapy", "medical", "nursing", "physician",
+    "allied health", "diagnostic", "laboratory", "lab", "imaging",
+    "physiotherapy", "occupational therapy", "social work",
+    "health authority", "health services", "health system", "health care",
+    "health worker", "health professional", "health workforce",
+    "health sciences", "hsa", "heabc",
+    # ── Substance use & overdose ─────────────────────────────────────────
+    "opioid", "overdose", "substance use", "substance abuse",
+    "addiction", "toxic drug", "drug poisoning", "drug supply",
+    "naloxone", "safe supply", "supervised consumption", "harm reduction",
+    "decriminalization", "fentanyl", "toxic supply", "illicit drug",
+    "drug death", "drug crisis", "toxic drug crisis",
+    # ── Mental health ────────────────────────────────────────────────────
+    "mental health", "psychiatric", "psychosocial", "crisis intervention",
+    "suicide", "eating disorder", "anxiety", "depression",
+    # ── Labour & collective bargaining ──────────────────────────────────
+    "labour", "labor", "collective bargaining", "collective agreement",
+    "union", "bargaining", "arbitration", "grievance", "strike",
+    "lockout", "wages", "wage", "compensation", "pension",
+    "benefits", "working conditions", "workforce", "employment",
+    "employer", "employee", "worker", "workers", "staff", "staffing",
+    "recruitment", "retention", "shortage", "vacancy", "vacancies",
+    "heu", "cupe", "bcgeu", "psac", "bcfed",
+    # ── Education & workforce ────────────────────────────────────────────
+    "education", "apprenticeship", "childcare", "child care", "early learning",
+    # ── BC-specific ──────────────────────────────────────────────────────
     "bc government", "british columbia", "bc legislature",
+    "bc ministry", "bc health",
+    # ── Professional regulation ──────────────────────────────────────────
+    "scope of practice", "regulated", "regulator", "college of",
+    "licensing", "registration", "certification", "professional",
+    "pharmacist", "nurse", "physiotherapist", "social worker",
 ]
 
 LOW_RELEVANCE_TERMS: list[str] = [
-    # Sports
-    "nba", "nfl", "nhl", "mlb", "fifa", "hockey game",
-    "basketball", "baseball game", "soccer match", "golf tournament",
+    # Sports — only clear entertainment sports, not sports medicine/health
+    "nba", "nfl", "nhl", "mlb", "fifa",
+    "basketball game", "baseball game", "soccer match", "golf tournament",
     "tennis match", "formula 1", "nascar", "wrestling",
     # Entertainment / celebrity
     "celebrity", "box office", "album release",
     "music video", "red carpet", "awards show", "oscars", "emmys",
     "reality tv", "bachelor", "survivor",
     # Lifestyle noise
-    "weather forecast", "horoscope", "astrology", "recipe", "cooking tips",
-    "lottery", "casino", "gambling", "real estate listing",
+    "horoscope", "astrology", "recipe", "cooking tips",
+    "lottery", "casino", "gambling",
     "stock tip", "crypto price", "bitcoin price",
+    # NOTE: removed "real estate listing", "weather forecast" — these can appear
+    # legitimately in health/housing policy articles
 ]
 
-# Sources that get an automatic score bump so they clear the pre-filter even
-# without keyword hits. Government press releases and official parliamentary
-# sources are almost always relevant and should never be dropped by the
-# keyword pre-filter.
+# Sources that get an automatic score bump so they always clear the pre-filter
+# even without keyword hits in their headline.  Every source in this app should
+# be trusted — a government press release or health authority announcement is
+# almost never irrelevant just because the headline doesn't use a keyword.
 TRUSTED_SOURCE_BOOSTS: dict[str, int] = {
-    "bc government newsroom":             30,
-    "bc legislature":                     30,
-    "bc ministry":                        25,
-    "government of canada":               25,
-    "indigenous relations":               30,
-    "first nations health authority":     30,
-    "fnha":                               30,
-    "crown-indigenous relations":         25,
-    "sshrc":                              25,
-    "nserc":                              25,
-    "cihr":                               25,
-    "universities canada":                20,
-    "university affairs":                 20,
-    "hansard":                            20,
+    # BC Government
+    "bc government newsroom":                  30,
+    "bc legislature":                          30,
+    "bc ministry":                             25,
+    "bc public service":                       25,
+    "bc indigenous":                           30,
+    # Federal Government
+    "government of canada":                    25,
+    "health canada":                           30,
+    "crown-indigenous":                        25,
+    "employment and social development":       20,
+    "innovation, science":                     20,
+    # Health Authorities — all should be trusted
+    "phsa":                                    30,
+    "provincial health services":              30,
+    "fraser health":                           30,
+    "vancouver coastal health":                30,
+    "interior health":                         30,
+    "northern health":                         30,
+    "island health":                           30,
+    "bc mental health":                        30,
+    "bcmhsus":                                 30,
+    # HSA-specific
+    "hsa bc":                                  30,
+    "heabc":                                   30,
+    "health employers":                        30,
+    "heu":                                     30,
+    "hospital employees":                      30,
+    # Indigenous Health
+    "first nations health authority":          30,
+    "fnha":                                    30,
+    "bc first nations":                        25,
+    # Labour
+    "bc federation of labour":                 25,
+    "bcfed":                                   25,
+    "cupe bc":                                 25,
+    "bc labour relations":                     25,
+    "lrb":                                     20,
+    # Substance Use & Mental Health
+    "bc centre on substance use":              30,
+    "bccsu":                                   30,
+    "mental health commission":                30,
+    # Research & Policy
+    "sshrc":                                   25,
+    "nserc":                                   25,
+    "cihr":                                    25,
+    "cihi":                                    25,
+    "cfhi":                                    25,
+    "universities canada":                     20,
+    "university affairs":                      20,
+    "policy options":                          20,
+    "canadian centre for policy":              20,
+    "higher education strategy":               20,
+    # Professional Regulation
+    "college of physicians":                   25,
+    "bc college of nurses":                    25,
+    "bccnm":                                   25,
+    "college of pharmacists":                  25,
+    "college of physical therapists":          25,
+    # Other trusted sources in the source list
+    "hansard":                                 20,
+    "maclean":                                 15,
 }
 
 

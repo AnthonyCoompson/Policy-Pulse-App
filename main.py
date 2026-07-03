@@ -502,13 +502,18 @@ def diagnose_sources(include_paused: bool = Query(False)):
     all_sources = get_sources()
     targets = all_sources if include_paused else [s for s in all_sources if s.get("active")]
 
+    # Diagnostic-specific timeout — tighter than the scraper's REQUEST_TIMEOUT (15s)
+    # so 45 sources complete well within the 120s client-side abort timer.
+    # With 20 parallel workers and 7s per request: worst case ≈ 3 batches × 7s = 21s.
+    DIAG_TIMEOUT = 7
+
     def _diagnose_rss(s):
         url = s["url"]
         try:
-            resp = req_lib.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            resp = req_lib.get(url, headers=HEADERS, timeout=DIAG_TIMEOUT)
         except req_lib.exceptions.Timeout:
             return {"reason": "unreachable",
-                    "detail": "Request timed out before any response was received.",
+                    "detail": "Request timed out (7s). Source may be slow or unreachable from Render.",
                     "status": "timeout", "article_sample": []}
         except req_lib.exceptions.RequestException as e:
             return {"reason": "unreachable", "detail": str(e)[:160],
@@ -545,10 +550,10 @@ def diagnose_sources(include_paused: bool = Query(False)):
         base = _base_url(url)
         try:
             resp = req_lib.get(url, headers={**HEADERS, "User-Agent": USER_AGENTS[0]},
-                               timeout=REQUEST_TIMEOUT)
+                               timeout=DIAG_TIMEOUT)
         except req_lib.exceptions.Timeout:
             return {"reason": "unreachable",
-                    "detail": "Request timed out before any response was received.",
+                    "detail": "Request timed out (7s). Source may be slow or blocking Render's IP.",
                     "status": "timeout", "article_sample": []}
         except req_lib.exceptions.RequestException as e:
             return {"reason": "unreachable", "detail": str(e)[:160],
@@ -611,7 +616,7 @@ def diagnose_sources(include_paused: bool = Query(False)):
         }
 
     results = []
-    with ThreadPoolExecutor(max_workers=min(8, max(1, len(targets)))) as ex:
+    with ThreadPoolExecutor(max_workers=min(20, max(1, len(targets)))) as ex:
         futures = {ex.submit(_diagnose, s): s for s in targets}
         for f in as_completed(futures):
             results.append(f.result())
