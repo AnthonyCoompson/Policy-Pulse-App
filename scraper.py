@@ -467,6 +467,61 @@ def _extract_articles_from_soup(soup, url, source_name, base_url=None):
         ".post-list h2 a", ".post-list h3 a",
         ".archive-list h2 a", ".archive-list h3 a",
         # ── Heading wrappers (broad but essential fallback) ───────────────
+        # ── BCCSU / WordPress Gutenberg query loop ────────────────────────
+        # BCCSU uses a wp:query block that renders as ul.wp-block-post-template
+        # Each post title sits in h2.wp-block-post-title > a
+        "ul.wp-block-post-template li h2 a",
+        "ul.wp-block-post-template li h3 a",
+        ".wp-block-post-template .wp-block-post-title a",
+        # ── FNHA (First Nations Health Authority) — custom tile layout ────
+        # FNHA renders news as .news-listing-item cards
+        ".news-listing-item a",
+        ".news-listing-item h3 a",
+        ".news-listing-item h4 a",
+        ".news-tile a",
+        ".news-tile h3 a",
+        # ── Canadian Pharmacists Association — custom news module ──────────
+        # CPhA uses a .news-module or .article-listing wrapper
+        ".article-listing a",
+        ".article-listing h3 a",
+        ".news-module a",
+        ".news-module h3 a",
+        ".news-module h4 a",
+        # ── Mental Health Commission of Canada — card grid layout ──────────
+        ".news-card a",
+        ".news-card h3 a",
+        ".news-card h4 a",
+        ".card-grid a",
+        ".card-grid h3 a",
+        ".resource-listing a",
+        ".resource-listing h3 a",
+        # ── CFHI / CIHI — government health research site patterns ────────
+        ".news-list-item a",
+        ".news-list-item h3 a",
+        ".result-item a",
+        ".result-item h3 a",
+        ".search-result a",
+        ".search-result h3 a",
+        # ── BC Legislature — proceedings/bills listing ─────────────────────
+        ".bill-listing a",
+        ".bill-listing h3 a",
+        "table.bills td a",
+        "table.bills td:first-child a",
+        ".legislation-list a",
+        # ── Health authority generic patterns ─────────────────────────────
+        ".media-release a",
+        ".media-release h3 a",
+        ".news-release a",
+        ".news-release h3 a",
+        ".press-release a",
+        ".press-release h3 a",
+        # ── Labour org site patterns ──────────────────────────────────────
+        ".post-entry a",
+        ".post-entry h2 a",
+        ".archive-post a",
+        ".archive-post h2 a",
+        ".entry a",
+        ".entry h2 a",
         "h2.title a", "h3.title a",
         "h2 a", "h3 a", "h4 a",
     ]

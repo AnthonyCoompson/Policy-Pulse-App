@@ -417,37 +417,58 @@ def create_source(body: dict, _=Depends(require_auth)):
 
 @app.post("/sources/fix-all")
 def fix_all_sources(_=Depends(require_auth)):
-    """Re-apply all known URL fixes to the sources table immediately."""
+    """Re-apply all diagnosis-confirmed URL fixes immediately.
+    Fix set based on PolicyPulse-Source-Diagnostic-2026-07-03.pdf.
+    """
     from database import get_conn
     conn = get_conn()
     fixed = []
-    _url_fixes_like = [
-        ("%SSHRC%",              "https://www.sshrc-crsh.gc.ca/rss/news-nouvelles-eng.xml",                          "rss",  "SSHRC — Research News"),
-        ("%NSERC%",              "https://www.nserc-crsng.gc.ca/rss/news-eng.xml",                                    "rss",  "NSERC — News Releases"),
-        ("%CIHR — News%",        "https://www.cihr-irsc.gc.ca/rss/news-eng.xml",                                      "rss",  "CIHR — News"),
-        ("%CIHI%",               "https://www.cihi.ca/sites/default/files/cihi-news-rss.xml",                         "rss",  "CIHI — Canadian Institute for Health Info"),
-        ("%Legislature%Bills%",  "https://www.leg.bc.ca/rss/news",                                                    "rss",  "BC Legislature — News & Hansard"),
-        ("%Legislature%Hansard%","https://www.leg.bc.ca/rss/news",                                                    "rss",  "BC Legislature — News & Hansard"),
-        ("%Indigenous%Reconciliation%",
-         "https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",                                  "html", "BC Indigenous Relations & Reconciliation"),
-        ("%Substance Use%",      "https://www.bccsu.ca/news-and-media/",                                              "html", "BC Centre on Substance Use"),
-        ("%Health Canada%",      "https://www.canada.ca/en/health-canada/news.atom",                                  "rss",  "Health Canada News"),
-        ("%Innovation Science%", "https://www.canada.ca/en/innovation-science-economic-development/news.atom",        "rss",  "Innovation Science and Economic Development"),
-        ("%Crown-Indigenous%",   "https://www.canada.ca/en/crown-indigenous-relations-northern-affairs/news.atom",    "rss",  "Crown-Indigenous Relations Canada"),
-        ("%Canada%Education%",   "https://www.canada.ca/en/employment-social-development/news.atom",                  "rss",  "Government of Canada — Education"),
-        ("%Mental Health Commission%", "https://www.mentalhealthcommission.ca/feed/",                                 "rss",  "Mental Health Commission of Canada"),
-        ("%Public Service Agency%",    "https://news.gov.bc.ca/ministries/public-service-agency",                    "html", "BC Public Service Agency"),
-        ("%Burnaby%",                  "https://www.burnaby.ca/news",                                                "html", "Burnaby City Hall News"),
+    _fixes = [
+        # SSL errors — switch to working endpoints
+        ("%CIHR — News%",              "https://cihr-irsc.gc.ca/e/news_releases.html",                                                            "html", "CIHR — News"),
+        ("%Physical Therapists%",      "https://www.collegept.ca/about/news-events",                                                              "html", "College of Physical Therapists of BC"),
+        ("%Labour Relations Board%",   "https://lrb.bc.ca/news/",                                                                                "html", "BC Labour Relations Board"),
+        # canada.ca total timeout — route via Google News RSS (not IP-restricted)
+        ("%Health Canada%",            "https://news.google.com/rss/search?q=Health+Canada+site:canada.ca&hl=en-CA&gl=CA&ceid=CA:en",            "rss",  "Health Canada News"),
+        ("%Crown-Indigenous%",         "https://news.google.com/rss/search?q=%22Crown-Indigenous+Relations%22+Canada&hl=en-CA&gl=CA&ceid=CA:en", "rss",  "Crown-Indigenous Relations Canada"),
+        ("%Innovation Science%",       "https://news.google.com/rss/search?q=%22Innovation+Science%22+Canada+government&hl=en-CA&gl=CA&ceid=CA:en", "rss", "Innovation Science and Economic Development"),
+        ("%Canada%Education%",         "https://news.google.com/rss/search?q=%22Employment+Social+Development%22+Canada&hl=en-CA&gl=CA&ceid=CA:en", "rss", "Government of Canada — Employment & Social Development"),
+        # 404 — URLs that moved
+        ("%College of Nurses%",        "https://www.bccnm.ca/news/",                                                                             "html", "BC College of Nurses & Midwives"),
+        ("%Federation of Labour%",     "https://bcfed.ca/news/",                                                                                 "html", "BC Federation of Labour"),
+        ("%Legislature%",              "https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings",                            "html", "BC Legislature — Bills & Proceedings"),
+        ("%Mental Health & Substance Use Services%", "https://www.phsa.ca/about/news-stories",                                                   "html", "BC Mental Health & Substance Use Services"),
+        ("%Public Service Agency%",    "https://news.gov.bc.ca/",                                                                                "html", "BC Public Service Agency"),
+        ("%CFHI%",                     "https://www.cfhi-fcass.ca/news",                                                                         "html", "CFHI — Canadian Foundation for Healthcare Improvement"),
+        ("%CIHI%",                     "https://www.cihi.ca/en/news",                                                                            "html", "CIHI — Canadian Institute for Health Info"),
+        ("%CUPE BC%",                  "https://cupe.bc.ca/news/",                                                                               "html", "CUPE BC"),
+        ("%HEABC%",                    "https://heabc.bc.ca/news-and-resources/",                                                                "html", "HEABC — Health Employers Association of BC"),
+        ("%Hospital Employees Union%", "https://www.heu.org/news/",                                                                              "html", "HEU — Hospital Employees Union"),
+        ("%Interior Health%",          "https://www.interiorhealth.ca/news",                                                                     "html", "Interior Health Authority"),
+        ("%Island Health%",            "https://www.islandhealth.ca/news",                                                                       "html", "Island Health Authority"),
+        ("%NSERC%",                    "https://www.nserc-crsng.gc.ca/Media-Media/NewsReleases-CommuniquesDePresse_eng.asp",                      "html", "NSERC — News Releases"),
+        ("%Northern Health%",          "https://www.northernhealth.ca/about-northern-health/media-centre/news-releases",                         "html", "Northern Health Authority"),
+        ("%Provincial Health Services%","https://www.phsa.ca/about/news-stories",                                                                "html", "PHSA — Provincial Health Services Authority"),
+        ("%SSHRC%",                    "https://www.sshrc-crsh.gc.ca/news-nouvelles/index-eng.aspx",                                             "html", "SSHRC — Research News"),
+        # 403 IP blocks — route via Google News RSS
+        ("%Maclean%",                  "https://news.google.com/rss/search?q=macleans+canada+education&hl=en-CA&gl=CA&ceid=CA:en",               "rss",  "Maclean's Education"),
+        ("%Times Higher Education%",   "https://news.google.com/rss/search?q=%22higher+education%22+Canada+university&hl=en-CA&gl=CA&ceid=CA:en","rss",  "Times Higher Education"),
+        ("%Universities Canada%",      "https://news.google.com/rss/search?q=%22Universities+Canada%22&hl=en-CA&gl=CA&ceid=CA:en",               "rss",  "Universities Canada"),
+        ("%University Affairs%",       "https://news.google.com/rss/search?q=%22university+affairs%22+Canada&hl=en-CA&gl=CA&ceid=CA:en",         "rss",  "University Affairs Canada"),
+        # Pin known-good URLs
+        ("%Substance Use%",            "https://www.bccsu.ca/news-and-media/",                                                                   "html", "BC Centre on Substance Use"),
+        ("%Mental Health Commission%", "https://www.mentalhealthcommission.ca/feed/",                                                            "rss",  "Mental Health Commission of Canada"),
+        ("%Burnaby%",                  "https://www.burnaby.ca/news",                                                                            "html", "Burnaby City Hall News"),
+        ("%Indigenous%Reconciliation%","https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",                              "html", "BC Indigenous Relations & Reconciliation"),
     ]
     try:
-        for name_like, new_url, new_type, new_name in _url_fixes_like:
+        for name_like, new_url, new_type, new_name in _fixes:
             result = conn.execute(
                 "UPDATE sources SET url=?, scrape_type=?, name=? WHERE name LIKE ?",
                 (new_url, new_type, new_name, name_like)
             )
             if result.rowcount and result.rowcount > 0:
                 fixed.append(new_name)
-        # Ensure RSS sources never use HTML pagination
         conn.execute("UPDATE sources SET pagination_style='none' WHERE scrape_type='rss'")
         conn.commit()
     finally:
@@ -817,6 +838,12 @@ def edit_source(source_id: int, body: dict, _=Depends(require_auth)):
 
 @app.delete("/sources/{source_id}")
 def remove_source(source_id: int, _=Depends(require_auth)):
+    from database import get_conn
+    conn = get_conn()
+    row = conn.execute("SELECT id FROM sources WHERE id = ?", (source_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Source {source_id} not found — it may have already been deleted.")
     delete_source(source_id)
     return {"ok": True}
 
@@ -864,17 +891,28 @@ def _run_backfill_bg(source: dict, pages: int):
 
 @app.get("/sources/{source_id}/check")
 def check_source_reachability(source_id: int):
+    """Quick reachability check for a single source.
+
+    Uses GET (not HEAD) — many government and health authority servers return
+    403 or 405 on HEAD requests even when the page is perfectly accessible,
+    which would cause false positives in the Fix Broken Links report.
+    Only reads the first 8KB of the response to keep it fast.
+    """
     import requests as req_lib
     from database import get_conn
     conn = get_conn()
-    row  = conn.execute("SELECT url FROM sources WHERE id = ?", (source_id,)).fetchone()
+    row  = conn.execute("SELECT url, scrape_type FROM sources WHERE id = ?", (source_id,)).fetchone()
     conn.close()
     if not row:
         raise HTTPException(status_code=404, detail="Source not found")
     url = row["url"]
     try:
-        r = req_lib.head(url, timeout=8, allow_redirects=True,
-                         headers={"User-Agent": "PolicyPulse/1.0 link-checker"})
+        r = req_lib.get(
+            url, timeout=10, allow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; PolicyPulse/1.0)"},
+            stream=True,   # stream so we don't download the full page
+        )
+        r.close()
         return {"reachable": r.status_code < 400, "status": r.status_code, "url": url}
     except req_lib.exceptions.Timeout:
         return {"reachable": False, "status": "timeout", "url": url}

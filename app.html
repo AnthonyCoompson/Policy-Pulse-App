@@ -6879,7 +6879,7 @@ async function fixLinks(){
 
   if(!API_BASE){
     resultEl.style.color = '#fb7185';
-    resultEl.innerHTML   = '⚠ Connect your Render backend to enable real link checking.';
+    resultEl.innerHTML   = '&#x26A0; Connect your Render backend to enable real link checking.';
     setTimeout(function(){ resultEl.style.display='none'; }, 6000);
     return;
   }
@@ -6889,6 +6889,8 @@ async function fixLinks(){
   for(var i = 0; i < sources.length; i++){
     var s = sources[i];
     try {
+      // Use the per-source check endpoint (GET-based, not HEAD — HEAD is rejected
+      // by many government and health authority servers even when the page is fine)
       var resp = await apiFetch('/sources/' + s.id + '/check');
       if(resp && resp.reachable){
         ok.push(s.name);
@@ -6903,8 +6905,9 @@ async function fixLinks(){
 
   if(broken.length === 0 && errors.length === 0){
     resultEl.style.color = 'var(--green)';
-    resultEl.innerHTML   = '✓ All ' + ok.length + ' source links are reachable.';
-    showToast('✅','Links OK','All ' + ok.length + ' sources responded successfully.',4000);
+    resultEl.innerHTML   = '&#x2713; All ' + ok.length + ' source links are reachable. '
+      + '<span style="color:var(--dim);font-size:10px">Note: this checks reachability only — use <strong>Diagnose All</strong> to find sources returning 0 articles.</span>';
+    showToast('&#x2705;','Links OK','All ' + ok.length + ' sources responded successfully.',4000);
   } else {
     var brokenList = broken.map(function(b){
       return '<span style="color:#f87171">'+escHtml(b.name)+'</span>'
@@ -6912,18 +6915,18 @@ async function fixLinks(){
     }).join(', ');
 
     resultEl.style.color = 'var(--text)';
-    resultEl.innerHTML   = '<strong style="color:#fb7185">⚠ '+broken.length+' unreachable:</strong> '
+    resultEl.innerHTML   = '<strong style="color:#fb7185">&#x26A0; '+broken.length+' unreachable:</strong> '
       + brokenList
       + '<br><span style="font-size:10px;color:var(--dim);margin-top:6px;display:block">'
-      + '403 errors from government sites are usually server-side IP restrictions on Render\'s range, not broken URLs. '
-      + 'Connection errors mean the URL itself is wrong. '
-      + 'Sources that consistently return 0 articles after scraping can safely be paused or deleted.'
+      + 'This button checks reachability only — it does <strong>not</strong> fix URLs. '
+      + 'To fix broken URLs click <strong>Fix All Source URLs</strong>. '
+      + 'To understand why a source returns 0 articles even when reachable, click <strong>Diagnose All</strong>.'
       + '</span>'
       + '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'
       + '<button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="pauseAllBroken(['+broken.map(function(b){return b.id;}).join(',')+'])">Pause all unreachable</button>'
       + '<button class="btn btn-ghost btn-sm" style="font-size:10px;color:var(--dim)" onclick="document.getElementById(\'fix-links-result\').style.display=\'none\'">Dismiss</button>'
       + '</div>';
-    showToast('⚠️','Broken Links Found',broken.length+' source(s) could not be reached.',5000);
+    showToast('&#x26A0;','Broken Links Found',broken.length+' source(s) could not be reached.',5000);
   }
 }
 
@@ -6949,10 +6952,10 @@ async function fixAllSourceUrls(){
   }
   var btn = event && event.target ? event.target : null;
   if(btn){ btn.disabled=true; btn.textContent='Fixing…'; }
-  showToast('&#x1F527;','Applying URL Fixes','Correcting BCCSU, CIHI, BC Legislature, BC Indigenous Relations, and research council URLs…',4000);
+  showToast('&#x1F527;','Applying URL Fixes','Updating all source URLs based on latest diagnostic report — SSL fixes, 404 corrections, Google News RSS workarounds…',5000);
 
   var d = await apiFetch('/sources/fix-all', {method:'POST'});
-  if(btn){ btn.disabled=false; btn.textContent='&#x1F527; Fix All Source URLs'; }
+  if(btn){ btn.disabled=false; btn.innerHTML='&#x1F527; Fix All Source URLs'; }
 
   if(d && d.ok){
     var fixedEl = document.getElementById('fix-links-result');
@@ -6967,7 +6970,6 @@ async function fixAllSourceUrls(){
           + ' &mdash; <button class="btn btn-primary btn-sm" onclick="scrapeNow()" style="margin-left:8px">Scrape Now to test</button>'
         : '&#x2713; All source URLs are already up to date.';
     }
-    // Reload sources table from backend to show updated URLs
     var src = await apiFetch('/sources');
     if(src && src.sources) sources = src.sources;
     renderSources();

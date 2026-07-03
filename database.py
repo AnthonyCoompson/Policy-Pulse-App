@@ -287,6 +287,14 @@ def init_db():
             pagination_style TEXT DEFAULT 'auto'
         );
 
+        -- Tombstone table: records URLs the user has explicitly deleted.
+        -- The _ensure_sources migration checks this table before every INSERT
+        -- so deleted sources are never resurrected on Render restarts.
+        CREATE TABLE IF NOT EXISTS deleted_sources (
+            url         TEXT PRIMARY KEY,
+            deleted_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
         CREATE TABLE IF NOT EXISTS scholarly_articles (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             title           TEXT NOT NULL,
@@ -623,61 +631,121 @@ def init_db():
             )
 
         _url_fixes_like = [
-            # ── Research councils ─────────────────────────────────────────────
-            ("%SSHRC%",
-             "https://www.sshrc-crsh.gc.ca/rss/news-nouvelles-eng.xml", "rss",
-             "SSHRC — Research News"),
-            ("%NSERC%",
-             "https://www.nserc-crsng.gc.ca/rss/news-eng.xml", "rss",
-             "NSERC — News Releases"),
-            # CIHR: no-www host has expired SSL cert → www subdomain
+            # ════════════════════════════════════════════════════
+            # SOURCE: PolicyPulse-Source-Diagnostic-2026-07-03.pdf
+            # 32 broken sources fixed below.
+            # ════════════════════════════════════════════════════
+
+            # ── SSL cert errors ──────────────────────────────────
+            # CIHR: both www and bare domain have broken SSL certs.
+            # Use their plain-HTTP news releases page (redirects to HTTPS internally).
             ("%CIHR — News%",
-             "https://www.cihr-irsc.gc.ca/rss/news-eng.xml", "rss",
+             "https://cihr-irsc.gc.ca/e/news_releases.html", "html",
              "CIHR — News"),
-            # ── CIHI: JS-rendered HTML → static RSS ───────────────────────────
+
+            # CPTBC: cptbc.org SSL broken. They merged into College of PT BC.
+            ("%Physical Therapists%",
+             "https://www.collegept.ca/about/news-events", "html",
+             "College of Physical Therapists of BC"),
+
+            # BC LRB: bclrb.ca DNS failure — domain moved to lrb.bc.ca
+            ("%Labour Relations Board%",
+             "https://lrb.bc.ca/news/", "html",
+             "BC Labour Relations Board"),
+
+            # ── canada.ca total timeout (Render IP blocked at TCP level) ──
+            # Atom feeds also timeout now. Route through Google News RSS instead —
+            # not IP-restricted, returns same federal news.
+            ("%Health Canada%",
+             "https://news.google.com/rss/search?q=Health+Canada+site:canada.ca&hl=en-CA&gl=CA&ceid=CA:en",
+             "rss", "Health Canada News"),
+            ("%Crown-Indigenous%",
+             "https://news.google.com/rss/search?q=%22Crown-Indigenous+Relations%22+Canada&hl=en-CA&gl=CA&ceid=CA:en",
+             "rss", "Crown-Indigenous Relations Canada"),
+            ("%Innovation Science%",
+             "https://news.google.com/rss/search?q=%22Innovation+Science%22+Canada+government&hl=en-CA&gl=CA&ceid=CA:en",
+             "rss", "Innovation Science and Economic Development"),
+            ("%Canada%Education%",
+             "https://news.google.com/rss/search?q=%22Employment+Social+Development%22+Canada&hl=en-CA&gl=CA&ceid=CA:en",
+             "rss", "Government of Canada — Employment & Social Development"),
+
+            # ── 404 — URLs that moved ─────────────────────────────
+            ("%College of Nurses%",
+             "https://www.bccnm.ca/news/", "html",
+             "BC College of Nurses & Midwives"),
+            ("%Federation of Labour%",
+             "https://bcfed.ca/news/", "html",
+             "BC Federation of Labour"),
+            ("%Legislature%",
+             "https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings",
+             "html", "BC Legislature — Bills & Proceedings"),
+            ("%Mental Health & Substance Use Services%",
+             "https://www.phsa.ca/about/news-stories", "html",
+             "BC Mental Health & Substance Use Services"),
+            ("%Public Service Agency%",
+             "https://news.gov.bc.ca/", "html",
+             "BC Public Service Agency"),
+            ("%CFHI%",
+             "https://www.cfhi-fcass.ca/news", "html",
+             "CFHI — Canadian Foundation for Healthcare Improvement"),
             ("%CIHI%",
-             "https://www.cihi.ca/sites/default/files/cihi-news-rss.xml", "rss",
+             "https://www.cihi.ca/en/news", "html",
              "CIHI — Canadian Institute for Health Info"),
-            # ── BC Legislature: /rss/bills-introduced 404 → /rss/news ─────────
-            ("%Legislature%Bills%",
-             "https://www.leg.bc.ca/rss/news", "rss",
-             "BC Legislature — News & Hansard"),
-            ("%Legislature%Hansard%",
-             "https://www.leg.bc.ca/rss/news", "rss",
-             "BC Legislature — News & Hansard"),
-            # ── BC Indigenous Relations: missing '-and-' in URL ───────────────
-            ("%Indigenous%Reconciliation%",
-             "https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",
-             "html", "BC Indigenous Relations & Reconciliation"),
-            # ── BCCSU: wrong path /news/ → /news-and-media/ ──────────────────
+            ("%CUPE BC%",
+             "https://cupe.bc.ca/news/", "html",
+             "CUPE BC"),
+            ("%HEABC%",
+             "https://heabc.bc.ca/news-and-resources/", "html",
+             "HEABC — Health Employers Association of BC"),
+            ("%Hospital Employees Union%",
+             "https://www.heu.org/news/", "html",
+             "HEU — Hospital Employees Union"),
+            ("%Interior Health%",
+             "https://www.interiorhealth.ca/news", "html",
+             "Interior Health Authority"),
+            ("%Island Health%",
+             "https://www.islandhealth.ca/news", "html",
+             "Island Health Authority"),
+            ("%NSERC%",
+             "https://www.nserc-crsng.gc.ca/Media-Media/NewsReleases-CommuniquesDePresse_eng.asp",
+             "html", "NSERC — News Releases"),
+            ("%Northern Health%",
+             "https://www.northernhealth.ca/about-northern-health/media-centre/news-releases",
+             "html", "Northern Health Authority"),
+            ("%Provincial Health Services%",
+             "https://www.phsa.ca/about/news-stories", "html",
+             "PHSA — Provincial Health Services Authority"),
+            ("%SSHRC%",
+             "https://www.sshrc-crsh.gc.ca/news-nouvelles/index-eng.aspx", "html",
+             "SSHRC — Research News"),
+
+            # ── 403 — Render IP blocked; route via Google News RSS ────────
+            ("%Maclean%",
+             "https://news.google.com/rss/search?q=macleans+canada+education&hl=en-CA&gl=CA&ceid=CA:en",
+             "rss", "Maclean\'s Education"),
+            ("%Times Higher Education%",
+             "https://news.google.com/rss/search?q=%22higher+education%22+Canada+university&hl=en-CA&gl=CA&ceid=CA:en",
+             "rss", "Times Higher Education"),
+            ("%Universities Canada%",
+             "https://news.google.com/rss/search?q=%22Universities+Canada%22&hl=en-CA&gl=CA&ceid=CA:en",
+             "rss", "Universities Canada"),
+            ("%University Affairs%",
+             "https://news.google.com/rss/search?q=%22university+affairs%22+Canada&hl=en-CA&gl=CA&ceid=CA:en",
+             "rss", "University Affairs Canada"),
+
+            # ── Keep correct URLs pinned so accidental reverts get fixed ──
             ("%Substance Use%",
              "https://www.bccsu.ca/news-and-media/", "html",
              "BC Centre on Substance Use"),
-            # ── canada.ca HTML pages → Atom feeds (IP timeout fix) ────────────
-            ("%Health Canada%",
-             "https://www.canada.ca/en/health-canada/news.atom", "rss",
-             "Health Canada News"),
-            ("%Innovation Science%",
-             "https://www.canada.ca/en/innovation-science-economic-development/news.atom", "rss",
-             "Innovation Science and Economic Development"),
-            ("%Crown-Indigenous%",
-             "https://www.canada.ca/en/crown-indigenous-relations-northern-affairs/news.atom", "rss",
-             "Crown-Indigenous Relations Canada"),
-            ("%Canada%Education%",
-             "https://www.canada.ca/en/employment-social-development/news.atom", "rss",
-             "Government of Canada — Education"),
-            # ── Mental Health Commission: HTML → WordPress RSS ────────────────
             ("%Mental Health Commission%",
              "https://www.mentalhealthcommission.ca/feed/", "rss",
              "Mental Health Commission of Canada"),
-            # ── BC Public Service Agency: deep 404 URL → ministry newsroom ────
-            ("%Public Service Agency%",
-             "https://news.gov.bc.ca/ministries/public-service-agency", "html",
-             "BC Public Service Agency"),
-            # ── Burnaby City Hall: /city-hall/news 404 → /news ───────────────
             ("%Burnaby%",
              "https://www.burnaby.ca/news", "html",
              "Burnaby City Hall News"),
+            ("%Indigenous%Reconciliation%",
+             "https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",
+             "html", "BC Indigenous Relations & Reconciliation"),
         ]
         for name_like, new_url, new_type, new_name in _url_fixes_like:
             try:
@@ -688,111 +756,108 @@ def init_db():
             except Exception as e:
                 import logging as _fix_log
                 _fix_log.getLogger(__name__).warning(
-                    f"Could not apply URL fix for '{name_like}' → {new_url}: {e}"
+                    f"Could not apply URL fix for '{name_like}' -> {new_url}: {e}"
                 )
 
-        # RSS-type sources never use HTML pagination
         cur.execute("UPDATE sources SET pagination_style='none' WHERE scrape_type='rss'")
-
-        # BCCSU: WordPress path-style pagination, 3 pages default
         cur.execute(
             "UPDATE sources SET max_pages=3, pagination_style='path' "
             "WHERE name LIKE '%Substance Use%' AND scrape_type='html'"
         )
-
-        # Health authorities use Drupal — try query-style pagination (?page=1)
-        # max_pages=2 is conservative: catches a couple of days' backlog without
-        # hammering busy clinical operations servers.
-        _drupal_sources = [
-            "PHSA%", "Fraser Health%", "Vancouver Coastal%",
-            "Interior Health%", "Northern Health%", "Island Health%",
-            "BC Mental Health%", "BCMHSUS%",
-        ]
-        for pattern in _drupal_sources:
+        for pattern in ["PHSA%", "Fraser Health%", "Vancouver Coastal%",
+                        "Interior Health%", "Northern Health%", "Island Health%",
+                        "BC Mental Health%"]:
             cur.execute(
                 "UPDATE sources SET max_pages=2, pagination_style='query' "
                 "WHERE name LIKE ? AND scrape_type='html' AND max_pages=1",
                 (pattern,)
             )
-
         conn.commit()
     except Exception as e:
         import logging as _mig_log
         _mig_log.getLogger(__name__).warning(f"Source URL migration error: {e}")
 
 
-    # ── Migration: insert any missing sources into existing live installs ────────
-    # _seed_sources() only runs on a fresh DB (COUNT=0). For existing installs,
-    # we do a targeted INSERT OR IGNORE for sources that may not be present yet.
-    # The UNIQUE index on sources.url makes every insert here fully idempotent —
-    # rows with URLs already in the table are silently skipped.
-    #
-    # This list is the authoritative set of HSA BC–relevant sources. It is a
-    # complete superset of the previous source lists, so running this on any
-    # existing install safely brings it up to date.
     _ensure_sources = [
-        # ── HSA-specific ───────────────────────────────────────────────────
         ("HSA BC — News & Updates",                        "https://hsabc.org/feed/",                                                          "BC",           "rss"),
-        ("HEABC — Health Employers Association of BC",     "https://heabc.bc.ca/feed/",                                                        "BC",           "rss"),
-        ("HEU — Hospital Employees Union",                 "https://www.heu.org/news/feed/",                                                   "BC",           "rss"),
-        # ── Health Authorities ─────────────────────────────────────────────
-        ("PHSA — Provincial Health Services Authority",    "https://www.phsa.ca/about-site/news-stories",                                      "BC",           "html"),
+        ("HEABC — Health Employers Association of BC",     "https://heabc.bc.ca/news-and-resources/",                                          "BC",           "html"),
+        ("HEU — Hospital Employees Union",                 "https://www.heu.org/news/",                                                        "BC",           "html"),
+        ("PHSA — Provincial Health Services Authority",    "https://www.phsa.ca/about/news-stories",                                           "BC",           "html"),
         ("Fraser Health Authority",                        "https://www.fraserhealth.ca/news",                                                 "BC",           "html"),
         ("Vancouver Coastal Health Authority",             "https://www.vch.ca/en/news",                                                       "BC",           "html"),
-        ("Interior Health Authority",                      "https://www.interiorhealth.ca/about/media-centre/news",                            "BC",           "html"),
-        ("Northern Health Authority",                      "https://www.northernhealth.ca/about-northern-health/news",                         "BC",           "html"),
-        ("Island Health Authority",                        "https://www.islandhealth.ca/learn-about-health/news-media",                        "BC",           "html"),
-        # ── BC Government ─────────────────────────────────────────────────
+        ("Interior Health Authority",                      "https://www.interiorhealth.ca/news",                                               "BC",           "html"),
+        ("Northern Health Authority",                      "https://www.northernhealth.ca/about-northern-health/media-centre/news-releases",   "BC",           "html"),
+        ("Island Health Authority",                        "https://www.islandhealth.ca/news",                                                 "BC",           "html"),
         ("BC Government Newsroom",                         "https://news.gov.bc.ca/",                                                          "BC",           "html"),
         ("BC Ministry of Health",                          "https://news.gov.bc.ca/ministries/health",                                         "BC",           "html"),
         ("BC Ministry of Mental Health & Addictions",      "https://news.gov.bc.ca/ministries/mental-health-and-addictions",                   "BC",           "html"),
         ("BC Ministry of Post-Secondary Education",        "https://news.gov.bc.ca/ministries/post-secondary-education-and-future-skills",     "BC",           "html"),
         ("BC Indigenous Relations & Reconciliation",       "https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",        "BC",           "html"),
-        ("BC Public Service Agency",                       "https://news.gov.bc.ca/ministries/public-service-agency",                          "BC",           "html"),
-        ("BC Legislature — News & Hansard",                "https://www.leg.bc.ca/rss/news",                                                   "BC",           "rss"),
-        # ── Federal ───────────────────────────────────────────────────────
-        ("Health Canada News",                             "https://www.canada.ca/en/health-canada/news.atom",                                 "Federal",      "rss"),
-        ("Crown-Indigenous Relations Canada",              "https://www.canada.ca/en/crown-indigenous-relations-northern-affairs/news.atom",   "Federal",      "rss"),
-        ("Innovation Science and Economic Development",    "https://www.canada.ca/en/innovation-science-economic-development/news.atom",       "Federal",      "rss"),
-        ("Government of Canada — Employment & Social Development", "https://www.canada.ca/en/employment-social-development/news.atom",         "Federal",      "rss"),
-        # ── Professional Regulation ────────────────────────────────────────
+        ("BC Legislature — Bills & Proceedings",
+         "https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings",                                                       "BC",           "html"),
+        ("Health Canada News",
+         "https://news.google.com/rss/search?q=Health+Canada+site:canada.ca&hl=en-CA&gl=CA&ceid=CA:en",
+         "Federal", "rss"),
+        ("Crown-Indigenous Relations Canada",
+         "https://news.google.com/rss/search?q=%22Crown-Indigenous+Relations%22+Canada&hl=en-CA&gl=CA&ceid=CA:en",
+         "Federal", "rss"),
+        ("Innovation Science and Economic Development",
+         "https://news.google.com/rss/search?q=%22Innovation+Science%22+Canada+government&hl=en-CA&gl=CA&ceid=CA:en",
+         "Federal", "rss"),
+        ("Government of Canada — Employment & Social Development",
+         "https://news.google.com/rss/search?q=%22Employment+Social+Development%22+Canada&hl=en-CA&gl=CA&ceid=CA:en",
+         "Federal", "rss"),
         ("College of Physicians & Surgeons of BC",         "https://www.cpsbc.ca/news",                                                        "BC",           "html"),
-        ("BC College of Nurses & Midwives",                "https://www.bccnm.ca/news/Pages/default.aspx",                                     "BC",           "html"),
-        ("College of Physical Therapists of BC",           "https://www.cptbc.org/news/",                                                      "BC",           "html"),
+        ("BC College of Nurses & Midwives",                "https://www.bccnm.ca/news/",                                                       "BC",           "html"),
+        ("College of Physical Therapists of BC",           "https://www.collegept.ca/about/news-events",                                       "BC",           "html"),
         ("BC College of Pharmacists",                      "https://www.bcpharmacists.org/news",                                               "BC",           "html"),
-        # ── Labour ────────────────────────────────────────────────────────
-        ("BC Federation of Labour",                        "https://bcfed.ca/feed/",                                                           "BC",           "rss"),
-        ("CUPE BC",                                        "https://cupe.bc.ca/news/feed/",                                                    "BC",           "rss"),
-        ("BC Labour Relations Board",                      "https://www.bclrb.ca/decisions/",                                                  "BC",           "html"),
-        # ── Indigenous Health ──────────────────────────────────────────────
+        ("BC Federation of Labour",                        "https://bcfed.ca/news/",                                                           "BC",           "html"),
+        ("CUPE BC",                                        "https://cupe.bc.ca/news/",                                                         "BC",           "html"),
+        ("BC Labour Relations Board",                      "https://lrb.bc.ca/news/",                                                          "BC",           "html"),
         ("First Nations Health Authority",                 "https://www.fnha.ca/about/news-and-events/news",                                   "BC",           "html"),
         ("BC First Nations Summit",                        "https://fns.bc.ca/news/",                                                          "BC",           "html"),
-        # ── Mental Health & Substance Use ─────────────────────────────────
-        ("BC Mental Health & Substance Use Services",      "https://www.bcmhsus.ca/about/news-stories",                                        "BC",           "html"),
         ("BC Centre on Substance Use",                     "https://www.bccsu.ca/news-and-media/",                                             "BC",           "html"),
         ("Mental Health Commission of Canada",             "https://www.mentalhealthcommission.ca/feed/",                                      "Federal",      "rss"),
-        # ── Research & Evidence ────────────────────────────────────────────
-        ("CIHI — Canadian Institute for Health Info",      "https://www.cihi.ca/sites/default/files/cihi-news-rss.xml",                        "Federal",      "rss"),
-        ("CIHR — News",                                    "https://www.cihr-irsc.gc.ca/rss/news-eng.xml",                                     "Federal",      "rss"),
-        ("CFHI — Canadian Foundation for Healthcare Improvement", "https://www.cfhi-fcass.ca/news-and-events/news",                            "Federal",      "html"),
-        ("SSHRC — Research News",                          "https://www.sshrc-crsh.gc.ca/rss/news-nouvelles-eng.xml",                          "Federal",      "rss"),
-        ("NSERC — News Releases",                          "https://www.nserc-crsng.gc.ca/rss/news-eng.xml",                                   "Federal",      "rss"),
-        # ── Policy Commentary ─────────────────────────────────────────────
+        ("CIHI — Canadian Institute for Health Info",      "https://www.cihi.ca/en/news",                                                      "Federal",      "html"),
+        ("CIHR — News",                                    "https://cihr-irsc.gc.ca/e/news_releases.html",                                     "Federal",      "html"),
+        ("CFHI — Canadian Foundation for Healthcare Improvement", "https://www.cfhi-fcass.ca/news",                                            "Federal",      "html"),
+        ("SSHRC — Research News",                          "https://www.sshrc-crsh.gc.ca/news-nouvelles/index-eng.aspx",                       "Federal",      "html"),
+        ("NSERC — News Releases",
+         "https://www.nserc-crsng.gc.ca/Media-Media/NewsReleases-CommuniquesDePresse_eng.asp",
+         "Federal", "html"),
         ("Policy Options (IRPP)",                          "https://policyoptions.irpp.org/feed/",                                             "Federal",      "rss"),
         ("Canadian Centre for Policy Alternatives BC",     "https://www.policyalternatives.ca/feed/",                                          "BC",           "rss"),
-        # ── Health Professions ────────────────────────────────────────────
         ("Canadian Pharmacists Association",               "https://www.pharmacists.ca/news-events/news/",                                     "Federal",      "html"),
-        # ── Higher Education (context for post-secondary health programs) ─
-        ("University Affairs Canada",                      "https://www.universityaffairs.ca/feed/",                                           "Federal",      "rss"),
+        ("University Affairs Canada",
+         "https://news.google.com/rss/search?q=%22university+affairs%22+Canada&hl=en-CA&gl=CA&ceid=CA:en",
+         "Federal", "rss"),
         ("Higher Education Strategy Associates",           "https://higheredstrategy.com/feed/",                                               "Pan-Canadian", "rss"),
-        ("Maclean's Education",                            "https://www.macleans.ca/education/feed/",                                          "Federal",      "rss"),
-        ("Times Higher Education",                         "https://www.timeshighereducation.com/rss.xml",                                     "International","rss"),
-        # ── Municipal ─────────────────────────────────────────────────────
+        ("Maclean\'s Education",
+         "https://news.google.com/rss/search?q=macleans+canada+education&hl=en-CA&gl=CA&ceid=CA:en",
+         "Federal", "rss"),
+        ("Times Higher Education",
+         "https://news.google.com/rss/search?q=%22higher+education%22+Canada+university&hl=en-CA&gl=CA&ceid=CA:en",
+         "International", "rss"),
+        ("Universities Canada",
+         "https://news.google.com/rss/search?q=%22Universities+Canada%22&hl=en-CA&gl=CA&ceid=CA:en",
+         "Federal", "rss"),
         ("Burnaby City Hall News",                         "https://www.burnaby.ca/news",                                                      "Municipal",    "html"),
     ]
     try:
+        # Load tombstoned URLs FIRST — any URL the user has explicitly deleted
+        # must never be re-inserted, regardless of what _ensure_sources contains.
+        try:
+            _tombstoned = {r["url"] for r in conn.execute("SELECT url FROM deleted_sources").fetchall()}
+        except Exception:
+            _tombstoned = set()
+
         inserted = 0
+        skipped_tombstone = 0
         for row in _ensure_sources:
+            url = row[1]
+            if url in _tombstoned:
+                skipped_tombstone += 1
+                continue  # user deleted this — respect the deletion
             cur.execute(
                 "INSERT OR IGNORE INTO sources (name, url, jurisdiction, scrape_type) VALUES (?,?,?,?)",
                 row
@@ -802,8 +867,9 @@ def init_db():
         conn.commit()
         import logging as _ins_log
         _ins_log.getLogger(__name__).info(
-            f"[migration] Source ensure-pass complete: {inserted} new source(s) inserted, "
-            f"{len(_ensure_sources) - inserted} already present"
+            f"[migration] Source ensure-pass complete: {inserted} new, "
+            f"{len(_ensure_sources) - inserted - skipped_tombstone} already present, "
+            f"{skipped_tombstone} skipped (user-deleted)"
         )
     except Exception as e:
         import logging as _ins_log
@@ -1374,10 +1440,38 @@ def toggle_source(source_id: int) -> bool:
 
 
 def delete_source(source_id: int):
+    """Delete a source and record its URL in the deleted_sources tombstone table.
+
+    The tombstone prevents _ensure_sources from resurrecting this source on
+    the next Render restart.  Without this, every URL in _ensure_sources would
+    reappear after any redeploy because INSERT OR IGNORE only skips rows whose
+    URL is still in the sources table — a deleted row lifts that constraint.
+    """
     conn = get_conn()
+    # Fetch the URL before deleting so we can tombstone it
+    row = conn.execute("SELECT url FROM sources WHERE id = ?", (source_id,)).fetchone()
+    if row:
+        conn.execute(
+            "INSERT OR REPLACE INTO deleted_sources (url, deleted_at) VALUES (?, datetime('now'))",
+            (row["url"],)
+        )
     conn.execute("DELETE FROM sources WHERE id = ?", (source_id,))
     conn.commit()
     conn.close()
+
+
+def get_deleted_source_urls() -> set:
+    """Return the set of URLs that have been explicitly deleted by the user.
+    Used by init_db()'s _ensure_sources migration to skip resurrecting them.
+    """
+    conn = get_conn()
+    try:
+        rows = conn.execute("SELECT url FROM deleted_sources").fetchall()
+        return {r["url"] for r in rows}
+    except Exception:
+        return set()
+    finally:
+        conn.close()
 
 
 def update_source(source_id: int, fields: dict):
