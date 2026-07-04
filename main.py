@@ -479,147 +479,135 @@ def fix_all_sources(_=Depends(require_auth)):
 
 @app.get("/sources/diagnose")
 def diagnose_sources(include_paused: bool = Query(False)):
-    """Run a full per-source diagnostic using the real scraper parsing logic.
+    """Diagnose all sources — explains why each returns 0 articles.
 
-    Returns one result per source explaining exactly why it is or isn't
-    producing articles — not just an HTTP status code.  Seven possible reasons:
-      healthy | unreachable | http_error | js_rendered |
-      no_selector_match | rss_empty | rss_parse_error
+    Runs each source check in a thread pool with:
+    - 6s per-request HTTP timeout (tight enough to fit all sources in 90s wall time)
+    - 90s hard wall-clock deadline — any source not finished by then is marked
+      'timed_out' and partial results are returned rather than failing entirely
 
-    Client-side note: this endpoint fetches and parses every active source
-    (up to 26 sources × 15s timeout each) using a thread pool, so it can take
-    30-90 seconds on a cold Render instance.  The frontend uses a dedicated
-    120s timeout (not the default 15s apiFetch timeout) for this call.
+    The client uses a 120s AbortController, giving a 30s safety margin.
     """
+    import time as _time
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import requests as req_lib
     from scraper import (
-        _fetch_listing_page, _extract_articles_from_soup, _base_url,
-        USER_AGENTS, HEADERS, REQUEST_TIMEOUT,
+        _extract_articles_from_soup, _base_url,
+        USER_AGENTS, HEADERS,
     )
     from bs4 import BeautifulSoup
 
+    DIAG_TIMEOUT   = 6    # per-request HTTP timeout (seconds)
+    WALL_DEADLINE  = 88   # hard wall-clock limit for the entire batch (seconds)
+
     all_sources = get_sources()
     targets = all_sources if include_paused else [s for s in all_sources if s.get("active")]
+    start_wall = _time.monotonic()
 
-    # Diagnostic-specific timeout — tighter than the scraper's REQUEST_TIMEOUT (15s)
-    # so 45 sources complete well within the 120s client-side abort timer.
-    # With 20 parallel workers and 7s per request: worst case ≈ 3 batches × 7s = 21s.
-    DIAG_TIMEOUT = 7
-
-    def _diagnose_rss(s):
-        url = s["url"]
-        try:
-            resp = req_lib.get(url, headers=HEADERS, timeout=DIAG_TIMEOUT)
-        except req_lib.exceptions.Timeout:
-            return {"reason": "unreachable",
-                    "detail": "Request timed out (7s). Source may be slow or unreachable from Render.",
-                    "status": "timeout", "article_sample": []}
-        except req_lib.exceptions.RequestException as e:
-            return {"reason": "unreachable", "detail": str(e)[:160],
-                    "status": "error", "article_sample": []}
-
-        if resp.status_code >= 400:
-            msg = ("The URL is likely wrong or the page has moved." if resp.status_code == 404
-                   else "The source may be blocking PolicyPulse's IP or rate-limiting it."
-                   if resp.status_code in (403, 429) else "Check the URL is correct.")
-            return {"reason": "http_error",
-                    "detail": f"Server returned HTTP {resp.status_code}. {msg}",
-                    "status": resp.status_code, "article_sample": []}
-
-        try:
-            soup = BeautifulSoup(resp.content, "xml")
-            items = soup.find_all("item") or soup.find_all("entry")
-        except Exception as e:
-            return {"reason": "rss_parse_error",
-                    "detail": f"Response was not valid RSS/Atom XML: {str(e)[:120]}",
-                    "status": resp.status_code, "article_sample": []}
-
-        if not items:
-            return {"reason": "rss_empty",
-                    "detail": "Feed loaded and parsed correctly but contains zero items.",
-                    "status": resp.status_code, "article_sample": []}
-
-        sample = [it.find("title").get_text(strip=True)[:90]
-                  for it in items[:3] if it.find("title")]
-        return {"reason": "healthy", "detail": f"{len(items)} item(s) found in feed.",
-                "status": resp.status_code, "article_sample": sample}
-
-    def _diagnose_html(s):
-        url  = s["url"]
-        base = _base_url(url)
-        try:
-            resp = req_lib.get(url, headers={**HEADERS, "User-Agent": USER_AGENTS[0]},
-                               timeout=DIAG_TIMEOUT)
-        except req_lib.exceptions.Timeout:
-            return {"reason": "unreachable",
-                    "detail": "Request timed out (7s). Source may be slow or blocking Render's IP.",
-                    "status": "timeout", "article_sample": []}
-        except req_lib.exceptions.RequestException as e:
-            return {"reason": "unreachable", "detail": str(e)[:160],
-                    "status": "error", "article_sample": []}
-
-        if resp.status_code >= 400:
-            msg = ("The URL is likely wrong or the page has moved." if resp.status_code == 404
-                   else "The source may be blocking PolicyPulse's IP or rate-limiting it."
-                   if resp.status_code in (403, 429) else "Check the URL is correct.")
-            return {"reason": "http_error",
-                    "detail": f"Server returned HTTP {resp.status_code}. {msg}",
-                    "status": resp.status_code, "article_sample": []}
-
-        soup          = BeautifulSoup(resp.text, "html.parser")
-        body_text_len = len(soup.get_text(strip=True))
-        tag_count     = len(soup.find_all(True))
-        articles      = _extract_articles_from_soup(soup, url, s["name"], base_url=base)
-
-        if articles:
-            return {"reason": "healthy",
-                    "detail": f"{len(articles)} candidate article link(s) found on page 1.",
-                    "status": resp.status_code,
-                    "article_sample": [a["title"][:90] for a in articles[:3]]}
-
-        if body_text_len < 600 and tag_count < 80:
-            return {"reason": "js_rendered",
-                    "detail": (f"Page returned HTTP {resp.status_code} but only {body_text_len} "
-                               f"characters of visible text and {tag_count} HTML tags — strongly "
-                               f"suggests content is rendered by JavaScript after page load. "
-                               f"PolicyPulse's static HTML fetcher never executes JS. "
-                               f"Look for an RSS/Atom feed for this source instead."),
-                    "status": resp.status_code, "article_sample": []}
-
-        return {"reason": "no_selector_match",
-                "detail": (f"Page loaded ({len(resp.text):,} bytes, {tag_count} tags) but none "
-                           f"of PolicyPulse's ~35 CSS selector patterns matched any article links. "
-                           f"This site uses markup PolicyPulse doesn't yet recognise — it needs a "
-                           f"custom selector added in scraper.py."),
-                "status": resp.status_code, "article_sample": []}
-
-    def _diagnose(s):
-        try:
-            result = _diagnose_rss(s) if s.get("scrape_type") == "rss" else _diagnose_html(s)
-        except Exception as e:
-            result = {"reason": "unreachable",
-                      "detail": f"Unexpected error: {str(e)[:160]}",
-                      "status": "error", "article_sample": []}
+    def _timed_out_result(s):
         return {
             "id": s["id"], "name": s["name"], "url": s["url"],
             "type": s.get("scrape_type", "html"),
             "jurisdiction": s.get("jurisdiction", ""),
             "max_pages": s.get("max_pages", 1),
             "active": bool(s.get("active")),
-            "healthy":   result["reason"] == "healthy",
-            "reachable": result["reason"] in ("healthy", "rss_empty", "no_selector_match", "filtered_out"),
-            "reason":    result["reason"],
-            "detail":    result["detail"],
-            "status":    result["status"],
-            "article_sample": result["article_sample"],
+            "healthy": False, "reachable": False,
+            "reason": "unreachable",
+            "detail": "Diagnostic timed out — backend is under load. Try running Diagnose All again; sources that timed out will usually succeed on a second attempt.",
+            "status": "timed_out", "article_sample": [],
         }
 
+    def _make_result(s, reason, detail, status, article_sample):
+        return {
+            "id": s["id"], "name": s["name"], "url": s["url"],
+            "type": s.get("scrape_type", "html"),
+            "jurisdiction": s.get("jurisdiction", ""),
+            "max_pages": s.get("max_pages", 1),
+            "active": bool(s.get("active")),
+            "healthy":   reason == "healthy",
+            "reachable": reason in ("healthy", "rss_empty", "no_selector_match"),
+            "reason": reason, "detail": detail,
+            "status": status, "article_sample": article_sample,
+        }
+
+    def _diagnose(s):
+        url  = s["url"]
+        stype = s.get("scrape_type", "html")
+        try:
+            if stype == "rss":
+                resp = req_lib.get(url, headers=HEADERS, timeout=DIAG_TIMEOUT)
+                if resp.status_code >= 400:
+                    msg = ("URL not found — check if the feed moved." if resp.status_code == 404
+                           else "Blocked by server — Render IP may be filtered."
+                           if resp.status_code in (403, 429) else "Server error.")
+                    return _make_result(s, "http_error",
+                                        f"HTTP {resp.status_code}: {msg}",
+                                        resp.status_code, [])
+                soup  = BeautifulSoup(resp.content, "xml")
+                items = soup.find_all("item") or soup.find_all("entry")
+                if not items:
+                    return _make_result(s, "rss_empty",
+                                        "Feed parsed OK but returned 0 items.", resp.status_code, [])
+                sample = [it.find("title").get_text(strip=True)[:90]
+                          for it in items[:3] if it.find("title")]
+                return _make_result(s, "healthy", f"{len(items)} item(s) in feed.",
+                                    resp.status_code, sample)
+            else:
+                resp = req_lib.get(url,
+                                   headers={**HEADERS, "User-Agent": USER_AGENTS[0]},
+                                   timeout=DIAG_TIMEOUT)
+                if resp.status_code >= 400:
+                    msg = ("URL not found — check if the page moved." if resp.status_code == 404
+                           else "Blocked by server — Render IP may be filtered."
+                           if resp.status_code in (403, 429) else "Server error.")
+                    return _make_result(s, "http_error",
+                                        f"HTTP {resp.status_code}: {msg}",
+                                        resp.status_code, [])
+                soup          = BeautifulSoup(resp.text, "html.parser")
+                body_text_len = len(soup.get_text(strip=True))
+                tag_count     = len(soup.find_all(True))
+                base          = _base_url(url)
+                articles      = _extract_articles_from_soup(soup, url, s["name"], base_url=base)
+                if articles:
+                    return _make_result(s, "healthy",
+                                        f"{len(articles)} article link(s) found.",
+                                        resp.status_code,
+                                        [a["title"][:90] for a in articles[:3]])
+                if body_text_len < 600 and tag_count < 80:
+                    return _make_result(s, "js_rendered",
+                                        f"Page returned {body_text_len} chars / {tag_count} tags — "
+                                        f"likely JavaScript-rendered. Find an RSS feed for this source.",
+                                        resp.status_code, [])
+                return _make_result(s, "no_selector_match",
+                                    f"Page loaded ({len(resp.text):,} bytes, {tag_count} tags) "
+                                    f"but no article links matched any known CSS selector pattern.",
+                                    resp.status_code, [])
+        except req_lib.exceptions.Timeout:
+            return _make_result(s, "unreachable",
+                                f"Request timed out after {DIAG_TIMEOUT}s.",
+                                "timeout", [])
+        except Exception as e:
+            return _make_result(s, "unreachable", str(e)[:160], "error", [])
+
     results = []
-    with ThreadPoolExecutor(max_workers=min(20, max(1, len(targets)))) as ex:
+    # Use 25 workers — on Render free tier (1 vCPU) threads are mostly I/O-waiting
+    # so more workers = more concurrent HTTP requests without CPU contention.
+    with ThreadPoolExecutor(max_workers=min(25, max(1, len(targets)))) as ex:
         futures = {ex.submit(_diagnose, s): s for s in targets}
         for f in as_completed(futures):
-            results.append(f.result())
+            elapsed = _time.monotonic() - start_wall
+            if elapsed > WALL_DEADLINE:
+                # Hard deadline exceeded — cancel remaining and mark as timed_out
+                for pending_future, pending_source in futures.items():
+                    if not pending_future.done():
+                        pending_future.cancel()
+                        results.append(_timed_out_result(pending_source))
+                break
+            try:
+                results.append(f.result())
+            except Exception as e:
+                src = futures[f]
+                results.append(_make_result(src, "unreachable", str(e)[:120], "error", []))
 
     reason_order = {"unreachable": 0, "http_error": 1, "js_rendered": 2,
                     "rss_parse_error": 3, "no_selector_match": 4,
@@ -630,6 +618,7 @@ def diagnose_sources(include_paused: bool = Query(False)):
     broken  = [r for r in results if not r["healthy"]]
     return {
         "checked": len(results), "healthy": len(healthy), "broken": len(broken),
+        "partial": len(results) < len(targets),
         "by_reason": {k: sum(1 for r in broken if r["reason"] == k)
                       for k in reason_order if any(r["reason"] == k for r in broken)},
         "results":   results,

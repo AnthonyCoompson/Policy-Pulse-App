@@ -7061,7 +7061,11 @@ async function diagnoseSources(){
   var brokenList = all.filter(function(r){ return !r.healthy; });
   var okList     = all.filter(function(r){ return r.healthy; });
 
-  summary.innerHTML = '<strong style="color:var(--white)">'+d.checked+'</strong> sources checked &nbsp;&bull;&nbsp; '
+  var partialNote = d.partial
+    ? ' &nbsp;<span style="font-size:10px;color:#f59e0b;font-weight:600">⚠ Partial — some sources timed out. Run again to complete.</span>'
+    : '';
+
+  summary.innerHTML = '<strong style="color:var(--white)">'+d.checked+'</strong> sources checked'+partialNote+' &nbsp;&bull;&nbsp; '
     +'<strong style="color:'+(brokenList.length?'#f87171':'var(--green)')+'">'+brokenList.length+' broken</strong> &nbsp;&bull;&nbsp; '
     +'<strong style="color:var(--green)">'+okList.length+' working</strong>';
 

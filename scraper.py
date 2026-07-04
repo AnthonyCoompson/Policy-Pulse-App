@@ -42,7 +42,8 @@ ARTICLE_FETCH_TIMEOUT = 12
 DELAY_BETWEEN_SOURCES = 1.5
 DELAY_BETWEEN_ARTICLES = 0.4
 FUZZY_DEDUP_THRESHOLD  = 88   # token_set_ratio >= this → duplicate
-QUICK_FILTER_THRESHOLD = 1    # quick_relevance_score must be > 0 to proceed to AI
+QUICK_FILTER_THRESHOLD = 0    # score must be > 0 to proceed; trusted sources get a
+                              # boost that guarantees they always clear this bar
                               # (score 0 = a noise keyword hit with zero policy hits)
 
 # ── USER-AGENT ROTATION ───────────────────────────────────────────────────────
@@ -567,19 +568,26 @@ def _extract_articles_from_soup(soup, url, source_name, base_url=None):
             if not href or href.startswith(("#", "javascript:", "mailto:")):
                 continue
 
-            # Skip links that leave the source domain entirely
-            # (e.g. Twitter/Facebook share buttons, external media partners)
+            # Domain guard — block obvious non-article external domains
+            # (social media, CDNs, tracking pixels) but ALLOW legitimate
+            # external news links. Many news aggregator sites (e.g. BCCSU,
+            # FNHA) list articles hosted on external publications (CBC,
+            # Washington Post, Medscape). The old guard that blocked ALL
+            # cross-domain links was stripping every article from these sources.
             _href_domain = _urlparse(href).netloc.lower()
-            if _listing_domain and _href_domain and _href_domain != _listing_domain:
-                # Allow sub-domain variations (e.g. www.bccsu.ca vs bccsu.ca)
-                _base_listing = ".".join(_listing_domain.split(".")[-2:])
-                _base_href    = ".".join(_href_domain.split(".")[-2:])
-                if _base_listing != _base_href:
-                    continue
+            _BLOCKED_DOMAINS = {
+                "twitter.com", "x.com", "facebook.com", "instagram.com",
+                "linkedin.com", "youtube.com", "tiktok.com", "pinterest.com",
+                "t.co", "bit.ly", "ow.ly", "buff.ly",
+                "addthis.com", "sharethis.com", "feedburner.com",
+                "googletagmanager.com", "google-analytics.com",
+            }
+            if any(blocked in _href_domain for blocked in _BLOCKED_DOMAINS):
+                continue
 
             seen.add(href)
             articles.append({"title": title, "url": href, "pub_date": None})
-        if len(articles) >= 20:   # raised from 15 → 20 so paginated sites yield more
+        if len(articles) >= 20:
             break
 
     # Deduplicate by URL (different selectors may hit the same link)
