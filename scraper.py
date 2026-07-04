@@ -417,9 +417,11 @@ def scrape_rss(url, source_name, extra_tag=None):
 def _extract_articles_from_soup(soup, url, source_name, base_url=None):
     """Pull candidate article links out of a single listing page's soup.
 
-    This is the parsing logic previously inlined in scrape_generic() — split
-    out so the pagination orchestrator (scrape_generic_paginated) can call it
-    once per page without duplicating the selector list or the noise filter.
+    Returns list of dicts with keys: title, url, pub_date, snippet.
+    `snippet` is the description text found near the title on the listing
+    page — used as fallback article_text for aggregator sites (like BCCSU)
+    where the individual article page is a thin stub that links to an
+    external publication, giving the AI nothing to analyze.
     """
     articles = []
 
@@ -431,103 +433,68 @@ def _extract_articles_from_soup(soup, url, source_name, base_url=None):
         ".news-title a", ".news-heading a", ".news-list li a",
         ".entry-title a", ".post-title a",
         # ── WordPress Gutenberg block editor (BCCSU, many NGO sites) ─────
-        # Post titles rendered via Gutenberg use wp-block-post-title
         ".wp-block-post-title a",
-        ".wp-block-post-title",          # sometimes the <a> IS the title el
+        ".wp-block-post-title",
         ".wp-block-query .wp-block-post-title a",
         ".wp-block-query li a",
         ".wp-block-query h2 a", ".wp-block-query h3 a",
-        # Classic WordPress themes
+        "ul.wp-block-post-template li h2 a",
+        "ul.wp-block-post-template li h3 a",
+        ".wp-block-post-template .wp-block-post-title a",
+        # Classic WordPress
         ".post-title a", ".entry-title a",
-        # ── Drupal Views (BC Gov Newsroom, ministry pages use Drupal) ────
+        # ── Drupal Views (BC Gov Newsroom, ministry pages) ────────────────
         ".views-row a", ".views-row h3 a", ".views-row h4 a",
         ".view-content h3 a", ".view-content h4 a",
         ".field-content a", ".field-items a",
         ".view-content .views-field-title a",
-        # ── Canada.ca / GCWeb 4.x & 5.x template ─────────────────────────
-        # The federal government's standard web template uses these patterns
+        # ── Canada.ca / GCWeb ─────────────────────────────────────────────
         ".feeds-cont li a", ".feeds-cont a",
-        "main ul li > a",                    # direct list links in main content
-        ".mwsbodytext ul li a",              # body text list items
-        "h3.gc-thickline a",                 # GCWeb article card headings
-        ".gc-card h3 a", ".gc-card h2 a",   # GCWeb 5.x card components
-        ".card-title a",                     # Bootstrap-based GOC pages
-        # ── CIHI / health research council pages ─────────────────────────
-        ".news-listing a", ".news-listing h3 a",
-        ".news-listing h2 a",
+        "main ul li > a",
+        ".mwsbodytext ul li a",
+        "h3.gc-thickline a",
+        ".gc-card h3 a", ".gc-card h2 a",
+        ".card-title a",
+        # ── CIHI / health research ────────────────────────────────────────
+        ".news-listing a", ".news-listing h3 a", ".news-listing h2 a",
         ".results-list h3 a", ".results-list h2 a",
+        ".news-list-item a", ".news-list-item h3 a",
+        ".result-item a", ".result-item h3 a",
         # ── BC Gov newsroom / ministry sub-pages ─────────────────────────
         ".article-list a", ".article-list h3 a",
         ".news-releases a", ".news-releases h3 a",
-        # ── Government research councils (CIHR, NSERC, SSHRC) ────────────
-        # Use table-based layouts on older pages
-        "table td.views-field a",
-        "table.table td a",
-        # ── Generic list patterns used by NGO / think-tank sites ─────────
+        # ── Government research councils ──────────────────────────────────
+        "table td.views-field a", "table.table td a",
+        # ── FNHA / health authority custom layouts ────────────────────────
+        ".news-listing-item a", ".news-listing-item h3 a", ".news-listing-item h4 a",
+        ".news-tile a", ".news-tile h3 a",
+        # ── Canadian Pharmacists / NGO news modules ───────────────────────
+        ".article-listing a", ".article-listing h3 a",
+        ".news-module a", ".news-module h3 a", ".news-module h4 a",
+        # ── Mental Health Commission / card grids ─────────────────────────
+        ".news-card a", ".news-card h3 a", ".news-card h4 a",
+        ".card-grid a", ".card-grid h3 a",
+        ".resource-listing a", ".resource-listing h3 a",
+        # ── BC Legislature — bills listing ────────────────────────────────
+        ".bill-listing a", ".legislation-list a",
+        "table.bills td a",
+        # ── Media release / press release patterns ────────────────────────
+        ".media-release a", ".media-release h3 a",
+        ".news-release a", ".news-release h3 a",
+        ".press-release a", ".press-release h3 a",
+        # ── Labour org patterns (WordPress archive pages) ─────────────────
+        ".post-entry a", ".post-entry h2 a",
+        ".archive-post a", ".archive-post h2 a",
+        ".entry a", ".entry h2 a",
+        # ── Generic list patterns ─────────────────────────────────────────
         "ul.post-list li a", "ul.article-list li a",
         ".post-list h2 a", ".post-list h3 a",
         ".archive-list h2 a", ".archive-list h3 a",
-        # ── Heading wrappers (broad but essential fallback) ───────────────
-        # ── BCCSU / WordPress Gutenberg query loop ────────────────────────
-        # BCCSU uses a wp:query block that renders as ul.wp-block-post-template
-        # Each post title sits in h2.wp-block-post-title > a
-        "ul.wp-block-post-template li h2 a",
-        "ul.wp-block-post-template li h3 a",
-        ".wp-block-post-template .wp-block-post-title a",
-        # ── FNHA (First Nations Health Authority) — custom tile layout ────
-        # FNHA renders news as .news-listing-item cards
-        ".news-listing-item a",
-        ".news-listing-item h3 a",
-        ".news-listing-item h4 a",
-        ".news-tile a",
-        ".news-tile h3 a",
-        # ── Canadian Pharmacists Association — custom news module ──────────
-        # CPhA uses a .news-module or .article-listing wrapper
-        ".article-listing a",
-        ".article-listing h3 a",
-        ".news-module a",
-        ".news-module h3 a",
-        ".news-module h4 a",
-        # ── Mental Health Commission of Canada — card grid layout ──────────
-        ".news-card a",
-        ".news-card h3 a",
-        ".news-card h4 a",
-        ".card-grid a",
-        ".card-grid h3 a",
-        ".resource-listing a",
-        ".resource-listing h3 a",
-        # ── CFHI / CIHI — government health research site patterns ────────
-        ".news-list-item a",
-        ".news-list-item h3 a",
-        ".result-item a",
-        ".result-item h3 a",
-        ".search-result a",
-        ".search-result h3 a",
-        # ── BC Legislature — proceedings/bills listing ─────────────────────
-        ".bill-listing a",
-        ".bill-listing h3 a",
-        "table.bills td a",
-        "table.bills td:first-child a",
-        ".legislation-list a",
-        # ── Health authority generic patterns ─────────────────────────────
-        ".media-release a",
-        ".media-release h3 a",
-        ".news-release a",
-        ".news-release h3 a",
-        ".press-release a",
-        ".press-release h3 a",
-        # ── Labour org site patterns ──────────────────────────────────────
-        ".post-entry a",
-        ".post-entry h2 a",
-        ".archive-post a",
-        ".archive-post h2 a",
-        ".entry a",
-        ".entry h2 a",
+        # ── Broad heading fallbacks (last resort) ─────────────────────────
         "h2.title a", "h3.title a",
         "h2 a", "h3 a", "h4 a",
     ]
 
-    # Words that indicate navigation/utility links — not news articles
     _NAV_NOISE = {
         "home", "about", "contact", "menu", "search", "login", "sign in",
         "subscribe", "follow us", "share", "back to", "read more", "more news",
@@ -537,60 +504,76 @@ def _extract_articles_from_soup(soup, url, source_name, base_url=None):
         "privacy policy", "accessibility", "sitemap", "careers",
     }
 
-    # Base domain of the listing page — we only keep links that stay on the
-    # same domain.  This prevents navigation links pointing to external sites
-    # (e.g. social media share URLs) from polluting the candidate list.
+    _BLOCKED_DOMAINS = {
+        "twitter.com", "x.com", "facebook.com", "instagram.com",
+        "linkedin.com", "youtube.com", "tiktok.com", "pinterest.com",
+        "t.co", "bit.ly", "ow.ly", "buff.ly",
+        "addthis.com", "sharethis.com", "feedburner.com",
+        "googletagmanager.com", "google-analytics.com",
+    }
+
     from urllib.parse import urlparse as _urlparse
-    _listing_domain = _urlparse(base_url or url).netloc.lower()
 
     seen = set()
     for sel in selectors:
-        for el in soup.select(sel)[:30]:   # raised from 25 → 30 per selector
+        for el in soup.select(sel)[:30]:
             title = el.get_text(strip=True)
             href  = el.get("href", "")
 
-            # Length guard: too short = nav, too long = aggregated text blob
             if not title or len(title) < 15 or len(title) > 300:
                 continue
             if href in seen:
                 continue
 
-            # Filter navigation noise
             title_lower = title.lower()
             if any(noise in title_lower for noise in _NAV_NOISE):
                 continue
 
-            # Resolve relative URLs
             if href and not href.startswith("http"):
                 href = urljoin(base_url or url, href)
 
-            # Skip anchors, javascript links, and mailto
             if not href or href.startswith(("#", "javascript:", "mailto:")):
                 continue
 
-            # Domain guard — block obvious non-article external domains
-            # (social media, CDNs, tracking pixels) but ALLOW legitimate
-            # external news links. Many news aggregator sites (e.g. BCCSU,
-            # FNHA) list articles hosted on external publications (CBC,
-            # Washington Post, Medscape). The old guard that blocked ALL
-            # cross-domain links was stripping every article from these sources.
             _href_domain = _urlparse(href).netloc.lower()
-            _BLOCKED_DOMAINS = {
-                "twitter.com", "x.com", "facebook.com", "instagram.com",
-                "linkedin.com", "youtube.com", "tiktok.com", "pinterest.com",
-                "t.co", "bit.ly", "ow.ly", "buff.ly",
-                "addthis.com", "sharethis.com", "feedburner.com",
-                "googletagmanager.com", "google-analytics.com",
-            }
             if any(blocked in _href_domain for blocked in _BLOCKED_DOMAINS):
                 continue
 
+            # Extract a description snippet from the listing page context.
+            # Walk up to the nearest container (article, li, div) and look
+            # for a paragraph or description element nearby.
+            snippet = ""
+            container = el.parent
+            for _ in range(4):  # walk up max 4 levels
+                if container is None:
+                    break
+                tag = getattr(container, 'name', None)
+                if tag in ('article', 'li', 'div', 'section'):
+                    # Try common description selectors within this container
+                    for desc_sel in ('p', '.excerpt', '.summary', '.description',
+                                     '.entry-summary', '.post-excerpt',
+                                     '.wp-block-post-excerpt__excerpt'):
+                        desc_el = container.find(desc_sel)
+                        if desc_el:
+                            text = desc_el.get_text(strip=True)
+                            if len(text) > 30:
+                                snippet = text[:500]
+                                break
+                    if snippet:
+                        break
+                container = getattr(container, 'parent', None)
+
             seen.add(href)
-            articles.append({"title": title, "url": href, "pub_date": None})
+            articles.append({
+                "title":   title,
+                "url":     href,
+                "pub_date": None,
+                "snippet": snippet,
+            })
         if len(articles) >= 20:
             break
 
-    # Deduplicate by URL (different selectors may hit the same link)
+    # Deduplicate by URL
     seen_urls: set[str] = set()
     unique: list[dict] = []
     for art in articles:
@@ -942,8 +925,9 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
     for raw in raw_articles:
         title      = (raw.get("title") or "").strip()
         url        = (raw.get("url")   or "").strip()
-        pub_date   = raw.get("pub_date")  # None means "unknown" — resolved in Phase 1b
+        pub_date   = raw.get("pub_date")
         forced_tag = raw.get("forced_tag")
+        snippet    = raw.get("snippet", "")  # description from listing page
 
         if not title or not url or len(title) < 10:
             continue
@@ -975,6 +959,7 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
             "url":        url,
             "pub_date":   pub_date,
             "forced_tag": forced_tag,
+            "snippet":    snippet,
             "url_hash":   hashlib.sha256(url.encode()).hexdigest(),
         })
 
@@ -1006,16 +991,23 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
     meta  = []
 
     for candidate, (article_text, extracted_date) in zip(candidates, body_results):
-        # Priority: 1) date extracted from article page, 2) date from RSS feed,
-        # 3) None (saved as processed_date so DB shows when it was scraped, not today)
-        # This prevents HTML-scraped articles from showing today as their publish date.
-        raw_feed_date = candidate["pub_date"]  # from RSS or None (HTML sources)
-        pub_date = extracted_date or raw_feed_date  # None if both are missing
+        raw_feed_date = candidate["pub_date"]
+        pub_date = extracted_date or raw_feed_date
+
+        # Use listing-page snippet as fallback when body fetch returns nothing.
+        # This is the key fix for aggregator sites (BCCSU, FNHA) where the
+        # individual article page is a thin stub — the description on the
+        # listing page is often 100-400 chars and gives the AI enough to work
+        # with for domain classification, tagging, and relevance scoring.
+        effective_text = article_text
+        if not effective_text and candidate.get("snippet"):
+            effective_text = f"[Listing summary] {candidate['snippet']}"
+
         batch.append({
             "title":        candidate["title"],
             "url":          candidate["url"],
             "source_name":  source_name,
-            "article_text": article_text,
+            "article_text": effective_text,
         })
         meta.append({
             "url_hash":   candidate["url_hash"],

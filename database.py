@@ -434,7 +434,46 @@ def init_db():
     if cur.fetchone()[0] == 0:
         _seed_sources(cur)
 
-    # ── Migration: dedupe sources table + enforce uniqueness going forward ──────
+    # ── Migration: remove academia sources and name-based duplicates ─────────────
+    # Anthony confirmed these should be removed — not relevant to HSA BC:
+    # University Affairs, Higher Ed Strategy, Maclean's Education,
+    # Times Higher Education, Universities Canada, SSHRC, NSERC, CFHI, CIHR.
+    # Also deduplicate by name: screenshots show "CIHI", "Health Canada News",
+    # "Mental Health Commission" appearing 2-3x with different URLs because
+    # multiple migration passes inserted them. Keep the row with highest article_count.
+    try:
+        _REMOVE_NAME_PATTERNS = [
+            "%University Affairs%",
+            "%Higher Education Strategy%",
+            "%Maclean%Education%",
+            "%Times Higher Education%",
+            "%Universities Canada%",
+            "%SSHRC%",
+            "%NSERC%",
+            "%CFHI%",
+            "%CIHR%",
+            "%Burnaby%",          # municipal, not health sector relevant
+        ]
+        for pattern in _REMOVE_NAME_PATTERNS:
+            cur.execute("DELETE FROM sources WHERE name LIKE ?", (pattern,))
+
+        # Name-based dedup: for sources with same name, keep highest article_count
+        name_groups = cur.execute("""
+            SELECT name, COUNT(*) as n FROM sources GROUP BY name HAVING n > 1
+        """).fetchall()
+        for grp in name_groups:
+            rows = cur.execute(
+                "SELECT id, article_count FROM sources WHERE name = ? ORDER BY article_count DESC, id ASC",
+                (grp["name"],)
+            ).fetchall()
+            for row in rows[1:]:
+                cur.execute("DELETE FROM sources WHERE id = ?", (row["id"],))
+        conn.commit()
+    except Exception as e:
+        import logging as _cleanup_log
+        _cleanup_log.getLogger(__name__).warning(f"Source cleanup migration error: {e}")
+
+    # ── Migration: remove duplicate source rows by URL ─────────────────────────
     # Root cause of the duplicate-source bug: every backend restart previously
     # ran `INSERT OR IGNORE INTO sources (...)` for a fixed list of sources, but
     # the table had no UNIQUE constraint on name or url. INSERT OR IGNORE only
@@ -779,69 +818,50 @@ def init_db():
 
 
     _ensure_sources = [
-        ("HSA BC — News & Updates",                        "https://hsabc.org/feed/",                                                          "BC",           "rss"),
-        ("HEABC — Health Employers Association of BC",     "https://heabc.bc.ca/news-and-resources/",                                          "BC",           "html"),
-        ("HEU — Hospital Employees Union",                 "https://www.heu.org/news/",                                                        "BC",           "html"),
-        ("PHSA — Provincial Health Services Authority",    "https://www.phsa.ca/about/news-stories",                                           "BC",           "html"),
-        ("Fraser Health Authority",                        "https://www.fraserhealth.ca/news",                                                 "BC",           "html"),
-        ("Vancouver Coastal Health Authority",             "https://www.vch.ca/en/news",                                                       "BC",           "html"),
-        ("Interior Health Authority",                      "https://www.interiorhealth.ca/news",                                               "BC",           "html"),
-        ("Northern Health Authority",                      "https://www.northernhealth.ca/about-northern-health/media-centre/news-releases",   "BC",           "html"),
-        ("Island Health Authority",                        "https://www.islandhealth.ca/news",                                                 "BC",           "html"),
-        ("BC Government Newsroom",                         "https://news.gov.bc.ca/",                                                          "BC",           "html"),
-        ("BC Ministry of Health",                          "https://news.gov.bc.ca/ministries/health",                                         "BC",           "html"),
-        ("BC Ministry of Mental Health & Addictions",      "https://news.gov.bc.ca/ministries/mental-health-and-addictions",                   "BC",           "html"),
-        ("BC Ministry of Post-Secondary Education",        "https://news.gov.bc.ca/ministries/post-secondary-education-and-future-skills",     "BC",           "html"),
-        ("BC Indigenous Relations & Reconciliation",       "https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",        "BC",           "html"),
-        ("BC Legislature — Bills & Proceedings",
-         "https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings",                                                       "BC",           "html"),
-        ("Health Canada News",
-         "https://news.google.com/rss/search?q=Health+Canada+site:canada.ca&hl=en-CA&gl=CA&ceid=CA:en",
-         "Federal", "rss"),
-        ("Crown-Indigenous Relations Canada",
-         "https://news.google.com/rss/search?q=%22Crown-Indigenous+Relations%22+Canada&hl=en-CA&gl=CA&ceid=CA:en",
-         "Federal", "rss"),
-        ("Innovation Science and Economic Development",
-         "https://news.google.com/rss/search?q=%22Innovation+Science%22+Canada+government&hl=en-CA&gl=CA&ceid=CA:en",
-         "Federal", "rss"),
-        ("Government of Canada — Employment & Social Development",
-         "https://news.google.com/rss/search?q=%22Employment+Social+Development%22+Canada&hl=en-CA&gl=CA&ceid=CA:en",
-         "Federal", "rss"),
-        ("College of Physicians & Surgeons of BC",         "https://www.cpsbc.ca/news",                                                        "BC",           "html"),
-        ("BC College of Nurses & Midwives",                "https://www.bccnm.ca/news/",                                                       "BC",           "html"),
-        ("College of Physical Therapists of BC",           "https://www.collegept.ca/about/news-events",                                       "BC",           "html"),
-        ("BC College of Pharmacists",                      "https://www.bcpharmacists.org/news",                                               "BC",           "html"),
-        ("BC Federation of Labour",                        "https://bcfed.ca/news/",                                                           "BC",           "html"),
-        ("CUPE BC",                                        "https://cupe.bc.ca/news/",                                                         "BC",           "html"),
-        ("BC Labour Relations Board",                      "https://lrb.bc.ca/news/",                                                          "BC",           "html"),
-        ("First Nations Health Authority",                 "https://www.fnha.ca/about/news-and-events/news",                                   "BC",           "html"),
-        ("BC First Nations Summit",                        "https://fns.bc.ca/news/",                                                          "BC",           "html"),
-        ("BC Centre on Substance Use",                     "https://www.bccsu.ca/news-and-media/",                                             "BC",           "html"),
-        ("Mental Health Commission of Canada",             "https://www.mentalhealthcommission.ca/feed/",                                      "Federal",      "rss"),
-        ("CIHI — Canadian Institute for Health Info",      "https://www.cihi.ca/en/news",                                                      "Federal",      "html"),
-        ("CIHR — News",                                    "https://cihr-irsc.gc.ca/e/news_releases.html",                                     "Federal",      "html"),
-        ("CFHI — Canadian Foundation for Healthcare Improvement", "https://www.cfhi-fcass.ca/news",                                            "Federal",      "html"),
-        ("SSHRC — Research News",                          "https://www.sshrc-crsh.gc.ca/news-nouvelles/index-eng.aspx",                       "Federal",      "html"),
-        ("NSERC — News Releases",
-         "https://www.nserc-crsng.gc.ca/Media-Media/NewsReleases-CommuniquesDePresse_eng.asp",
-         "Federal", "html"),
-        ("Policy Options (IRPP)",                          "https://policyoptions.irpp.org/feed/",                                             "Federal",      "rss"),
-        ("Canadian Centre for Policy Alternatives BC",     "https://www.policyalternatives.ca/feed/",                                          "BC",           "rss"),
-        ("Canadian Pharmacists Association",               "https://www.pharmacists.ca/news-events/news/",                                     "Federal",      "html"),
-        ("University Affairs Canada",
-         "https://news.google.com/rss/search?q=%22university+affairs%22+Canada&hl=en-CA&gl=CA&ceid=CA:en",
-         "Federal", "rss"),
-        ("Higher Education Strategy Associates",           "https://higheredstrategy.com/feed/",                                               "Pan-Canadian", "rss"),
-        ("Maclean\'s Education",
-         "https://news.google.com/rss/search?q=macleans+canada+education&hl=en-CA&gl=CA&ceid=CA:en",
-         "Federal", "rss"),
-        ("Times Higher Education",
-         "https://news.google.com/rss/search?q=%22higher+education%22+Canada+university&hl=en-CA&gl=CA&ceid=CA:en",
-         "International", "rss"),
-        ("Universities Canada",
-         "https://news.google.com/rss/search?q=%22Universities+Canada%22&hl=en-CA&gl=CA&ceid=CA:en",
-         "Federal", "rss"),
-        ("Burnaby City Hall News",                         "https://www.burnaby.ca/news",                                                      "Municipal",    "html"),
+        # ── HSA-specific ───────────────────────────────────────────────────
+        ("HSA BC — News & Updates",                        "https://hsabc.org/feed/",                                                          "BC",      "rss"),
+        ("HEABC — Health Employers Association of BC",     "https://heabc.bc.ca/news-and-resources/",                                          "BC",      "html"),
+        ("HEU — Hospital Employees Union",                 "https://www.heu.org/news/",                                                        "BC",      "html"),
+        # ── Health Authorities ─────────────────────────────────────────────
+        ("PHSA — Provincial Health Services Authority",    "https://www.phsa.ca/about/news-stories",                                           "BC",      "html"),
+        ("Fraser Health Authority",                        "https://www.fraserhealth.ca/news",                                                 "BC",      "html"),
+        ("Vancouver Coastal Health Authority",             "https://www.vch.ca/en/news",                                                       "BC",      "html"),
+        ("Interior Health Authority",                      "https://www.interiorhealth.ca/news",                                               "BC",      "html"),
+        ("Northern Health Authority",                      "https://www.northernhealth.ca/about-northern-health/media-centre/news-releases",   "BC",      "html"),
+        ("Island Health Authority",                        "https://www.islandhealth.ca/news",                                                 "BC",      "html"),
+        # ── BC Government ─────────────────────────────────────────────────
+        ("BC Government Newsroom",                         "https://news.gov.bc.ca/",                                                          "BC",      "html"),
+        ("BC Ministry of Health",                          "https://news.gov.bc.ca/ministries/health",                                         "BC",      "html"),
+        ("BC Ministry of Mental Health & Addictions",      "https://news.gov.bc.ca/ministries/mental-health-and-addictions",                   "BC",      "html"),
+        ("BC Ministry of Post-Secondary Education",        "https://news.gov.bc.ca/ministries/post-secondary-education-and-future-skills",     "BC",      "html"),
+        ("BC Indigenous Relations & Reconciliation",       "https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",        "BC",      "html"),
+        ("BC Legislature — Bills & Proceedings",           "https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings",     "BC",      "html"),
+        # ── Federal — via Google News RSS (canada.ca IP-blocked from Render) ─
+        ("Health Canada News",                             "https://news.google.com/rss/search?q=Health+Canada+site:canada.ca&hl=en-CA&gl=CA&ceid=CA:en",        "Federal", "rss"),
+        ("Crown-Indigenous Relations Canada",              "https://news.google.com/rss/search?q=%22Crown-Indigenous+Relations%22+Canada&hl=en-CA&gl=CA&ceid=CA:en", "Federal", "rss"),
+        ("Innovation Science and Economic Development",    "https://news.google.com/rss/search?q=%22Innovation+Science%22+Canada+government&hl=en-CA&gl=CA&ceid=CA:en", "Federal", "rss"),
+        ("Government of Canada — Employment & Social Development", "https://news.google.com/rss/search?q=%22Employment+Social+Development%22+Canada&hl=en-CA&gl=CA&ceid=CA:en", "Federal", "rss"),
+        # ── Professional Regulation ────────────────────────────────────────
+        ("College of Physicians & Surgeons of BC",         "https://www.cpsbc.ca/news",                                                        "BC",      "html"),
+        ("BC College of Nurses & Midwives",                "https://www.bccnm.ca/news/",                                                       "BC",      "html"),
+        ("College of Physical Therapists of BC",           "https://www.collegept.ca/about/news-events",                                       "BC",      "html"),
+        ("BC College of Pharmacists",                      "https://www.bcpharmacists.org/news",                                               "BC",      "html"),
+        ("Canadian Pharmacists Association",               "https://www.pharmacists.ca/news-events/news/",                                     "Federal", "html"),
+        # ── Labour ────────────────────────────────────────────────────────
+        ("BC Federation of Labour",                        "https://bcfed.ca/news/",                                                           "BC",      "html"),
+        ("CUPE BC",                                        "https://cupe.bc.ca/news/",                                                         "BC",      "html"),
+        ("BC Labour Relations Board",                      "https://lrb.bc.ca/news/",                                                          "BC",      "html"),
+        # ── Indigenous Health ──────────────────────────────────────────────
+        ("First Nations Health Authority",                 "https://www.fnha.ca/about/news-and-events/news",                                   "BC",      "html"),
+        ("BC First Nations Summit",                        "https://fns.bc.ca/news/",                                                          "BC",      "html"),
+        # ── Mental Health & Substance Use ─────────────────────────────────
+        ("BC Centre on Substance Use",                     "https://www.bccsu.ca/news-and-media/",                                             "BC",      "html"),
+        ("Mental Health Commission of Canada",             "https://www.mentalhealthcommission.ca/feed/",                                      "Federal", "rss"),
+        # ── Health Research & Evidence ────────────────────────────────────
+        ("CIHI — Canadian Institute for Health Info",      "https://www.cihi.ca/en/news",                                                      "Federal", "html"),
+        # ── Policy Commentary ─────────────────────────────────────────────
+        ("Policy Options (IRPP)",                          "https://policyoptions.irpp.org/feed/",                                             "Federal", "rss"),
+        ("Canadian Centre for Policy Alternatives BC",     "https://www.policyalternatives.ca/feed/",                                          "BC",      "rss"),
     ]
     try:
         # Load tombstoned URLs FIRST — any URL the user has explicitly deleted
