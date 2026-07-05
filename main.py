@@ -479,45 +479,33 @@ def fix_all_sources(_=Depends(require_auth)):
 
 @app.get("/sources/diagnose")
 def diagnose_sources(include_paused: bool = Query(False)):
-    """Diagnose all sources — explains why each returns 0 articles.
+    """Diagnose all active sources and explain why each returns 0 articles.
 
-    Runs each source check in a thread pool with:
-    - 6s per-request HTTP timeout (tight enough to fit all sources in 90s wall time)
-    - 90s hard wall-clock deadline — any source not finished by then is marked
-      'timed_out' and partial results are returned rather than failing entirely
+    Architecture: fires all source checks simultaneously in a thread pool.
+    Each thread has a hard 6s HTTP timeout. The main thread collects results
+    as they arrive via a Queue. After 90s wall-clock, it stops waiting and
+    returns whatever has completed — partial results rather than a timeout error.
 
-    The client uses a 120s AbortController, giving a 30s safety margin.
+    Note: future.cancel() cannot interrupt a running thread in Python, so the
+    previous wall-deadline approach (cancelling via as_completed) was broken.
+    This implementation uses threading.Event + queue.Queue so the collection
+    loop exits cleanly at the deadline without waiting for stragglers.
     """
     import time as _time
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
+    import queue as _queue
     import requests as req_lib
-    from scraper import (
-        _extract_articles_from_soup, _base_url,
-        USER_AGENTS, HEADERS,
-    )
+    from concurrent.futures import ThreadPoolExecutor
+    from scraper import _extract_articles_from_soup, _base_url, USER_AGENTS, HEADERS
     from bs4 import BeautifulSoup
 
-    DIAG_TIMEOUT   = 6    # per-request HTTP timeout (seconds)
-    WALL_DEADLINE  = 88   # hard wall-clock limit for the entire batch (seconds)
+    PER_REQUEST_TIMEOUT = 6   # seconds per HTTP call — tight
+    WALL_DEADLINE       = 85  # seconds total — well inside client's 120s abort
 
     all_sources = get_sources()
     targets = all_sources if include_paused else [s for s in all_sources if s.get("active")]
-    start_wall = _time.monotonic()
 
-    def _timed_out_result(s):
-        return {
-            "id": s["id"], "name": s["name"], "url": s["url"],
-            "type": s.get("scrape_type", "html"),
-            "jurisdiction": s.get("jurisdiction", ""),
-            "max_pages": s.get("max_pages", 1),
-            "active": bool(s.get("active")),
-            "healthy": False, "reachable": False,
-            "reason": "unreachable",
-            "detail": "Diagnostic timed out — backend is under load. Try running Diagnose All again; sources that timed out will usually succeed on a second attempt.",
-            "status": "timed_out", "article_sample": [],
-        }
-
-    def _make_result(s, reason, detail, status, article_sample):
+    def _make_result(s, reason, detail, status, sample=None):
         return {
             "id": s["id"], "name": s["name"], "url": s["url"],
             "type": s.get("scrape_type", "html"),
@@ -527,101 +515,127 @@ def diagnose_sources(include_paused: bool = Query(False)):
             "healthy":   reason == "healthy",
             "reachable": reason in ("healthy", "rss_empty", "no_selector_match"),
             "reason": reason, "detail": detail,
-            "status": status, "article_sample": article_sample,
+            "status": status, "article_sample": sample or [],
         }
 
-    def _diagnose(s):
-        url  = s["url"]
+    result_q = _queue.Queue()
+
+    def _diagnose_and_enqueue(s):
+        """Run one source check and put result on the queue."""
+        url   = s["url"]
         stype = s.get("scrape_type", "html")
         try:
+            resp = req_lib.get(
+                url,
+                headers={**HEADERS, "User-Agent": USER_AGENTS[0]},
+                timeout=PER_REQUEST_TIMEOUT,
+                allow_redirects=True,
+            )
+            if resp.status_code >= 400:
+                code = resp.status_code
+                msg = ("URL not found — page may have moved." if code == 404
+                       else "Server blocked Render's IP." if code in (403, 429)
+                       else "Server error.")
+                result_q.put(_make_result(s, "http_error", f"HTTP {code}: {msg}", code))
+                return
+
             if stype == "rss":
-                resp = req_lib.get(url, headers=HEADERS, timeout=DIAG_TIMEOUT)
-                if resp.status_code >= 400:
-                    msg = ("URL not found — check if the feed moved." if resp.status_code == 404
-                           else "Blocked by server — Render IP may be filtered."
-                           if resp.status_code in (403, 429) else "Server error.")
-                    return _make_result(s, "http_error",
-                                        f"HTTP {resp.status_code}: {msg}",
-                                        resp.status_code, [])
                 soup  = BeautifulSoup(resp.content, "xml")
                 items = soup.find_all("item") or soup.find_all("entry")
                 if not items:
-                    return _make_result(s, "rss_empty",
-                                        "Feed parsed OK but returned 0 items.", resp.status_code, [])
-                sample = [it.find("title").get_text(strip=True)[:90]
+                    result_q.put(_make_result(s, "rss_empty",
+                                              "Feed OK but 0 items returned.", resp.status_code))
+                    return
+                sample = [it.find("title").get_text(strip=True)[:80]
                           for it in items[:3] if it.find("title")]
-                return _make_result(s, "healthy", f"{len(items)} item(s) in feed.",
-                                    resp.status_code, sample)
+                result_q.put(_make_result(s, "healthy",
+                                          f"{len(items)} items in feed.",
+                                          resp.status_code, sample))
             else:
-                resp = req_lib.get(url,
-                                   headers={**HEADERS, "User-Agent": USER_AGENTS[0]},
-                                   timeout=DIAG_TIMEOUT)
-                if resp.status_code >= 400:
-                    msg = ("URL not found — check if the page moved." if resp.status_code == 404
-                           else "Blocked by server — Render IP may be filtered."
-                           if resp.status_code in (403, 429) else "Server error.")
-                    return _make_result(s, "http_error",
-                                        f"HTTP {resp.status_code}: {msg}",
-                                        resp.status_code, [])
-                soup          = BeautifulSoup(resp.text, "html.parser")
-                body_text_len = len(soup.get_text(strip=True))
-                tag_count     = len(soup.find_all(True))
-                base          = _base_url(url)
-                articles      = _extract_articles_from_soup(soup, url, s["name"], base_url=base)
+                soup      = BeautifulSoup(resp.text, "html.parser")
+                body_len  = len(soup.get_text(strip=True))
+                tag_count = len(soup.find_all(True))
+                articles  = _extract_articles_from_soup(soup, url, s["name"],
+                                                        base_url=_base_url(url))
                 if articles:
-                    return _make_result(s, "healthy",
-                                        f"{len(articles)} article link(s) found.",
-                                        resp.status_code,
-                                        [a["title"][:90] for a in articles[:3]])
-                if body_text_len < 600 and tag_count < 80:
-                    return _make_result(s, "js_rendered",
-                                        f"Page returned {body_text_len} chars / {tag_count} tags — "
-                                        f"likely JavaScript-rendered. Find an RSS feed for this source.",
-                                        resp.status_code, [])
-                return _make_result(s, "no_selector_match",
-                                    f"Page loaded ({len(resp.text):,} bytes, {tag_count} tags) "
-                                    f"but no article links matched any known CSS selector pattern.",
-                                    resp.status_code, [])
-        except req_lib.exceptions.Timeout:
-            return _make_result(s, "unreachable",
-                                f"Request timed out after {DIAG_TIMEOUT}s.",
-                                "timeout", [])
-        except Exception as e:
-            return _make_result(s, "unreachable", str(e)[:160], "error", [])
+                    result_q.put(_make_result(s, "healthy",
+                                              f"{len(articles)} article link(s) found.",
+                                              resp.status_code,
+                                              [a["title"][:80] for a in articles[:3]]))
+                elif body_len < 600 and tag_count < 80:
+                    result_q.put(_make_result(s, "js_rendered",
+                                              f"Only {body_len} chars / {tag_count} tags — "
+                                              f"content is likely JS-rendered. Use an RSS feed.",
+                                              resp.status_code))
+                else:
+                    result_q.put(_make_result(s, "no_selector_match",
+                                              f"Page loaded ({len(resp.text):,} bytes) but no "
+                                              f"article links matched any CSS selector pattern.",
+                                              resp.status_code))
 
-    results = []
-    # Use 25 workers — on Render free tier (1 vCPU) threads are mostly I/O-waiting
-    # so more workers = more concurrent HTTP requests without CPU contention.
-    with ThreadPoolExecutor(max_workers=min(25, max(1, len(targets)))) as ex:
-        futures = {ex.submit(_diagnose, s): s for s in targets}
-        for f in as_completed(futures):
-            elapsed = _time.monotonic() - start_wall
-            if elapsed > WALL_DEADLINE:
-                # Hard deadline exceeded — cancel remaining and mark as timed_out
-                for pending_future, pending_source in futures.items():
-                    if not pending_future.done():
-                        pending_future.cancel()
-                        results.append(_timed_out_result(pending_source))
+        except req_lib.exceptions.Timeout:
+            result_q.put(_make_result(s, "unreachable",
+                                      f"Timed out after {PER_REQUEST_TIMEOUT}s — "
+                                      f"server slow or Render IP blocked.",
+                                      "timeout"))
+        except req_lib.exceptions.SSLError as e:
+            result_q.put(_make_result(s, "unreachable",
+                                      f"SSL certificate error: {str(e)[:120]}",
+                                      "ssl_error"))
+        except Exception as e:
+            result_q.put(_make_result(s, "unreachable", str(e)[:160], "error"))
+
+    # Fire all workers simultaneously — no waiting for one to finish before starting next
+    executor = ThreadPoolExecutor(max_workers=min(40, len(targets)))
+    for src in targets:
+        executor.submit(_diagnose_and_enqueue, src)
+    executor.shutdown(wait=False)  # don't block — collect via queue below
+
+    # Collect results until deadline or all done
+    results      = []
+    deadline     = _time.monotonic() + WALL_DEADLINE
+    remaining    = len(targets)
+
+    while remaining > 0:
+        timeout_left = deadline - _time.monotonic()
+        if timeout_left <= 0:
+            break
+        try:
+            result = result_q.get(timeout=min(timeout_left, 2.0))
+            results.append(result)
+            remaining -= 1
+        except _queue.Empty:
+            # Check if we've hit the wall
+            if _time.monotonic() >= deadline:
                 break
-            try:
-                results.append(f.result())
-            except Exception as e:
-                src = futures[f]
-                results.append(_make_result(src, "unreachable", str(e)[:120], "error", []))
+
+    # Any source that never returned gets a timed_out entry
+    finished_ids = {r["id"] for r in results}
+    for s in targets:
+        if s["id"] not in finished_ids:
+            results.append(_make_result(
+                s, "unreachable",
+                "Did not complete within 85s — backend under load. Run again.",
+                "timed_out",
+            ))
 
     reason_order = {"unreachable": 0, "http_error": 1, "js_rendered": 2,
                     "rss_parse_error": 3, "no_selector_match": 4,
-                    "rss_empty": 5, "filtered_out": 6, "healthy": 7}
+                    "rss_empty": 5, "healthy": 7}
     results.sort(key=lambda x: (reason_order.get(x["reason"], 9), x["name"]))
 
     healthy = [r for r in results if r["healthy"]]
     broken  = [r for r in results if not r["healthy"]]
+    partial = len(finished_ids) < len(targets)
+
     return {
-        "checked": len(results), "healthy": len(healthy), "broken": len(broken),
-        "partial": len(results) < len(targets),
+        "checked":  len(results),
+        "healthy":  len(healthy),
+        "broken":   len(broken),
+        "partial":  partial,
         "by_reason": {k: sum(1 for r in broken if r["reason"] == k)
                       for k in reason_order if any(r["reason"] == k for r in broken)},
-        "results":   results,
+        "results":  results,
         "generated_at": datetime.utcnow().isoformat(),
     }
 
