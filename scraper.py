@@ -98,70 +98,74 @@ def is_duplicate_title(new_title: str, seen: set) -> bool:
 
 def fetch_article_details(url: str) -> tuple[str, str | None]:
     """
-    Fetch article page with retry + User-Agent rotation.
-    Returns (article_text, pub_date). Both may be empty/None on all failures.
-    Retries 3 times with backoff: 1s, 2s then give up.
+    Fetch article page and extract body text + publish date.
+    Single attempt — no retry sleeps. Called in parallel for 20 articles;
+    retry sleeps were causing 60+ second delays that exceeded Render's timeout.
+    Returns (article_text, pub_date). article_text is empty string if the
+    page is unreachable OR if it appears to be a stub/nav-only page (< 300
+    chars of real content after boilerplate removal) so the snippet fallback
+    in _process_and_save can kick in.
     """
-    for attempt in range(3):
-        headers = {**HEADERS, "User-Agent": USER_AGENTS[attempt % len(USER_AGENTS)]}
-        try:
-            resp = requests.get(url, headers=headers, timeout=ARTICLE_FETCH_TIMEOUT)
-            resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, "html.parser")
+    headers = {**HEADERS, "User-Agent": USER_AGENTS[0]}
+    try:
+        resp = requests.get(url, headers=headers, timeout=ARTICLE_FETCH_TIMEOUT)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
 
-            # ── 1. Extract publish date ──────────────────────────────────────
-            pub_date = None
-            date_metas = [
-                ("meta", {"property": "article:published_time"}),
-                ("meta", {"property": "article:modified_time"}),
-                ("meta", {"name": "pubdate"}),
-                ("meta", {"name": "publishdate"}),
-                ("meta", {"name": "date"}),
-                ("meta", {"itemprop": "datePublished"}),
-                ("meta", {"property": "og:updated_time"}),
-            ]
-            for tag, attrs in date_metas:
-                el = soup.find(tag, attrs)
-                if el and el.get("content"):
-                    pub_date = _parse_date(el["content"])
-                    if pub_date:
-                        break
-            if not pub_date:
-                for time_el in soup.find_all("time", datetime=True)[:3]:
-                    pub_date = _parse_date(time_el["datetime"])
-                    if pub_date:
-                        break
+        # ── 1. Extract publish date ──────────────────────────────────────
+        pub_date = None
+        date_metas = [
+            ("meta", {"property": "article:published_time"}),
+            ("meta", {"property": "article:modified_time"}),
+            ("meta", {"name": "pubdate"}),
+            ("meta", {"name": "publishdate"}),
+            ("meta", {"name": "date"}),
+            ("meta", {"itemprop": "datePublished"}),
+            ("meta", {"property": "og:updated_time"}),
+        ]
+        for tag, attrs in date_metas:
+            el = soup.find(tag, attrs)
+            if el and el.get("content"):
+                pub_date = _parse_date(el["content"])
+                if pub_date:
+                    break
+        if not pub_date:
+            for time_el in soup.find_all("time", datetime=True)[:3]:
+                pub_date = _parse_date(time_el["datetime"])
+                if pub_date:
+                    break
 
-            # ── 2. Extract article body text ─────────────────────────────────
-            for tag in soup(["script", "style", "nav", "footer", "header",
-                             "aside", "figure", "form", "noscript", "iframe",
-                             "advertisement", "banner"]):
-                tag.decompose()
+        # ── 2. Extract article body text ─────────────────────────────────
+        for tag in soup(["script", "style", "nav", "footer", "header",
+                         "aside", "figure", "form", "noscript", "iframe"]):
+            tag.decompose()
 
-            article_text = ""
-            for selector in ["article", "main", ".article-body", ".entry-content",
-                             ".post-content", ".story-body", "#content", ".content",
-                             '[role="main"]', ".field-items"]:
-                container = soup.select_one(selector)
-                if container:
-                    article_text = container.get_text(separator=" ", strip=True)
-                    if len(article_text) > 200:
-                        break
-            if len(article_text) < 200:
-                article_text = soup.get_text(separator=" ", strip=True)
+        article_text = ""
+        for selector in ["article", "main", ".article-body", ".entry-content",
+                         ".post-content", ".story-body", "#content", ".content",
+                         '[role="main"]', ".field-items"]:
+            container = soup.select_one(selector)
+            if container:
+                article_text = container.get_text(separator=" ", strip=True)
+                if len(article_text) > 300:
+                    break
 
-            article_text = re.sub(r"\s{2,}", " ", article_text).strip()
-            return article_text[:5000], pub_date
+        if len(article_text) < 300:
+            article_text = soup.get_text(separator=" ", strip=True)
 
-        except requests.RequestException as e:
-            log.warning(f"fetch_article_details attempt {attempt+1}/3 [{url[:60]}]: {e}")
-            if attempt < 2:
-                time.sleep(2 ** attempt)
-        except Exception as e:
-            log.debug(f"fetch_article_details non-request error [{url[:60]}]: {e}")
-            break
+        article_text = re.sub(r"\s{2,}", " ", article_text).strip()
 
-    return "", None
+        # If after all extraction we still have < 300 chars, this is a stub
+        # page (nav boilerplate, "View full article" page, etc). Return empty
+        # so _process_and_save uses the listing-page snippet instead.
+        if len(article_text) < 300:
+            return "", pub_date
+
+        return article_text[:5000], pub_date
+
+    except Exception as e:
+        log.debug(f"fetch_article_details [{url[:60]}]: {e}")
+        return "", None
 
 
 # ── PARALLEL ARTICLE BODY FETCH ───────────────────────────────────────────────
@@ -994,13 +998,13 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
         raw_feed_date = candidate["pub_date"]
         pub_date = extracted_date or raw_feed_date
 
-        # Use listing-page snippet as fallback when body fetch returns nothing.
-        # This is the key fix for aggregator sites (BCCSU, FNHA) where the
-        # individual article page is a thin stub — the description on the
-        # listing page is often 100-400 chars and gives the AI enough to work
-        # with for domain classification, tagging, and relevance scoring.
+        # Use listing-page snippet as fallback when body fetch returns nothing
+        # OR when the fetched body is too short to be useful (stub pages return
+        # nav boilerplate that looks like content but gives Gemini nothing to
+        # score — now fetch_article_details returns "" for pages < 300 chars
+        # so this branch fires correctly for BCCSU and similar aggregators).
         effective_text = article_text
-        if not effective_text and candidate.get("snippet"):
+        if (not effective_text or len(effective_text) < 300) and candidate.get("snippet"):
             effective_text = f"[Listing summary] {candidate['snippet']}"
 
         batch.append({
