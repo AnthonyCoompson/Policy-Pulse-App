@@ -495,7 +495,20 @@ def _extract_articles_from_soup(soup, url, source_name, base_url=None):
         ".post-list h2 a", ".post-list h3 a",
         ".archive-list h2 a", ".archive-list h3 a",
         # ── Broad heading fallbacks (last resort) ─────────────────────────
-        "h2.title a", "h3.title a",
+        # ── Sitefinity CMS (pharmacists.ca and other .NET health orgs) ───
+        ".sfnewsItem h3 a", ".sfnewsItem h2 a", ".sfnewsItem a",
+        ".sfContentBlock h3 a", ".sfContentBlock h2 a",
+        ".sflist li a", ".sflist h3 a",
+        ".news-list-item a", ".news-list-item h3 a",
+        "[class*='newsItem'] a", "[class*='news-item'] a",
+        "[class*='newsItem'] h3 a", "[class*='newsItem'] h2 a",
+        # ── Generic fallback — any linked heading anywhere on the page ────
+        # Only fires when nothing above matched; catches non-standard CMS
+        "main h2 a", "main h3 a", "main h4 a",
+        "#main h2 a", "#main h3 a",
+        "#content h2 a", "#content h3 a",
+        ".main-content h2 a", ".main-content h3 a",
+        # ── Absolute last resort — any heading with a link ────────────────
         "h2 a", "h3 a", "h4 a",
     ]
 
