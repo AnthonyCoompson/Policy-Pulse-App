@@ -1172,35 +1172,40 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         <div style="font-size:11px;font-weight:700;color:#fb7185;margin-bottom:6px">&#x26A0; Potential Duplicate Articles Detected</div>
         <div id="duplicate-list" style="font-size:11px;color:var(--muted);line-height:1.8"></div>
       </div>
+
+      <!-- Button bar -->
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-        <div style="font-size:12px;color:var(--muted)" id="sources-count">8 sources configured</div>
+        <div style="font-size:12px;color:var(--muted)" id="sources-count">— sources configured</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-cyan" onclick="fixLinks()">🔧 Fix Broken Links</button>
+          <button class="btn btn-cyan" onclick="fixLinks()">🔧 Check Links</button>
           <button class="btn btn-ghost btn-sm" onclick="detectDuplicates()">&#x1F50D; Find Dupes</button>
-          <button class="btn btn-gold btn-sm" onclick="fixAllSourceUrls()" title="Apply known URL fixes for BCCSU, CIHI, BC Legislature, and BC Indigenous Relations">&#x1F527; Fix All Source URLs</button>
-          <button class="btn btn-ghost btn-sm" onclick="diagnoseSources()" title="Run a full diagnostic — fetches and parses every source to explain exactly why each is or isn't producing articles">&#x1F4CB; Diagnose All</button>
+          <button class="btn btn-gold btn-sm" onclick="fixAllSourceUrls()" title="Apply all known URL fixes immediately">&#x1F527; Fix All Source URLs</button>
+          <button class="btn btn-ghost btn-sm" onclick="diagnoseSources()" title="Full diagnostic — explains why each source returns 0 articles">&#x1F4CB; Diagnose All</button>
           <button class="btn btn-primary" onclick="openAddSourceModal()">+ Add Source</button>
         </div>
       </div>
+
       <div id="fix-links-result" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:12px;border:1px solid rgba(0,194,255,0.2);background:rgba(0,194,255,0.05);color:var(--cyan)"></div>
 
-      <!-- Diagnose results panel -->
-      <div id="source-diagnose-result" style="display:none;margin-bottom:14px;padding:14px 16px;background:rgba(11,24,41,0.8);border:1px solid var(--border);border-radius:8px">
+      <!-- Diagnostic report panel -->
+      <div id="source-diagnose-result" style="display:none;margin-bottom:14px;padding:14px 16px;background:rgba(11,24,41,0.9);border:1px solid var(--border);border-radius:8px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
           <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)">&#x1F4CB; Source Diagnostic Report</div>
-          <div style="display:flex;gap:6px;align-items:center">
-            <button class="btn btn-gold btn-sm" onclick="downloadDiagnosePdf()" id="diagnose-pdf-btn" style="font-size:10px;padding:3px 10px">&#x1F4C4; Download PDF Report</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-gold btn-sm" id="diagnose-autofix-btn" onclick="autoFixFromDiagnostic()" style="display:none;font-size:10px;padding:3px 10px">&#x1F527; Auto-Fix Issues</button>
+            <button class="btn btn-ghost btn-sm" id="diagnose-pdf-btn" onclick="downloadDiagnosePdf()" style="font-size:10px;padding:3px 10px">&#x1F4C4; Download PDF</button>
             <button onclick="document.getElementById('source-diagnose-result').style.display='none'" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px">&#x2715;</button>
           </div>
         </div>
         <div id="source-diagnose-summary" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
-        <div id="source-diagnose-broken" style="margin-bottom:10px"></div>
+        <div id="source-diagnose-broken"></div>
         <div id="source-diagnose-ok" style="display:none"></div>
-        <button id="source-diagnose-show-ok" onclick="toggleDiagnoseOk()" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0;font-family:'IBM Plex Sans',sans-serif">&#x25BC; Show working sources</button>
+        <button id="source-diagnose-show-ok" onclick="toggleDiagnoseOk()" style="display:none;font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0;font-family:'IBM Plex Sans',sans-serif;margin-top:8px">&#x25BC; Show working sources</button>
       </div>
 
+      <!-- Sources table -->
       <div class="table-wrap" style="overflow-x:auto"><table>
-        <thead><tr><th>Source</th><th>URL</th><th>Jurisdiction</th><th>Type</th><th title="How many listing pages the scraper will attempt for this source">Pages</th><th>Status</th><th>Last Scraped</th><th>Articles</th><th></th></tr></thead>
+        <thead><tr><th>Source</th><th>URL</th><th>Jurisdiction</th><th>Type</th><th title="Max listing pages to fetch per scrape">Pages</th><th>Status</th><th>Last Scraped</th><th>Articles</th><th></th></tr></thead>
         <tbody id="sources-tbody"></tbody>
       </table></div>
     </div>
@@ -5929,7 +5934,7 @@ function renderSources(){
   if(!tbody) return;
   if(countEl) countEl.textContent = sources.length + ' sources configured';
   if(!sources.length){
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:24px">No sources loaded yet. Connect the backend and refresh.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--dim);padding:24px">No sources loaded yet. Connect the backend and refresh.</td></tr>';
     return;
   }
   tbody.innerHTML = sources.map(function(s){
@@ -5941,18 +5946,16 @@ function renderSources(){
       ? '<span style="font-size:9px;font-weight:700;color:#38bdf8;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.25);border-radius:3px;padding:1px 5px">RSS</span>'
       : '<span style="font-size:9px;font-weight:700;color:#a78bfa;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.25);border-radius:3px;padding:1px 5px">HTML</span>';
     var maxPages = s.max_pages || 1;
-    // RSS feeds don't use HTML pagination — the feed itself defines item count.
-    // Show a static dash rather than an editable stepper for those rows.
     var pagesCell = isRss
-      ? '<span style="font-size:10px;color:var(--dim)" title="RSS feeds don\'t paginate — the feed defines how many items are returned">&mdash;</span>'
-      : '<div style="display:flex;align-items:center;gap:4px">'
-        + '<button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px;min-width:auto" onclick="adjustSourcePages('+s.id+',-1)" '+(maxPages<=1?'disabled':'')+'>&#x2212;</button>'
-        + '<span style="font-size:11px;font-weight:700;color:'+(maxPages>1?'var(--cyan)':'var(--muted)')+';min-width:16px;text-align:center;font-family:\'IBM Plex Mono\',monospace">'+maxPages+'</span>'
-        + '<button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px;min-width:auto" onclick="adjustSourcePages('+s.id+',1)" '+(maxPages>=30?'disabled':'')+'>&#x2B;</button>'
-        + '</div>';
+      ? '<span style="font-size:10px;color:var(--dim)" title="RSS feeds don\'t use page pagination">—</span>'
+      : '<div style="display:flex;align-items:center;gap:3px">'
+        +'<button onclick="adjustSourcePages('+s.id+',-1)" style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:3px;color:var(--text);cursor:pointer;width:18px;height:18px;font-size:11px;line-height:1;padding:0" '+(maxPages<=1?'disabled':'')+'>−</button>'
+        +'<span style="font-size:11px;font-weight:700;color:'+(maxPages>1?'var(--cyan)':'var(--muted)')+';min-width:14px;text-align:center">'+maxPages+'</span>'
+        +'<button onclick="adjustSourcePages('+s.id+',1)" style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:3px;color:var(--text);cursor:pointer;width:18px;height:18px;font-size:11px;line-height:1;padding:0" '+(maxPages>=30?'disabled':'')+'>+</button>'
+        +'</div>';
     return '<tr>'
-      + '<td style="font-weight:600;color:var(--white);white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis" title="'+escHtml(s.name||'')+'">'+escHtml(s.name||'')+'</td>'
-      + '<td><a href="'+escHtml(s.url||'')+'" target="_blank" style="color:var(--cyan);font-size:10px;font-family:\'IBM Plex Mono\',monospace;max-width:200px;overflow:hidden;text-overflow:ellipsis;display:block;white-space:nowrap">'+escHtml(s.url||'')+'</a></td>'
+      + '<td style="font-weight:600;color:var(--white);white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis" title="'+escHtml(s.name||'')+'">'+escHtml(s.name||'')+'</td>'
+      + '<td><a href="'+escHtml(s.url||'')+'" target="_blank" style="color:var(--cyan);font-size:10px;font-family:\'IBM Plex Mono\',monospace;max-width:180px;overflow:hidden;text-overflow:ellipsis;display:block;white-space:nowrap">'+escHtml(s.url||'')+'</a></td>'
       + '<td><span class="tag tag-juris">'+escHtml(s.jurisdiction||'')+'</span></td>'
       + '<td>'+typeTag+'</td>'
       + '<td>'+pagesCell+'</td>'
@@ -5961,80 +5964,230 @@ function renderSources(){
       + '<td style="font-family:\'IBM Plex Mono\',monospace">'+count+'</td>'
       + '<td><div style="display:flex;gap:4px;flex-wrap:wrap">'
       + '<button class="btn '+(active?'btn-red':'btn-green')+' btn-sm" onclick="toggleSourceApi('+s.id+')">'+(active?'Pause':'Activate')+'</button>'
-      + '<button class="btn btn-ghost btn-sm" onclick="checkSourceReachability('+s.id+',this)" title="Test if this URL is reachable" style="font-size:10px">&#x1F50D;</button>'
-      + (!isRss ? '<button class="btn btn-gold btn-sm" onclick="openBackfillModal('+s.id+',\''+escHtml(s.name||'').replace(/'/g,"\\'")+'\')" title="One-off deep historical crawl — fetch many pages back without permanently changing this source\'s Pages setting" style="font-size:10px">&#x1F4DA; Backfill</button>' : '')
-      + '<button class="btn btn-ghost btn-sm" onclick="deleteSourceApi('+s.id+',\''+escHtml(s.name||'').replace(/'/g,"\\'")+'\')" title="Delete this source permanently" style="font-size:10px;color:#f87171">&#x1F5D1;</button>'
+      + '<button class="btn btn-ghost btn-sm" onclick="checkSourceReachability('+s.id+',this)" title="Quick reachability check" style="font-size:10px">&#x1F50D;</button>'
+      + (!isRss ? '<button class="btn btn-gold btn-sm" onclick="openBackfillModal('+s.id+',\''+escHtml(s.name||'').replace(/'/g,'\\\'')+'\')" title="One-off deep crawl" style="font-size:10px">&#x1F4DA;</button>' : '')
+      + '<button class="btn btn-ghost btn-sm" onclick="deleteSourceApi('+s.id+',\''+escHtml(s.name||'').replace(/'/g,'\\\'')+'\')" style="font-size:10px;color:#f87171">&#x1F5D1;</button>'
       + '</div></td>'
       + '</tr>';
   }).join('');
 }
 function toggleSource(id){var s=sources.find(function(x){return x.id===id;});if(s)s.active=!s.active;renderSources();}
 
-/* ── Pages stepper (max_pages) ───────────────────────────────────────────── */
+/* ── Pages stepper ────────────────────────────────────────────────────────── */
 async function adjustSourcePages(id, delta){
-  var s = sources.find(function(x){ return x.id===id; });
+  var s = sources.find(function(x){return x.id===id;});
   if(!s) return;
-  var current = s.max_pages || 1;
-  var next = Math.max(1, Math.min(30, current + delta));
-  if(next === current) return;
-  // Optimistic update so the stepper feels instant
+  var next = Math.max(1, Math.min(30, (s.max_pages||1) + delta));
+  if(next === (s.max_pages||1)) return;
   s.max_pages = next;
   renderSources();
-  var resp = await apiFetch('/sources/'+id, {method:'PATCH', body:JSON.stringify({max_pages:next})});
-  if(!resp || resp.ok === false){
-    s.max_pages = current; // revert on failure
+  var r = await apiFetch('/sources/'+id, {method:'PATCH', body:JSON.stringify({max_pages:next})});
+  if(!r||r.ok===false){s.max_pages=(s.max_pages||1)-delta;renderSources();showToast('⚠','Could Not Update','Check backend connection.',3000);}
+}
+
+/* ── Fix All Source URLs ─────────────────────────────────────────────────── */
+async function fixAllSourceUrls(){
+  if(!API_BASE){showToast('⚠','No Backend','Connect Render backend first.',4000);return;}
+  showToast('🔧','Applying URL Fixes','Updating broken source URLs…',4000);
+  var d = await apiFetch('/sources/fix-all',{method:'POST'});
+  if(d&&d.ok){
+    var el=document.getElementById('fix-links-result');
+    if(el){
+      el.style.display='block';el.style.color='var(--green)';
+      el.style.background='rgba(16,185,129,.08)';el.style.border='1px solid rgba(16,185,129,.25)';
+      el.innerHTML=d.count>0
+        ?'✓ Fixed '+d.count+' source URL'+(d.count!==1?'s':'')+'. <button class="btn btn-primary btn-sm" onclick="scrapeNow()" style="margin-left:8px">Scrape Now</button>'
+        :'✓ All source URLs already up to date.';
+    }
+    var src=await apiFetch('/sources');
+    if(src&&src.sources)sources=src.sources;
     renderSources();
-    showToast('&#x26A0;','Could Not Update','Check your backend connection.',3000);
+    showToast('✅','URLs Fixed',d.count+' source'+(d.count!==1?'s':'')+' corrected.',4000);
+  } else {
+    showToast('⚠','Fix Failed','Could not reach backend.',4000);
+  }
+}
+
+/* ── Diagnose All Sources ─────────────────────────────────────────────────── */
+var _diagnoseOkVisible = false;
+var _lastDiagnoseReport = null;
+
+var REASON_LABELS = {
+  unreachable:       '🔴 Unreachable / Timed Out',
+  http_error:        '🔴 HTTP Error (404/403/500)',
+  js_rendered:       '🟠 JS-Rendered — use RSS feed',
+  rss_parse_error:   '🟠 Invalid RSS Feed',
+  no_selector_match: '🟡 No Matching Selector Pattern',
+  rss_empty:         '🟡 RSS Feed Empty',
+};
+var REASON_ORDER = ['unreachable','http_error','js_rendered','rss_parse_error','no_selector_match','rss_empty'];
+var REASON_COLORS = {
+  unreachable:'#f87171',http_error:'#f87171',
+  js_rendered:'#fb923c',rss_parse_error:'#fb923c',
+  no_selector_match:'#facc15',rss_empty:'#facc15',
+};
+
+async function diagnoseSources(){
+  if(!API_BASE){showToast('⚠','No Backend','Connect Render backend first.',4000);return;}
+  var panel=document.getElementById('source-diagnose-result');
+  var summary=document.getElementById('source-diagnose-summary');
+  var brokenDiv=document.getElementById('source-diagnose-broken');
+  var okDiv=document.getElementById('source-diagnose-ok');
+  var showOkBtn=document.getElementById('source-diagnose-show-ok');
+  var autoFixBtn=document.getElementById('diagnose-autofix-btn');
+  var pdfBtn=document.getElementById('diagnose-pdf-btn');
+  panel.style.display='block';
+  if(autoFixBtn)autoFixBtn.style.display='none';
+  if(pdfBtn)pdfBtn.disabled=true;
+  summary.innerHTML='<span style="display:inline-block;animation:spin 1s linear infinite;margin-right:6px">⟳</span> Running diagnostic — fetching all '+sources.length+' sources in parallel (up to 110s)…';
+  brokenDiv.innerHTML='';
+  if(okDiv)okDiv.innerHTML='';
+  _diagnoseOkVisible=false;
+  if(showOkBtn)showOkBtn.textContent='▼ Show working sources';
+
+  // 120s client-side abort
+  var ctrl=new AbortController();
+  var timer=setTimeout(function(){ctrl.abort();},120000);
+  var hdrs={'Content-Type':'application/json'};
+  if(_PP_API_KEY)hdrs['Authorization']='Bearer '+_PP_API_KEY;
+  var d=null;
+  try{
+    var resp=await fetch(API_BASE+'/sources/diagnose',{headers:hdrs,signal:ctrl.signal});
+    clearTimeout(timer);
+    if(resp.ok)d=await resp.json();
+  } catch(e){
+    clearTimeout(timer);
+    summary.innerHTML='<span style="color:var(--red)">⚠ '+(e.name==='AbortError'?'Timed out after 120s — backend overloaded. Try again.':escHtml(e.message))+'</span>';
+    if(pdfBtn)pdfBtn.disabled=false;
     return;
   }
-  if(next > 1 && current === 1){
-    showToast('&#x1F4D6;','Pagination Enabled', s.name+' will now fetch up to '+next+' pages per scrape, stopping early once it reaches articles already in your database.', 5000);
-  } else if(next === 1){
-    showToast('&#x2713;','Pagination Off', s.name+' will only fetch page 1 from now on.', 2500);
+  if(pdfBtn)pdfBtn.disabled=false;
+  if(!d){summary.innerHTML='<span style="color:var(--red)">⚠ Could not reach backend.</span>';return;}
+  _lastDiagnoseReport=d;
+
+  var all=d.results||[];
+  var brokenList=all.filter(function(r){return!r.healthy;});
+  var okList=all.filter(function(r){return r.healthy;});
+  var partialNote=d.partial?'&nbsp;<span style="color:#f59e0b;font-size:10px;font-weight:600">⚠ Partial result — some sources timed out. Run again.</span>':'';
+
+  summary.innerHTML='<strong style="color:var(--white)">'+d.checked+'</strong> checked'+partialNote
+    +'&nbsp;·&nbsp;<strong style="color:'+(brokenList.length?'#f87171':'var(--green)')+'">'+brokenList.length+' broken</strong>'
+    +'&nbsp;·&nbsp;<strong style="color:var(--green)">'+okList.length+' working</strong>';
+
+  // Show auto-fix button if there are fixable issues
+  var fixable=brokenList.filter(function(r){return r.reason==='http_error'||r.reason==='unreachable';});
+  if(fixable.length&&autoFixBtn){autoFixBtn.style.display='inline-block';}
+
+  if(!brokenList.length){
+    brokenDiv.innerHTML='<div style="font-size:12px;color:var(--green);padding:6px 0">✓ Every source is producing article links!</div>';
+  } else {
+    var html='';
+    REASON_ORDER.forEach(function(reason){
+      var grp=brokenList.filter(function(r){return r.reason===reason;});
+      if(!grp.length)return;
+      var col=REASON_COLORS[reason]||'#f87171';
+      html+='<div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:'+col+';margin:14px 0 6px">'+(REASON_LABELS[reason]||reason)+' — '+grp.length+'</div>';
+      html+=grp.map(function(r){
+        return '<div style="padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)">'
+          +'<div style="font-size:12px;font-weight:600;color:var(--white)">'+escHtml(r.name)
+          +'<span style="font-weight:400;color:var(--dim);font-size:10px;margin-left:6px">['+escHtml(r.jurisdiction||'')+']</span></div>'
+          +'<div style="font-size:10px;color:var(--muted);font-family:\'IBM Plex Mono\',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(r.url)+'</div>'
+          +'<div style="font-size:11px;color:'+col+';margin-top:2px;line-height:1.5">'+escHtml(r.detail||'')+'</div>'
+          +'</div>';
+      }).join('');
+    });
+    brokenDiv.innerHTML=html;
   }
+
+  if(okDiv){
+    okDiv.innerHTML='<div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--green);margin-bottom:8px">✓ Working</div>'
+      +okList.map(function(r){
+        return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.03)">'
+          +'<span style="font-size:11px;font-weight:700;color:var(--green);min-width:40px;text-align:center">'+escHtml(String(r.status))+'</span>'
+          +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:11px;font-weight:600;color:var(--text)">'+escHtml(r.name)+'</div>'
+          +(r.article_sample&&r.article_sample.length?'<div style="font-size:9px;color:var(--dim);font-style:italic">e.g. "'+escHtml(r.article_sample[0])+'"</div>':'')
+          +'</div></div>';
+      }).join('');
+  }
+  if(showOkBtn)showOkBtn.style.display=okList.length?'block':'none';
 }
 
-/* ── Backfill modal — one-off deep historical crawl for a single source ──── */
-var _backfillSourceId = null;
-
-function openBackfillModal(sourceId, sourceName){
-  _backfillSourceId = sourceId;
-  var existing = document.getElementById('backfill-modal');
-  if(existing) existing.remove();
-  var modal = document.createElement('div');
-  modal.id = 'backfill-modal';
-  modal.style.cssText = 'display:flex;position:fixed;inset:0;z-index:9300;background:rgba(0,0,0,.6);align-items:center;justify-content:center';
-  modal.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;width:100%;max-width:440px;margin:20px">'
-    + '<div style="font-weight:700;font-size:15px;color:var(--white);margin-bottom:6px">&#x1F4DA; Backfill: '+escHtml(sourceName)+'</div>'
-    + '<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:16px">One-off deep crawl to pull in older articles beyond what this source\'s regular Pages setting reaches. Runs once in the background — does not change the source\'s ongoing configuration.</div>'
-    + '<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Pages to fetch (1&ndash;30)</label>'
-    + '<input class="filter-input" id="backfill-pages-inp" type="number" min="1" max="30" value="10" style="width:100%;margin-bottom:16px">'
-    + '<div style="font-size:11px;color:var(--dim);margin-bottom:16px">&#x26A0; Larger values take longer and place more load on the source\'s server. Early-exit still applies &mdash; if a page returns only articles already in your database, the crawl stops automatically.</div>'
-    + '<div style="display:flex;gap:8px;justify-content:flex-end">'
-    + '<button class="btn btn-ghost" onclick="closeBackfillModal()">Cancel</button>'
-    + '<button class="btn btn-gold" onclick="submitBackfill()">Start Backfill</button>'
-    + '</div></div>';
-  document.body.appendChild(modal);
+function toggleDiagnoseOk(){
+  _diagnoseOkVisible=!_diagnoseOkVisible;
+  var okDiv=document.getElementById('source-diagnose-ok');
+  var btn=document.getElementById('source-diagnose-show-ok');
+  if(okDiv)okDiv.style.display=_diagnoseOkVisible?'block':'none';
+  if(btn)btn.textContent=_diagnoseOkVisible?'▲ Hide working sources':'▼ Show working sources';
 }
 
-function closeBackfillModal(){
-  var modal = document.getElementById('backfill-modal');
-  if(modal) modal.remove();
-  _backfillSourceId = null;
+/* ── Auto-Fix from Diagnostic ────────────────────────────────────────────── */
+async function autoFixFromDiagnostic(){
+  showToast('🔧','Auto-Fixing','Applying Fix All Source URLs based on diagnostic results…',4000);
+  await fixAllSourceUrls();
+  // Re-run diagnostic after fix
+  setTimeout(function(){diagnoseSources();},2000);
 }
 
+/* ── Download Diagnostic PDF ─────────────────────────────────────────────── */
+async function downloadDiagnosePdf(){
+  if(!API_BASE){showToast('⚠','No Backend','Connect Render backend first.',4000);return;}
+  var btn=document.getElementById('diagnose-pdf-btn');
+  if(btn){btn.disabled=true;btn.textContent='Generating…';}
+  showToast('📄','Generating PDF','Running diagnostic and building report (30–110s)…',8000);
+  var hdrs={'Content-Type':'application/json'};
+  if(_PP_API_KEY)hdrs['Authorization']='Bearer '+_PP_API_KEY;
+  var ctrl=new AbortController();
+  var timer=setTimeout(function(){ctrl.abort();},150000);
+  try{
+    var resp=await fetch(API_BASE+'/sources/diagnose/pdf',{headers:hdrs,signal:ctrl.signal});
+    clearTimeout(timer);
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    var blob=await resp.blob();
+    var url=URL.createObjectURL(blob);
+    var link=document.createElement('a');
+    link.href=url;link.download='PolicyPulse-Source-Diagnostic-'+new Date().toISOString().slice(0,10)+'.pdf';
+    link.click();
+    setTimeout(function(){URL.revokeObjectURL(url);},8000);
+    showToast('✅','PDF Downloaded','Source diagnostic report saved.',3000);
+  } catch(e){
+    clearTimeout(timer);
+    showToast('⚠','PDF Failed',e.name==='AbortError'?'Timed out — try again':e.message,5000);
+  }
+  if(btn){btn.disabled=false;btn.innerHTML='📄 Download PDF';}
+}
+
+/* ── Backfill Modal ───────────────────────────────────────────────────────── */
+var _backfillId=null;
+function openBackfillModal(id,name){
+  _backfillId=id;
+  var existing=document.getElementById('backfill-modal');
+  if(existing)existing.remove();
+  var m=document.createElement('div');
+  m.id='backfill-modal';
+  m.style.cssText='display:flex;position:fixed;inset:0;z-index:9300;background:rgba(0,0,0,.6);align-items:center;justify-content:center';
+  m.innerHTML='<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;width:100%;max-width:420px;margin:20px">'
+    +'<div style="font-weight:700;font-size:15px;color:var(--white);margin-bottom:6px">📚 Backfill: '+escHtml(name)+'</div>'
+    +'<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:16px">One-off deep crawl to pull in older articles. Does not change the source\'s ongoing Pages setting.</div>'
+    +'<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Pages to fetch (1–30)</label>'
+    +'<input class="filter-input" id="backfill-pages-inp" type="number" min="1" max="30" value="10" style="width:100%;margin-bottom:16px">'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end">'
+    +'<button class="btn btn-ghost" onclick="document.getElementById(\'backfill-modal\').remove()">Cancel</button>'
+    +'<button class="btn btn-gold" onclick="submitBackfill()">Start Backfill</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+}
 async function submitBackfill(){
-  if(!_backfillSourceId) return;
-  var pagesInp = document.getElementById('backfill-pages-inp');
-  var pages = parseInt(pagesInp ? pagesInp.value : 10) || 10;
-  pages = Math.max(1, Math.min(30, pages));
-  closeBackfillModal();
-  showToast('&#x1F4DA;','Backfill Started','Fetching up to '+pages+' pages in the background. This may take a few minutes &mdash; check Scrape Log when done.',6000);
-  var resp = await apiFetch('/sources/'+_backfillSourceId+'/backfill', {method:'POST', body:JSON.stringify({pages:pages})});
-  if(!resp || resp.ok === false){
-    showToast('&#x26A0;','Backfill Failed',(resp&&resp.detail)||'Could not start backfill. Check your backend connection.',5000);
-  }
+  if(!_backfillId)return;
+  var pages=Math.max(1,Math.min(30,parseInt(document.getElementById('backfill-pages-inp').value)||10));
+  document.getElementById('backfill-modal').remove();
+  showToast('📚','Backfill Started','Fetching up to '+pages+' pages in the background. Check Scrape Log when done.',6000);
+  var r=await apiFetch('/sources/'+_backfillId+'/backfill',{method:'POST',body:JSON.stringify({pages:pages})});
+  if(!r||r.ok===false)showToast('⚠','Backfill Failed',(r&&r.detail)||'Could not start backfill.',5000);
+  _backfillId=null;
 }
+
+
 
 async function toggleSourceApi(id){
   var resp = await apiFetch('/sources/'+id+'/toggle', {method:'PATCH'});
@@ -6879,7 +7032,7 @@ async function fixLinks(){
 
   if(!API_BASE){
     resultEl.style.color = '#fb7185';
-    resultEl.innerHTML   = '&#x26A0; Connect your Render backend to enable real link checking.';
+    resultEl.innerHTML   = '⚠ Connect your Render backend to enable real link checking.';
     setTimeout(function(){ resultEl.style.display='none'; }, 6000);
     return;
   }
@@ -6889,8 +7042,6 @@ async function fixLinks(){
   for(var i = 0; i < sources.length; i++){
     var s = sources[i];
     try {
-      // Use the per-source check endpoint (GET-based, not HEAD — HEAD is rejected
-      // by many government and health authority servers even when the page is fine)
       var resp = await apiFetch('/sources/' + s.id + '/check');
       if(resp && resp.reachable){
         ok.push(s.name);
@@ -6905,9 +7056,8 @@ async function fixLinks(){
 
   if(broken.length === 0 && errors.length === 0){
     resultEl.style.color = 'var(--green)';
-    resultEl.innerHTML   = '&#x2713; All ' + ok.length + ' source links are reachable. '
-      + '<span style="color:var(--dim);font-size:10px">Note: this checks reachability only — use <strong>Diagnose All</strong> to find sources returning 0 articles.</span>';
-    showToast('&#x2705;','Links OK','All ' + ok.length + ' sources responded successfully.',4000);
+    resultEl.innerHTML   = '✓ All ' + ok.length + ' source links are reachable.';
+    showToast('✅','Links OK','All ' + ok.length + ' sources responded successfully.',4000);
   } else {
     var brokenList = broken.map(function(b){
       return '<span style="color:#f87171">'+escHtml(b.name)+'</span>'
@@ -6915,18 +7065,18 @@ async function fixLinks(){
     }).join(', ');
 
     resultEl.style.color = 'var(--text)';
-    resultEl.innerHTML   = '<strong style="color:#fb7185">&#x26A0; '+broken.length+' unreachable:</strong> '
+    resultEl.innerHTML   = '<strong style="color:#fb7185">⚠ '+broken.length+' unreachable:</strong> '
       + brokenList
       + '<br><span style="font-size:10px;color:var(--dim);margin-top:6px;display:block">'
-      + 'This button checks reachability only — it does <strong>not</strong> fix URLs. '
-      + 'To fix broken URLs click <strong>Fix All Source URLs</strong>. '
-      + 'To understand why a source returns 0 articles even when reachable, click <strong>Diagnose All</strong>.'
+      + '403 errors from government sites are usually server-side IP restrictions on Render\'s range, not broken URLs. '
+      + 'Connection errors mean the URL itself is wrong. '
+      + 'Sources that consistently return 0 articles after scraping can safely be paused or deleted.'
       + '</span>'
       + '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'
       + '<button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="pauseAllBroken(['+broken.map(function(b){return b.id;}).join(',')+'])">Pause all unreachable</button>'
       + '<button class="btn btn-ghost btn-sm" style="font-size:10px;color:var(--dim)" onclick="document.getElementById(\'fix-links-result\').style.display=\'none\'">Dismiss</button>'
       + '</div>';
-    showToast('&#x26A0;','Broken Links Found',broken.length+' source(s) could not be reached.',5000);
+    showToast('⚠️','Broken Links Found',broken.length+' source(s) could not be reached.',5000);
   }
 }
 
@@ -6942,222 +7092,6 @@ async function pauseAllBroken(ids){
   renderSources();
   document.getElementById('fix-links-result').style.display='none';
   showToast('⏸','Paused '+paused+' sources','They will be skipped on the next scrape. Re-activate any you want to keep.',4000);
-}
-
-/* ── Fix All Known Source URLs ───────────────────────────────────────────── */
-async function fixAllSourceUrls(){
-  if(!API_BASE){
-    showToast('&#x26A0;','No Backend','Connect your Render backend first.',4000);
-    return;
-  }
-  var btn = event && event.target ? event.target : null;
-  if(btn){ btn.disabled=true; btn.textContent='Fixing…'; }
-  showToast('&#x1F527;','Applying URL Fixes','Updating all source URLs based on latest diagnostic report — SSL fixes, 404 corrections, Google News RSS workarounds…',5000);
-
-  var d = await apiFetch('/sources/fix-all', {method:'POST'});
-  if(btn){ btn.disabled=false; btn.innerHTML='&#x1F527; Fix All Source URLs'; }
-
-  if(d && d.ok){
-    var fixedEl = document.getElementById('fix-links-result');
-    if(fixedEl){
-      fixedEl.style.display = 'block';
-      fixedEl.style.background = 'rgba(16,185,129,0.08)';
-      fixedEl.style.border = '1px solid rgba(16,185,129,0.25)';
-      fixedEl.style.color = 'var(--green)';
-      fixedEl.innerHTML = d.count > 0
-        ? '&#x2713; Fixed '+d.count+' source URL'+(d.count!==1?'s':'')+': '
-          + d.fixed.map(function(n){ return '<strong>'+escHtml(n)+'</strong>'; }).join(', ')
-          + ' &mdash; <button class="btn btn-primary btn-sm" onclick="scrapeNow()" style="margin-left:8px">Scrape Now to test</button>'
-        : '&#x2713; All source URLs are already up to date.';
-    }
-    var src = await apiFetch('/sources');
-    if(src && src.sources) sources = src.sources;
-    renderSources();
-    if(d.count > 0){
-      showToast('&#x2705;','Source URLs Fixed',d.count+' source'+(d.count!==1?'s':'')+' corrected. Click Scrape Now to fetch articles.',5000);
-    } else {
-      showToast('&#x2713;','Already Up To Date','All source URLs are correct.',3000);
-    }
-  } else {
-    showToast('&#x26A0;','Fix Failed','Could not reach backend. Check your Render connection.',4000);
-  }
-}
-
-/* ── Diagnose All Sources ────────────────────────────────────────────────── */
-var _diagnoseOkVisible = false;
-var _lastDiagnoseReport = null;
-
-var REASON_LABELS = {
-  unreachable:       '&#x1F534; Unreachable',
-  http_error:        '&#x1F534; HTTP Error',
-  js_rendered:       '&#x1F7E0; JavaScript-Rendered (no static content)',
-  rss_parse_error:   '&#x1F7E0; Invalid RSS/Atom Feed',
-  no_selector_match: '&#x1F7E1; No Matching Selector Pattern',
-  rss_empty:         '&#x1F7E1; RSS Feed Empty',
-  filtered_out:      '&#x1F7E1; All Links Filtered Out',
-};
-var REASON_COLORS = {
-  unreachable:       '#f87171',
-  http_error:        '#f87171',
-  js_rendered:        '#fb923c',
-  rss_parse_error:    '#fb923c',
-  no_selector_match:  '#facc15',
-  rss_empty:          '#facc15',
-  filtered_out:       '#facc15',
-};
-var REASON_ORDER = ['unreachable','http_error','js_rendered','rss_parse_error','no_selector_match','rss_empty','filtered_out'];
-
-async function diagnoseSources(){
-  if(!API_BASE){
-    showToast('&#x26A0;','No Backend','Connect your Render backend first.',4000);
-    return;
-  }
-  var panel   = document.getElementById('source-diagnose-result');
-  var summary = document.getElementById('source-diagnose-summary');
-  var broken  = document.getElementById('source-diagnose-broken');
-  var okDiv   = document.getElementById('source-diagnose-ok');
-  var showOkBtn = document.getElementById('source-diagnose-show-ok');
-  var pdfBtn = document.getElementById('diagnose-pdf-btn');
-
-  panel.style.display = 'block';
-  if(pdfBtn) pdfBtn.disabled = true;
-  summary.innerHTML = '<span class="spin" style="display:inline-block;margin-right:6px">&#8635;</span> Running full diagnostic — fetching and parsing every active source, this can take 20–60 seconds…';
-  broken.innerHTML = '';
-  if(okDiv) okDiv.innerHTML = '';
-  _diagnoseOkVisible = false;
-  if(showOkBtn) showOkBtn.textContent = '&#x25BC; Show working sources';
-
-  // Use a dedicated fetch with a 120s timeout — NOT apiFetch() which caps
-  // GET requests at 15s. The diagnostic actually fetches and parses every
-  // source (up to 26 × 15s each via the backend thread pool), so the client
-  // must wait long enough. 120s is comfortable for Render's free tier.
-  var diagnoseController = new AbortController();
-  var diagnoseTimer = setTimeout(function(){ diagnoseController.abort(); }, 120000);
-  var fetchHeaders = {'Content-Type':'application/json'};
-  if(_PP_API_KEY) fetchHeaders['Authorization'] = 'Bearer ' + _PP_API_KEY;
-  var d = null;
-  try {
-    var resp = await fetch(API_BASE + '/sources/diagnose', {headers: fetchHeaders, signal: diagnoseController.signal});
-    clearTimeout(diagnoseTimer);
-    if(resp.ok) d = await resp.json();
-  } catch(e) {
-    clearTimeout(diagnoseTimer);
-    if(e.name === 'AbortError'){
-      summary.innerHTML = '<span style="color:var(--red)">&#x26A0; Diagnostic timed out after 120s. Your backend may be overloaded — try again or reduce the number of active sources.</span>';
-    } else {
-      summary.innerHTML = '<span style="color:var(--red)">&#x26A0; Could not reach backend: ' + escHtml(e.message) + '</span>';
-    }
-    if(pdfBtn) pdfBtn.disabled = false;
-    return;
-  }
-  if(pdfBtn) pdfBtn.disabled = false;
-  if(!d){
-    summary.innerHTML = '<span style="color:var(--red)">&#x26A0; Could not reach backend.</span>';
-    return;
-  }
-  _lastDiagnoseReport = d;
-
-  var all = d.results || [];
-  var brokenList = all.filter(function(r){ return !r.healthy; });
-  var okList     = all.filter(function(r){ return r.healthy; });
-
-  var partialNote = d.partial
-    ? ' &nbsp;<span style="font-size:10px;color:#f59e0b;font-weight:600">⚠ Partial — some sources timed out. Run again to complete.</span>'
-    : '';
-
-  summary.innerHTML = '<strong style="color:var(--white)">'+d.checked+'</strong> sources checked'+partialNote+' &nbsp;&bull;&nbsp; '
-    +'<strong style="color:'+(brokenList.length?'#f87171':'var(--green)')+'">'+brokenList.length+' broken</strong> &nbsp;&bull;&nbsp; '
-    +'<strong style="color:var(--green)">'+okList.length+' working</strong>';
-
-  if(!brokenList.length){
-    broken.innerHTML = '<div style="font-size:12px;color:var(--green);padding:6px 0">&#x2713; Every source is producing usable articles!</div>';
-  } else {
-    var html = '';
-    REASON_ORDER.forEach(function(reason){
-      var group = brokenList.filter(function(r){ return r.reason === reason; });
-      if(!group.length) return;
-      var col = REASON_COLORS[reason] || '#f87171';
-      html += '<div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:'+col+';margin:14px 0 8px">'
-        + (REASON_LABELS[reason]||reason) + ' &mdash; ' + group.length + '</div>';
-      html += group.map(function(r){
-        return '<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)">'
-          +'<div style="flex:1;min-width:0">'
-          +'<div style="font-size:12px;font-weight:600;color:var(--white)">'+escHtml(r.name)+' <span style="font-weight:400;color:var(--dim);font-size:10px">['+escHtml(r.jurisdiction||'')+']</span></div>'
-          +'<div style="font-size:10px;color:var(--muted);font-family:\'IBM Plex Mono\',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(r.url)+'</div>'
-          +'<div style="font-size:11px;color:'+col+';margin-top:3px;line-height:1.5">'+escHtml(r.detail||'')+'</div>'
-          +'</div>'
-          +'<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(244,63,94,.12);color:#f87171;white-space:nowrap;flex-shrink:0">'+escHtml(String(r.status))+'</span>'
-          +'</div>';
-      }).join('');
-    });
-    broken.innerHTML = html;
-  }
-
-  okDiv.innerHTML = '<div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--green);margin-bottom:8px">&#x2713; Working</div>'
-    + okList.map(function(r){
-        var sampleHtml = (r.article_sample && r.article_sample.length)
-          ? '<div style="font-size:9px;color:var(--dim);font-style:italic;margin-top:2px">e.g. "'+escHtml(r.article_sample[0])+'"</div>'
-          : '';
-        return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.03)">'
-          +'<span style="font-size:11px;font-weight:700;color:var(--green);min-width:36px;text-align:center">'+r.status+'</span>'
-          +'<div style="flex:1;min-width:0">'
-          +'<div style="font-size:11px;font-weight:600;color:var(--text)">'+escHtml(r.name)+'</div>'
-          +'<div style="font-size:9px;color:var(--dim);font-family:\'IBM Plex Mono\',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(r.url)+'</div>'
-          +sampleHtml
-          +'</div>'
-          +'</div>';
-      }).join('');
-
-  if(showOkBtn) showOkBtn.style.display = okList.length ? 'block' : 'none';
-  if(typeof gtag!=='undefined') gtag('event','source_diagnose',{event_category:'Sources',event_label:brokenList.length+' broken'});
-}
-
-function toggleDiagnoseOk(){
-  _diagnoseOkVisible = !_diagnoseOkVisible;
-  var okDiv = document.getElementById('source-diagnose-ok');
-  var btn   = document.getElementById('source-diagnose-show-ok');
-  if(okDiv) okDiv.style.display = _diagnoseOkVisible ? 'block' : 'none';
-  if(btn) btn.textContent = _diagnoseOkVisible ? '&#x25B2; Hide working sources' : '&#x25BC; Show working sources';
-}
-
-/* ── Download diagnostic report as PDF ───────────────────────────────────── */
-async function downloadDiagnosePdf(){
-  if(!API_BASE){
-    showToast('&#x26A0;','No Backend','Connect your Render backend first.',4000);
-    return;
-  }
-  var btn = document.getElementById('diagnose-pdf-btn');
-  if(btn){ btn.disabled = true; btn.textContent = 'Generating PDF…'; }
-  showToast('&#x1F4C4;','Generating PDF','Running full diagnostic and building report — this takes 30–90 seconds…',8000);
-
-  var headers = {'Content-Type':'application/json'};
-  if(_PP_API_KEY) headers['Authorization'] = 'Bearer ' + _PP_API_KEY;
-
-  // 150s timeout — PDF endpoint runs the full diagnostic pass THEN renders
-  // the PDF, so it takes longer than the JSON endpoint alone.
-  var controller = new AbortController();
-  var timer = setTimeout(function(){ controller.abort(); }, 150000);
-
-  try {
-    var resp = await fetch(API_BASE + '/sources/diagnose/pdf', {headers: headers, signal: controller.signal});
-    clearTimeout(timer);
-    if(!resp.ok) throw new Error('HTTP ' + resp.status + ' — ' + (await resp.text()).slice(0,120));
-    var blob = await resp.blob();
-    var url  = URL.createObjectURL(blob);
-    var link = document.createElement('a');
-    link.href = url;
-    link.download = 'PolicyPulse-Source-Diagnostic-' + new Date().toISOString().slice(0,10) + '.pdf';
-    link.click();
-    setTimeout(function(){ URL.revokeObjectURL(url); }, 8000);
-    showToast('&#x2705;','PDF Downloaded','Source diagnostic report saved.',3000);
-  } catch(e) {
-    clearTimeout(timer);
-    var msg = e.name === 'AbortError'
-      ? 'PDF generation timed out (150s). Try running Diagnose All first, then download.'
-      : e.message;
-    showToast('&#x26A0;','PDF Failed', msg, 5000);
-  }
-  if(btn){ btn.disabled = false; btn.innerHTML = '&#x1F4C4; Download PDF Report'; }
 }
 
 /* TRAY */

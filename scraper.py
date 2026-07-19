@@ -1,9 +1,6 @@
 """
-PolicyPulse Scraper v5
+PolicyPulse Scraper v4
 - Sources driven by DB table (scrape_type column decides RSS vs HTML)
-- Multi-page pagination support per source (max_pages + pagination_style
-  columns), with early-exit once a page yields only already-known articles.
-  See scrape_generic_paginated() for the full design rationale.
 - Fuzzy title deduplication via rapidfuzz before any AI calls are made
 - User-Agent rotation + exponential backoff retry on page fetches
 - Batch AI processing: articles > 3 use asyncio.gather for concurrent calls
@@ -28,7 +25,7 @@ from rapidfuzz import fuzz
 from database import (
     save_article, get_sources, log_scrape,
     update_source_scraped, get_watchlist_keywords, 
-    get_exclusion_keywords, get_known_url_hashes,
+    get_exclusion_keywords,
 )
 from ai_processor import analyze_article, analyze_articles_batch, quick_relevance_score
 
@@ -42,8 +39,7 @@ ARTICLE_FETCH_TIMEOUT = 12
 DELAY_BETWEEN_SOURCES = 1.5
 DELAY_BETWEEN_ARTICLES = 0.4
 FUZZY_DEDUP_THRESHOLD  = 88   # token_set_ratio >= this → duplicate
-QUICK_FILTER_THRESHOLD = 0    # score must be > 0 to proceed; trusted sources get a
-                              # boost that guarantees they always clear this bar
+QUICK_FILTER_THRESHOLD = 1    # quick_relevance_score must be > 0 to proceed to AI
                               # (score 0 = a noise keyword hit with zero policy hits)
 
 # ── USER-AGENT ROTATION ───────────────────────────────────────────────────────
@@ -97,14 +93,15 @@ def is_duplicate_title(new_title: str, seen: set) -> bool:
 # ── ARTICLE BODY + PUBLISH DATE EXTRACTION ───────────────────────────────────
 
 def fetch_article_details(url: str) -> tuple[str, str | None]:
-    """
-    Fetch article page and extract body text + publish date.
-    Single attempt — no retry sleeps. Called in parallel for 20 articles;
-    retry sleeps were causing 60+ second delays that exceeded Render's timeout.
-    Returns (article_text, pub_date). article_text is empty string if the
-    page is unreachable OR if it appears to be a stub/nav-only page (< 300
-    chars of real content after boilerplate removal) so the snippet fallback
-    in _process_and_save can kick in.
+    """Fetch article body + publish date. Single attempt, no retry sleeps.
+
+    Retry sleeps (1s, 2s) were removed because they caused 60+ second delays
+    when fetching 20 articles in parallel — killing background tasks on Render.
+
+    Returns ("", None) when:
+    - Request fails / times out
+    - Page body is < 300 chars after extraction (stub/nav-only page)
+      so _process_and_save can use the listing-page snippet instead.
     """
     headers = {**HEADERS, "User-Agent": USER_AGENTS[0]}
     try:
@@ -155,9 +152,8 @@ def fetch_article_details(url: str) -> tuple[str, str | None]:
 
         article_text = re.sub(r"\s{2,}", " ", article_text).strip()
 
-        # If after all extraction we still have < 300 chars, this is a stub
-        # page (nav boilerplate, "View full article" page, etc). Return empty
-        # so _process_and_save uses the listing-page snippet instead.
+        # Stub detection: < 300 chars means nav boilerplate or "View full article"
+        # page — return empty so the listing-page snippet is used instead.
         if len(article_text) < 300:
             return "", pub_date
 
@@ -166,6 +162,8 @@ def fetch_article_details(url: str) -> tuple[str, str | None]:
     except Exception as e:
         log.debug(f"fetch_article_details [{url[:60]}]: {e}")
         return "", None
+
+
 
 
 # ── PARALLEL ARTICLE BODY FETCH ───────────────────────────────────────────────
@@ -351,66 +349,30 @@ def _parse_date(raw: str) -> str | None:
 # ── RSS SCRAPING — no retry needed, feeds are stable ─────────────────────────
 
 def scrape_rss(url, source_name, extra_tag=None):
-    """Scrape an RSS 2.0 or Atom 1.0 feed.
-
-    Handles both formats:
-    - RSS 2.0:  <item><title>, <link>url</link>, <pubDate>
-    - Atom 1.0: <entry><title>, <link href="url"/>, <published>/<updated>
-
-    The canada.ca Atom feeds (.atom URLs) use Atom 1.0 format where <link>
-    is a self-closing tag with an href attribute — NOT text content.
-    BeautifulSoup's xml parser returns the href correctly via .get("href"),
-    but .get_text() returns "" on a self-closing tag, so we must try href first.
-    """
     articles = []
     try:
         resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
-        soup  = BeautifulSoup(resp.content, "xml")
-        # RSS 2.0 uses <item>, Atom 1.0 uses <entry>
+        soup = BeautifulSoup(resp.content, "xml")
         items = soup.find_all("item") or soup.find_all("entry")
-        for item in items[:25]:
+        for item in items[:20]:
             title_el = item.find("title")
+            link_el  = item.find("link")
+            pub_el   = (item.find("pubDate") or item.find("published") or item.find("updated"))
             if not title_el:
                 continue
-            title = title_el.get_text(strip=True)
-            if not title or len(title) < 5:
-                continue
-
-            # Link extraction — handles three variants:
-            # 1. RSS <link>https://...</link>  → get_text()
-            # 2. Atom <link href="https://..."/> → .get("href")
-            # 3. Atom <link rel="alternate" href="..."/> — find the alternate link
-            link = ""
-            link_el = item.find("link", rel="alternate") or item.find("link")
-            if link_el:
-                # Try href attribute first (Atom), then text content (RSS)
-                link = link_el.get("href", "") or link_el.get_text(strip=True)
-            if not link:
-                # Some Atom feeds use <id> as the canonical URL
-                id_el = item.find("id")
-                if id_el:
-                    candidate = id_el.get_text(strip=True)
-                    if candidate.startswith("http"):
-                        link = candidate
-
-            if not link:
-                continue
-
-            # Date extraction — RSS uses pubDate, Atom uses published or updated
+            title    = title_el.get_text(strip=True)
+            link     = (link_el.get_text(strip=True) or link_el.get("href", "")) if link_el else ""
             pub_date = datetime.utcnow().date().isoformat()
-            pub_el   = (item.find("pubDate") or item.find("published")
-                        or item.find("updated") or item.find("dc:date"))
             if pub_el:
                 parsed = _parse_date(pub_el.get_text(strip=True))
                 if parsed:
                     pub_date = parsed
-
-            art = {"title": title, "url": link, "pub_date": pub_date}
-            if extra_tag:
-                art["forced_tag"] = extra_tag
-            articles.append(art)
-
+            if title and link and len(title) > 10:
+                art = {"title": title, "url": link, "pub_date": pub_date}
+                if extra_tag:
+                    art["forced_tag"] = extra_tag
+                articles.append(art)
     except Exception as e:
         log.warning(f"RSS error [{source_name}]: {e}")
     return articles
@@ -419,96 +381,64 @@ def scrape_rss(url, source_name, extra_tag=None):
 # ── HTML SCRAPING — retry + UA rotation on initial page fetch ─────────────────
 
 def _extract_articles_from_soup(soup, url, source_name, base_url=None):
-    """Pull candidate article links out of a single listing page's soup.
+    """Extract candidate article links from a listing page soup.
 
-    Returns list of dicts with keys: title, url, pub_date, snippet.
-    `snippet` is the description text found near the title on the listing
-    page — used as fallback article_text for aggregator sites (like BCCSU)
-    where the individual article page is a thin stub that links to an
-    external publication, giving the AI nothing to analyze.
+    Returns list of dicts: {title, url, pub_date, snippet}
+    snippet = description text near the title on the listing page,
+    used as fallback when the article body page is a thin stub.
     """
-    articles = []
+    from urllib.parse import urlparse as _up
 
     selectors = [
-        # ── Semantic / article-wrapped (most reliable, try first) ────────
+        # Semantic article wrappers
         "article h2 a", "article h3 a", "article h4 a",
-        # ── Named CSS patterns common in news/gov CMS ────────────────────
-        ".news-item a", ".news-item h3 a", ".news-item h4 a",
-        ".news-title a", ".news-heading a", ".news-list li a",
+        # WordPress classic
         ".entry-title a", ".post-title a",
-        # ── WordPress Gutenberg block editor (BCCSU, many NGO sites) ─────
-        ".wp-block-post-title a",
-        ".wp-block-post-title",
-        ".wp-block-query .wp-block-post-title a",
-        ".wp-block-query li a",
-        ".wp-block-query h2 a", ".wp-block-query h3 a",
+        # WordPress Gutenberg (BCCSU, many NGOs)
+        ".wp-block-post-title a", ".wp-block-post-title",
         "ul.wp-block-post-template li h2 a",
         "ul.wp-block-post-template li h3 a",
-        ".wp-block-post-template .wp-block-post-title a",
-        # Classic WordPress
-        ".post-title a", ".entry-title a",
-        # ── Drupal Views (BC Gov Newsroom, ministry pages) ────────────────
-        ".views-row a", ".views-row h3 a", ".views-row h4 a",
+        ".wp-block-query h2 a", ".wp-block-query h3 a",
+        # Drupal Views (BC Gov Newsroom, ministry pages)
+        ".views-row h3 a", ".views-row h4 a", ".views-row a",
         ".view-content h3 a", ".view-content h4 a",
-        ".field-content a", ".field-items a",
-        ".view-content .views-field-title a",
-        # ── Canada.ca / GCWeb ─────────────────────────────────────────────
+        ".views-field-title a",
+        # Canada.ca / GCWeb
         ".feeds-cont li a", ".feeds-cont a",
-        "main ul li > a",
-        ".mwsbodytext ul li a",
-        "h3.gc-thickline a",
-        ".gc-card h3 a", ".gc-card h2 a",
-        ".card-title a",
-        # ── CIHI / health research ────────────────────────────────────────
-        ".news-listing a", ".news-listing h3 a", ".news-listing h2 a",
-        ".results-list h3 a", ".results-list h2 a",
-        ".news-list-item a", ".news-list-item h3 a",
-        ".result-item a", ".result-item h3 a",
-        # ── BC Gov newsroom / ministry sub-pages ─────────────────────────
-        ".article-list a", ".article-list h3 a",
-        ".news-releases a", ".news-releases h3 a",
-        # ── Government research councils ──────────────────────────────────
-        "table td.views-field a", "table.table td a",
-        # ── FNHA / health authority custom layouts ────────────────────────
-        ".news-listing-item a", ".news-listing-item h3 a", ".news-listing-item h4 a",
-        ".news-tile a", ".news-tile h3 a",
-        # ── Canadian Pharmacists / NGO news modules ───────────────────────
-        ".article-listing a", ".article-listing h3 a",
-        ".news-module a", ".news-module h3 a", ".news-module h4 a",
-        # ── Mental Health Commission / card grids ─────────────────────────
-        ".news-card a", ".news-card h3 a", ".news-card h4 a",
-        ".card-grid a", ".card-grid h3 a",
-        ".resource-listing a", ".resource-listing h3 a",
-        # ── BC Legislature — bills listing ────────────────────────────────
-        ".bill-listing a", ".legislation-list a",
-        "table.bills td a",
-        # ── Media release / press release patterns ────────────────────────
-        ".media-release a", ".media-release h3 a",
-        ".news-release a", ".news-release h3 a",
-        ".press-release a", ".press-release h3 a",
-        # ── Labour org patterns (WordPress archive pages) ─────────────────
-        ".post-entry a", ".post-entry h2 a",
-        ".archive-post a", ".archive-post h2 a",
-        ".entry a", ".entry h2 a",
-        # ── Generic list patterns ─────────────────────────────────────────
-        "ul.post-list li a", "ul.article-list li a",
-        ".post-list h2 a", ".post-list h3 a",
-        ".archive-list h2 a", ".archive-list h3 a",
-        # ── Broad heading fallbacks (last resort) ─────────────────────────
-        # ── Sitefinity CMS (pharmacists.ca and other .NET health orgs) ───
+        "main ul li > a", ".mwsbodytext ul li a",
+        "h3.gc-thickline a", ".gc-card h3 a", ".gc-card h2 a",
+        # BC Gov newsroom / ministry
+        ".article-list h3 a", ".news-releases h3 a",
+        ".media-release h3 a", ".media-release a",
+        ".press-release h3 a", ".press-release a",
+        # CIHI / health research
+        ".news-listing h3 a", ".news-listing h2 a", ".news-listing a",
+        ".results-list h3 a", ".news-list-item h3 a", ".news-list-item a",
+        # Named news patterns
+        ".news-item h3 a", ".news-item h4 a", ".news-item a",
+        ".news-title a", ".news-heading a", ".news-list li a",
+        # Card grids (CUPE BC, health authorities)
+        ".news-card h2 a", ".news-card h3 a", ".news-card a",
+        ".card h2 a", ".card h3 a",
+        ".news-tile h3 a", ".news-tile a",
+        ".news-listing-item h3 a", ".news-listing-item a",
+        # Labour orgs (WordPress archive pages)
+        ".post-entry h2 a", ".archive-post h2 a",
+        # Sitefinity CMS (pharmacists.ca and other .NET health orgs)
         ".sfnewsItem h3 a", ".sfnewsItem h2 a", ".sfnewsItem a",
         ".sfContentBlock h3 a", ".sfContentBlock h2 a",
         ".sflist li a", ".sflist h3 a",
-        ".news-list-item a", ".news-list-item h3 a",
-        "[class*='newsItem'] a", "[class*='news-item'] a",
         "[class*='newsItem'] h3 a", "[class*='newsItem'] h2 a",
-        # ── Generic fallback — any linked heading anywhere on the page ────
-        # Only fires when nothing above matched; catches non-standard CMS
+        # Government research tables
+        "table td.views-field a", "table.table td a",
+        # BC Legislature bills
+        ".bill-listing a", ".legislation-list a",
+        # Broad fallbacks — main content area
         "main h2 a", "main h3 a", "main h4 a",
         "#main h2 a", "#main h3 a",
         "#content h2 a", "#content h3 a",
         ".main-content h2 a", ".main-content h3 a",
-        # ── Absolute last resort — any heading with a link ────────────────
+        # Absolute last resort
         "h2 a", "h3 a", "h4 a",
     ]
 
@@ -519,19 +449,19 @@ def _extract_articles_from_soup(soup, url, source_name, base_url=None):
         "français", "english", "skip to", "return to", "print", "email this",
         "donate", "donate now", "register", "sign up", "terms of use",
         "privacy policy", "accessibility", "sitemap", "careers",
+        "news releases", "blog", "publications",
     }
 
     _BLOCKED_DOMAINS = {
         "twitter.com", "x.com", "facebook.com", "instagram.com",
         "linkedin.com", "youtube.com", "tiktok.com", "pinterest.com",
-        "t.co", "bit.ly", "ow.ly", "buff.ly",
-        "addthis.com", "sharethis.com", "feedburner.com",
+        "t.co", "bit.ly", "addthis.com", "sharethis.com",
         "googletagmanager.com", "google-analytics.com",
     }
 
-    from urllib.parse import urlparse as _urlparse
-
+    articles = []
     seen = set()
+
     for sel in selectors:
         for el in soup.select(sel)[:30]:
             title = el.get_text(strip=True)
@@ -541,274 +471,82 @@ def _extract_articles_from_soup(soup, url, source_name, base_url=None):
                 continue
             if href in seen:
                 continue
-
-            title_lower = title.lower()
-            if any(noise in title_lower for noise in _NAV_NOISE):
+            if any(noise in title.lower() for noise in _NAV_NOISE):
                 continue
 
             if href and not href.startswith("http"):
                 href = urljoin(base_url or url, href)
-
             if not href or href.startswith(("#", "javascript:", "mailto:")):
                 continue
 
-            _href_domain = _urlparse(href).netloc.lower()
-            if any(blocked in _href_domain for blocked in _BLOCKED_DOMAINS):
+            domain = _up(href).netloc.lower()
+            if any(b in domain for b in _BLOCKED_DOMAINS):
                 continue
 
-            # Extract a description snippet from the listing page context.
-            # Walk up to the nearest container (article, li, div) and look
-            # for a paragraph or description element nearby.
+            # Extract snippet from listing page context
             snippet = ""
             container = el.parent
-            for _ in range(4):  # walk up max 4 levels
+            for _ in range(5):
                 if container is None:
                     break
-                tag = getattr(container, 'name', None)
-                if tag in ('article', 'li', 'div', 'section'):
-                    # Try common description selectors within this container
-                    for desc_sel in ('p', '.excerpt', '.summary', '.description',
-                                     '.entry-summary', '.post-excerpt',
-                                     '.wp-block-post-excerpt__excerpt'):
-                        desc_el = container.find(desc_sel)
-                        if desc_el:
-                            text = desc_el.get_text(strip=True)
-                            if len(text) > 30:
-                                snippet = text[:500]
+                tag = getattr(container, "name", None)
+                if tag in ("li", "div", "article", "section"):
+                    for ds in ["p", ".excerpt", ".summary", ".description",
+                               ".entry-summary", ".post-excerpt",
+                               ".wp-block-post-excerpt__excerpt",
+                               ".wp-block-post-excerpt p"]:
+                        d = container.find(ds)
+                        if d:
+                            t = d.get_text(strip=True)
+                            if len(t) > 30:
+                                snippet = t[:500]
                                 break
                     if snippet:
                         break
-                container = getattr(container, 'parent', None)
+                container = getattr(container, "parent", None)
 
             seen.add(href)
             articles.append({
-                "title":   title,
-                "url":     href,
+                "title":    title,
+                "url":      href,
                 "pub_date": None,
-                "snippet": snippet,
+                "snippet":  snippet,
             })
+
         if len(articles) >= 20:
             break
 
-    # Deduplicate by URL
     seen_urls: set[str] = set()
-    unique: list[dict] = []
+    unique = []
     for art in articles:
         if art["url"] not in seen_urls:
             seen_urls.add(art["url"])
             unique.append(art)
-
     return unique[:20]
 
 
-def _fetch_listing_page(url, source_name):
-    """Fetch and parse a single listing page with retry + UA rotation.
-
-    Returns a BeautifulSoup object, or None if all attempts failed.
-    Shared by scrape_generic() and the pagination orchestrator so retry
-    behaviour is identical for page 1 and page N.
-    """
-    for attempt in range(3):
+def scrape_generic(url, source_name, base_url=None):
+    """Fetch a listing page and extract article links. Single attempt, no retry sleeps."""
+    soup = None
+    for attempt in range(2):
         headers = {**HEADERS, "User-Agent": USER_AGENTS[attempt % len(USER_AGENTS)]}
         try:
             resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
             resp.raise_for_status()
-            return BeautifulSoup(resp.text, "html.parser")
+            soup = BeautifulSoup(resp.text, "html.parser")
+            break
         except requests.RequestException as e:
-            log.warning(f"_fetch_listing_page attempt {attempt+1}/3 [{source_name}] {url[:70]}: {e}")
-            if attempt < 2:
-                time.sleep(2 ** attempt)
-    return None
+            log.warning(f"scrape_generic attempt {attempt+1}/2 [{source_name}]: {e}")
 
-
-def scrape_generic(url, source_name, base_url=None):
-    """Single-page HTML scrape — unchanged behaviour for sources with
-    max_pages=1 (the default for every source unless explicitly configured
-    otherwise). Kept as a thin wrapper around the shared fetch + parse
-    helpers so existing callers and tests are unaffected."""
-    soup = _fetch_listing_page(url, source_name)
     if soup is None:
         return []
+
     result = _extract_articles_from_soup(soup, url, source_name, base_url=base_url)
-    log.debug(f"  scrape_generic [{source_name}]: {len(result)} candidate links found")
+    log.debug(f"  scrape_generic [{source_name}]: {len(result)} links found")
     return result
 
 
-# ── PAGINATION — URL BUILDERS ─────────────────────────────────────────────────
-# Each builder takes the page-1 URL and a 1-indexed page number (page_num=1
-# always returns the original URL unchanged) and returns the URL to fetch for
-# that page. Three distinct styles cover the overwhelming majority of CMS
-# platforms encountered among government, university, and NGO sites:
-#
-#   path   — WordPress (BCCSU and most NGOs): /news/page/2/
-#   query  — Drupal / generic CMS: ?page=2  (Drupal page param is 0-indexed
-#            internally but we expose 1-indexed page_num to keep this
-#            consistent with the other two builders, converting internally)
-#   offset — Canada.ca / GCWeb item-offset pagination: ?start=10
-#
-# 'auto' tries all three in turn during the first multi-page fetch and
-# remembers whichever one actually changed the page content (see
-# scrape_generic_paginated). This means a source can be left on 'auto'
-# indefinitely without ever being told which CMS it runs.
 
-def _build_page_url_path(base_url: str, page_num: int) -> str:
-    """WordPress-style path pagination: example.com/news/ -> example.com/news/page/2/"""
-    if page_num <= 1:
-        return base_url
-    trimmed = base_url.rstrip("/")
-    return f"{trimmed}/page/{page_num}/"
-
-
-def _build_page_url_query(base_url: str, page_num: int) -> str:
-    """Drupal/generic query-param pagination: example.com/news?page=1 (0-indexed internally)."""
-    if page_num <= 1:
-        return base_url
-    sep = "&" if "?" in base_url else "?"
-    return f"{base_url}{sep}page={page_num - 1}"
-
-
-def _build_page_url_offset(base_url: str, page_num: int, items_per_page: int = 10) -> str:
-    """Canada.ca/GCWeb item-offset pagination: example.com/news?start=10"""
-    if page_num <= 1:
-        return base_url
-    sep = "&" if "?" in base_url else "?"
-    offset = (page_num - 1) * items_per_page
-    return f"{base_url}{sep}start={offset}"
-
-
-_PAGE_URL_BUILDERS = {
-    "path":   _build_page_url_path,
-    "query":  _build_page_url_query,
-    "offset": _build_page_url_offset,
-}
-
-
-def scrape_generic_paginated(url, source_name, base_url=None,
-                             max_pages: int = 1, pagination_style: str = "auto",
-                             known_url_hashes: set | None = None):
-    """Paginated HTML scrape with early-exit on already-known articles.
-
-    This is the entry point used by run_scrape() for any source with
-    max_pages > 1. Sources left at the default max_pages=1 go through
-    scrape_generic() exactly as before — zero behaviour change for the
-    ~25 single-page sources already configured.
-
-    Early-exit logic (the key cost-control mechanism):
-      After the FIRST page, every subsequent page is checked against
-      known_url_hashes (the set of url_hash values already in the articles
-      table). If a page contributes zero new URLs, pagination stops
-      immediately — we assume everything past this point has already been
-      seen on a prior scrape run. This means a daily scrape of a 266-page
-      site like BCCSU typically only ever fetches page 1, because new posts
-      since yesterday almost always fit on the first page. Pagination only
-      goes deeper than page 1 on the very first run (or after a long gap),
-      which is exactly when you want a deeper catch-up fetch.
-
-    pagination_style='auto' tries path, then query, then offset on page 2,
-    keeping whichever builder returns at least one link not already present
-    on page 1. If none produce new links, pagination stops after page 1
-    (same behaviour as max_pages=1).
-
-    Args:
-        url:               Page 1 URL (exactly as stored in the sources table).
-        source_name:       For logging.
-        base_url:          Used to resolve relative hrefs (same as scrape_generic).
-        max_pages:         Upper bound on how many pages to attempt.
-        pagination_style:  'path' | 'query' | 'offset' | 'auto' | 'none'.
-        known_url_hashes:  Set of url_hash values already in the DB, used for
-                            early-exit. If None, early-exit is skipped (every
-                            page up to max_pages is always fetched) — callers
-                            should always pass this in production use.
-
-    Returns:
-        List of article dicts (same shape as scrape_generic), deduplicated
-        across all pages fetched.
-    """
-    if pagination_style == "none" or max_pages <= 1:
-        return scrape_generic(url, source_name, base_url=base_url)
-
-    known_url_hashes = known_url_hashes or set()
-    all_articles: list[dict] = []
-    seen_urls: set[str] = set()
-    resolved_style = pagination_style  # 'auto' gets pinned to a concrete style below
-
-    # ── Page 1 — identical to the non-paginated path ──────────────────────────
-    soup = _fetch_listing_page(url, source_name)
-    if soup is None:
-        return []
-    page1_articles = _extract_articles_from_soup(soup, url, source_name, base_url=base_url)
-    for art in page1_articles:
-        if art["url"] not in seen_urls:
-            seen_urls.add(art["url"])
-            all_articles.append(art)
-
-    if max_pages <= 1 or not page1_articles:
-        return all_articles
-
-    # ── Pages 2..max_pages ──────────────────────────────────────────────────
-    for page_num in range(2, max_pages + 1):
-
-        if resolved_style == "auto":
-            # Try each builder until one yields at least one URL not seen on
-            # page 1. Once resolved, stick with that builder for the rest of
-            # this run (and log it so a human can hardcode it later via the
-            # Pages/Style UI control instead of re-discovering it every time).
-            found_style = None
-            for style_name, builder in _PAGE_URL_BUILDERS.items():
-                candidate_url = builder(url, page_num)
-                candidate_soup = _fetch_listing_page(candidate_url, f"{source_name} (auto-detect {style_name})")
-                if candidate_soup is None:
-                    continue
-                candidate_articles = _extract_articles_from_soup(
-                    candidate_soup, candidate_url, source_name, base_url=base_url
-                )
-                new_on_this_page = [a for a in candidate_articles if a["url"] not in seen_urls]
-                if new_on_this_page:
-                    found_style = style_name
-                    page_articles = candidate_articles
-                    break
-                time.sleep(0.5)  # be polite between auto-detect probe attempts
-            if found_style is None:
-                log.info(f"  [paginate] {source_name}: no pagination style produced new links at page {page_num} — stopping")
-                break
-            resolved_style = found_style
-            log.info(f"  [paginate] {source_name}: auto-detected pagination style = '{resolved_style}'")
-        else:
-            builder = _PAGE_URL_BUILDERS.get(resolved_style)
-            if builder is None:
-                log.warning(f"  [paginate] {source_name}: unknown pagination_style '{resolved_style}' — stopping")
-                break
-            page_url = builder(url, page_num)
-            page_soup = _fetch_listing_page(page_url, source_name)
-            if page_soup is None:
-                log.info(f"  [paginate] {source_name}: page {page_num} fetch failed — stopping")
-                break
-            page_articles = _extract_articles_from_soup(page_soup, page_url, source_name, base_url=base_url)
-
-        new_on_this_page = [a for a in page_articles if a["url"] not in seen_urls]
-
-        if not new_on_this_page:
-            log.info(f"  [paginate] {source_name}: page {page_num} had no new links — stopping (all already seen)")
-            break
-
-        # Early-exit: if every new link on this page is already in the DB,
-        # we've caught up to content we processed on a previous scrape run.
-        # No point fetching page_num+1 — it will be even older.
-        unseen_in_db = [a for a in new_on_this_page
-                        if hashlib.sha256(a["url"].encode()).hexdigest() not in known_url_hashes]
-        for art in new_on_this_page:
-            seen_urls.add(art["url"])
-            all_articles.append(art)
-
-        if known_url_hashes and not unseen_in_db:
-            log.info(f"  [paginate] {source_name}: page {page_num} was entirely already-known articles — stopping early "
-                      f"(caught up to previous scrape)")
-            break
-
-        time.sleep(DELAY_BETWEEN_SOURCES)
-
-    log.info(f"  [paginate] {source_name}: {len(all_articles)} total candidate links across pages")
-    return all_articles
 
 
 # ── GOOGLE NEWS ───────────────────────────────────────────────────────────────
@@ -850,40 +588,20 @@ def run_scrape():
     all_errors       = []
     all_new_articles: list[dict] = []   # collects every newly-inserted article
 
-    # Loaded once per run (not per source) — pagination early-exit checks
-    # candidate URLs against this set so a multi-page source like BCCSU stops
-    # fetching deeper pages the moment it hits content already in the DB.
-    known_url_hashes = get_known_url_hashes()
-    log.info(f"Known article hashes loaded for pagination early-exit: {len(known_url_hashes)}")
-
     sources = get_sources()
     for source in [s for s in sources if s["active"]]:
-        name             = source["name"]
-        url              = source["url"]
-        scrape_type      = source.get("scrape_type", "html")
-        max_pages        = int(source.get("max_pages") or 1)
-        pagination_style = source.get("pagination_style") or "auto"
-        log.info(f"Scraping [{scrape_type.upper()}]: {name}"
-                 + (f" (max_pages={max_pages}, style={pagination_style})" if max_pages > 1 else ""))
+        name        = source["name"]
+        url         = source["url"]
+        scrape_type = source.get("scrape_type", "html")
+        log.info(f"Scraping [{scrape_type.upper()}]: {name}")
         try:
             if scrape_type == "rss":
                 raw = scrape_rss(url, name)
-            elif max_pages > 1 and pagination_style != "none":
-                raw = scrape_generic_paginated(
-                    url, name, base_url=_base_url(url),
-                    max_pages=max_pages, pagination_style=pagination_style,
-                    known_url_hashes=known_url_hashes,
-                )
             else:
                 raw = scrape_generic(url, name, base_url=_base_url(url))
             added, new_arts = _process_and_save(raw, source, exclusions=exclusions)
             total_added += added
             all_new_articles.extend(new_arts)
-            # Newly-saved articles become "known" immediately so a later
-            # source in this same run (or the Google News pass below) won't
-            # re-trigger pagination on the same content if it shares a URL.
-            for art in new_arts:
-                known_url_hashes.add(hashlib.sha256(art["url"].encode()).hexdigest())
             update_source_scraped(name, added)
             log.info(f"  -> {added} new articles")
         except Exception as e:
@@ -942,9 +660,8 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
     for raw in raw_articles:
         title      = (raw.get("title") or "").strip()
         url        = (raw.get("url")   or "").strip()
-        pub_date   = raw.get("pub_date")
+        pub_date   = raw.get("pub_date")  # None means "unknown" — resolved in Phase 1b
         forced_tag = raw.get("forced_tag")
-        snippet    = raw.get("snippet", "")  # description from listing page
 
         if not title or not url or len(title) < 10:
             continue
@@ -976,7 +693,7 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
             "url":        url,
             "pub_date":   pub_date,
             "forced_tag": forced_tag,
-            "snippet":    snippet,
+            "snippet":    raw.get("snippet", ""),
             "url_hash":   hashlib.sha256(url.encode()).hexdigest(),
         })
 
@@ -1011,11 +728,9 @@ def _process_and_save(raw_articles, source, relevance_boost=0, exclusions=None):
         raw_feed_date = candidate["pub_date"]
         pub_date = extracted_date or raw_feed_date
 
-        # Use listing-page snippet as fallback when body fetch returns nothing
-        # OR when the fetched body is too short to be useful (stub pages return
-        # nav boilerplate that looks like content but gives Gemini nothing to
-        # score — now fetch_article_details returns "" for pages < 300 chars
-        # so this branch fires correctly for BCCSU and similar aggregators).
+        # Use listing-page snippet as fallback when body is empty or a stub
+        # (< 300 chars — fetch_article_details returns "" for stubs).
+        # This is the critical fix for BCCSU and similar aggregator sites.
         effective_text = article_text
         if (not effective_text or len(effective_text) < 300) and candidate.get("snippet"):
             effective_text = f"[Listing summary] {candidate['snippet']}"

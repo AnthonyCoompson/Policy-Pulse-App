@@ -376,15 +376,9 @@ def scrape_status():
 
 
 # ── SOURCES ───────────────────────────────────────────────────────────────────
-# ROUTING ORDER IS CRITICAL IN FASTAPI.
-# Literal paths (/sources/fix-all, /sources/diagnose, /sources/diagnose/pdf)
-# MUST be registered BEFORE wildcard paths (/sources/{source_id}) — FastAPI
-# matches routes top-to-bottom and a {source_id} pattern will eat any literal
-# segment that comes after it.  The previous ordering had fix-all and diagnose
-# registered after the {source_id} wildcard, causing every call to
-# GET /sources/diagnose to be matched as GET /sources/{source_id}/check with
-# source_id="diagnose" → 422 Unprocessable Entity (int parse failure) or 404,
-# which apiFetch threw on → returned null → "Could not reach backend".
+# ROUTING ORDER IS CRITICAL: literal paths MUST come before {source_id} wildcards.
+# FastAPI matches top-to-bottom — /sources/diagnose would be eaten by
+# /sources/{source_id} if the wildcard came first.
 
 @app.get("/sources")
 def list_sources():
@@ -405,11 +399,8 @@ def create_source(body: dict, _=Depends(require_auth)):
     try:
         new_id = add_source(name, url, jurisdiction, scrape_type)
     except sqlite3.IntegrityError:
-        raise HTTPException(
-            status_code=409,
-            detail="A source with this exact URL already exists. Check the Sources table — "
-                   "duplicate URLs are no longer allowed."
-        )
+        raise HTTPException(status_code=409,
+            detail="A source with this URL already exists.")
     return {"ok": True, "id": new_id}
 
 
@@ -417,95 +408,84 @@ def create_source(body: dict, _=Depends(require_auth)):
 
 @app.post("/sources/fix-all")
 def fix_all_sources(_=Depends(require_auth)):
-    """Re-apply all diagnosis-confirmed URL fixes immediately.
-    Fix set based on PolicyPulse-Source-Diagnostic-2026-07-03.pdf.
-    """
+    """Apply all known URL fixes immediately without a redeploy."""
     from database import get_conn
-    conn = get_conn()
+    conn  = get_conn()
     fixed = []
     _fixes = [
-        # SSL errors — switch to working endpoints
-        ("%CIHR — News%",              "https://cihr-irsc.gc.ca/e/news_releases.html",                                                            "html", "CIHR — News"),
-        ("%Physical Therapists%",      "https://www.collegept.ca/about/news-events",                                                              "html", "College of Physical Therapists of BC"),
-        ("%Labour Relations Board%",   "https://lrb.bc.ca/news/",                                                                                "html", "BC Labour Relations Board"),
-        # canada.ca total timeout — route via Google News RSS (not IP-restricted)
-        ("%Health Canada%",            "https://news.google.com/rss/search?q=Health+Canada+site:canada.ca&hl=en-CA&gl=CA&ceid=CA:en",            "rss",  "Health Canada News"),
-        ("%Crown-Indigenous%",         "https://news.google.com/rss/search?q=%22Crown-Indigenous+Relations%22+Canada&hl=en-CA&gl=CA&ceid=CA:en", "rss",  "Crown-Indigenous Relations Canada"),
-        ("%Innovation Science%",       "https://news.google.com/rss/search?q=%22Innovation+Science%22+Canada+government&hl=en-CA&gl=CA&ceid=CA:en", "rss", "Innovation Science and Economic Development"),
-        ("%Canada%Education%",         "https://news.google.com/rss/search?q=%22Employment+Social+Development%22+Canada&hl=en-CA&gl=CA&ceid=CA:en", "rss", "Government of Canada — Employment & Social Development"),
-        # 404 — URLs that moved
-        ("%College of Nurses%",        "https://www.bccnm.ca/news/",                                                                             "html", "BC College of Nurses & Midwives"),
-        ("%Federation of Labour%",     "https://bcfed.ca/news/",                                                                                 "html", "BC Federation of Labour"),
-        ("%Legislature%",              "https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings",                            "html", "BC Legislature — Bills & Proceedings"),
-        ("%Mental Health & Substance Use Services%", "https://www.phsa.ca/about/news-stories",                                                   "html", "BC Mental Health & Substance Use Services"),
-        ("%Public Service Agency%",    "https://news.gov.bc.ca/",                                                                                "html", "BC Public Service Agency"),
-        ("%CFHI%",                     "https://www.cfhi-fcass.ca/news",                                                                         "html", "CFHI — Canadian Foundation for Healthcare Improvement"),
-        ("%CIHI%",                     "https://www.cihi.ca/en/news",                                                                            "html", "CIHI — Canadian Institute for Health Info"),
-        ("%CUPE BC%",                  "https://cupe.bc.ca/news/",                                                                               "html", "CUPE BC"),
-        ("%HEABC%",                    "https://heabc.bc.ca/news-and-resources/",                                                                "html", "HEABC — Health Employers Association of BC"),
-        ("%Hospital Employees Union%", "https://www.heu.org/news/",                                                                              "html", "HEU — Hospital Employees Union"),
-        ("%Interior Health%",          "https://www.interiorhealth.ca/news",                                                                     "html", "Interior Health Authority"),
-        ("%Island Health%",            "https://www.islandhealth.ca/news",                                                                       "html", "Island Health Authority"),
-        ("%NSERC%",                    "https://www.nserc-crsng.gc.ca/Media-Media/NewsReleases-CommuniquesDePresse_eng.asp",                      "html", "NSERC — News Releases"),
-        ("%Northern Health%",          "https://www.northernhealth.ca/about-northern-health/media-centre/news-releases",                         "html", "Northern Health Authority"),
-        ("%Provincial Health Services%","https://www.phsa.ca/about/news-stories",                                                                "html", "PHSA — Provincial Health Services Authority"),
-        ("%SSHRC%",                    "https://www.sshrc-crsh.gc.ca/news-nouvelles/index-eng.aspx",                                             "html", "SSHRC — Research News"),
-        # 403 IP blocks — route via Google News RSS
-        ("%Maclean%",                  "https://news.google.com/rss/search?q=macleans+canada+education&hl=en-CA&gl=CA&ceid=CA:en",               "rss",  "Maclean's Education"),
-        ("%Times Higher Education%",   "https://news.google.com/rss/search?q=%22higher+education%22+Canada+university&hl=en-CA&gl=CA&ceid=CA:en","rss",  "Times Higher Education"),
-        ("%Universities Canada%",      "https://news.google.com/rss/search?q=%22Universities+Canada%22&hl=en-CA&gl=CA&ceid=CA:en",               "rss",  "Universities Canada"),
-        ("%University Affairs%",       "https://news.google.com/rss/search?q=%22university+affairs%22+Canada&hl=en-CA&gl=CA&ceid=CA:en",         "rss",  "University Affairs Canada"),
-        # Pin known-good URLs
-        ("%Substance Use%",            "https://www.bccsu.ca/news-and-media/",                                                                   "html", "BC Centre on Substance Use"),
-        ("%Mental Health Commission%", "https://www.mentalhealthcommission.ca/feed/",                                                            "rss",  "Mental Health Commission of Canada"),
-        ("%Burnaby%",                  "https://www.burnaby.ca/news",                                                                            "html", "Burnaby City Hall News"),
-        ("%Indigenous%Reconciliation%","https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",                              "html", "BC Indigenous Relations & Reconciliation"),
+        ("%Substance Use%",          "https://www.bccsu.ca/news-and-media/",                                                               "html", "BC Centre on Substance Use"),
+        ("%Mental Health Commission%","https://www.mentalhealthcommission.ca/feed/",                                                        "rss",  "Mental Health Commission of Canada"),
+        ("%Indigenous%Reconciliation%","https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",                        "html", "BC Indigenous Relations & Reconciliation"),
+        ("%Federation of Labour%",   "https://bcfed.ca/news/",                                                                             "html", "BC Federation of Labour"),
+        ("%Hospital Employees Union%","https://www.heu.org/news/",                                                                         "html", "HEU — Hospital Employees Union"),
+        ("%CUPE BC%",                "https://cupe.bc.ca/news/",                                                                           "html", "CUPE BC"),
+        ("%Labour Relations Board%", "https://lrb.bc.ca/news/",                                                                            "html", "BC Labour Relations Board"),
+        ("%Health Canada%",          "https://news.google.com/rss/search?q=Health+Canada+site:canada.ca&hl=en-CA&gl=CA&ceid=CA:en",        "rss",  "Health Canada News"),
+        ("%Crown-Indigenous%",       "https://news.google.com/rss/search?q=%22Crown-Indigenous+Relations%22+Canada&hl=en-CA&gl=CA&ceid=CA:en", "rss", "Crown-Indigenous Relations Canada"),
+        ("%Innovation Science%",     "https://news.google.com/rss/search?q=%22Innovation+Science%22+Canada+government&hl=en-CA&gl=CA&ceid=CA:en", "rss", "Innovation Science and Economic Development"),
+        ("%Canada%Education%",       "https://news.google.com/rss/search?q=%22Employment+Social+Development%22+Canada&hl=en-CA&gl=CA&ceid=CA:en", "rss", "Government of Canada — Employment & Social Development"),
+        ("%CIHI%",                   "https://www.cihi.ca/en/news",                                                                        "html", "CIHI — Canadian Institute for Health Info"),
+        ("%Canadian Pharmacists%",   "https://www.pharmacists.ca/rss/news.xml",                                                            "rss",  "Canadian Pharmacists Association"),
+        ("%College of Nurses%",      "https://www.bccnm.ca/news/",                                                                         "html", "BC College of Nurses & Midwives"),
+        ("%HEABC%",                  "https://heabc.bc.ca/",                                                                               "html", "HEABC — Health Employers Association of BC"),
+        ("%Interior Health%",        "https://www.interiorhealth.ca/about/media-centre",                                                   "html", "Interior Health Authority"),
+        ("%Northern Health%",        "https://www.northernhealth.ca/about-northern-health/media-centre",                                   "html", "Northern Health Authority"),
+        ("%Provincial Health Services%","https://www.phsa.ca/about/news-stories",                                                         "html", "PHSA — Provincial Health Services Authority"),
+        ("%Legislature%",            "https://www.leg.bc.ca/bills-statutes/2026/42nd-parliament/3rd-session",                              "html", "BC Legislature — Bills & Proceedings"),
+        ("%Public Service Agency%",  "https://news.gov.bc.ca/",                                                                            "html", "BC Public Service Agency"),
     ]
     try:
+        # Delete known-broken duplicate rows by exact URL
+        for bad_url in [
+            "https://www.canada.ca/en/health-canada/news.html",
+            "https://www.canada.ca/en/health-canada/news.atom",
+            "https://www.cihi.ca/sites/default/files/cihi-news-rss.xml",
+            "https://www.mentalhealthcommission.ca/news/",
+            "https://www.phsa.ca/about-site/news-stories",
+            "https://heabc.bc.ca/news-and-resources/",
+            "https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings",
+            "https://www.bccnm.ca/news/Pages/default.aspx",
+        ]:
+            conn.execute("DELETE FROM sources WHERE url = ?", (bad_url,))
+
         for name_like, new_url, new_type, new_name in _fixes:
-            result = conn.execute(
+            r = conn.execute(
                 "UPDATE sources SET url=?, scrape_type=?, name=? WHERE name LIKE ?",
                 (new_url, new_type, new_name, name_like)
             )
-            if result.rowcount and result.rowcount > 0:
+            if r.rowcount and r.rowcount > 0:
                 fixed.append(new_name)
+
+        # Pause collegept.ca — DNS fails entirely
+        conn.execute("UPDATE sources SET active=0 WHERE name LIKE '%Physical Therapists%'")
         conn.execute("UPDATE sources SET pagination_style='none' WHERE scrape_type='rss'")
         conn.commit()
     finally:
         conn.close()
     return {"ok": True, "fixed": fixed, "count": len(fixed),
-            "message": "Source URLs updated. Run a scrape to test."}
+            "message": "URLs updated. Run a scrape to test."}
 
 
 @app.get("/sources/diagnose")
 def diagnose_sources(include_paused: bool = Query(False)):
-    """Diagnose all active sources and explain why each returns 0 articles.
-
-    Architecture: fires all source checks simultaneously in a thread pool.
-    Each thread has a hard 6s HTTP timeout. The main thread collects results
-    as they arrive via a Queue. After 90s wall-clock, it stops waiting and
-    returns whatever has completed — partial results rather than a timeout error.
-
-    Note: future.cancel() cannot interrupt a running thread in Python, so the
-    previous wall-deadline approach (cancelling via as_completed) was broken.
-    This implementation uses threading.Event + queue.Queue so the collection
-    loop exits cleanly at the deadline without waiting for stragglers.
+    """Diagnose all sources. Uses a queue-based approach with a hard 110s
+    wall-clock deadline so it always returns before the client's 120s abort.
+    Sources that don't complete are marked timed_out (not broken).
     """
     import time as _time
     import threading
     import queue as _queue
     import requests as req_lib
-    from concurrent.futures import ThreadPoolExecutor
     from scraper import _extract_articles_from_soup, _base_url, USER_AGENTS, HEADERS
     from bs4 import BeautifulSoup
 
-    PER_REQUEST_TIMEOUT = 6   # seconds per HTTP call — tight
-    WALL_DEADLINE       = 85  # seconds total — well inside client's 120s abort
+    PER_REQUEST_TIMEOUT = 8    # seconds per HTTP call
+    WALL_DEADLINE       = 110  # seconds total wall clock
 
     all_sources = get_sources()
     targets = all_sources if include_paused else [s for s in all_sources if s.get("active")]
 
-    def _make_result(s, reason, detail, status, sample=None):
+    def _make(s, reason, detail, status, sample=None):
         return {
             "id": s["id"], "name": s["name"], "url": s["url"],
             "type": s.get("scrape_type", "html"),
@@ -520,294 +500,203 @@ def diagnose_sources(include_paused: bool = Query(False)):
 
     result_q = _queue.Queue()
 
-    def _diagnose_and_enqueue(s):
-        """Run one source check and put result on the queue."""
-        url   = s["url"]
-        stype = s.get("scrape_type", "html")
+    def _check(s):
+        url = s["url"]
         try:
             resp = req_lib.get(
-                url,
+                url, timeout=PER_REQUEST_TIMEOUT, allow_redirects=True,
                 headers={**HEADERS, "User-Agent": USER_AGENTS[0]},
-                timeout=PER_REQUEST_TIMEOUT,
-                allow_redirects=True,
             )
             if resp.status_code >= 400:
                 code = resp.status_code
-                msg = ("URL not found — page may have moved." if code == 404
-                       else "Server blocked Render's IP." if code in (403, 429)
-                       else "Server error.")
-                result_q.put(_make_result(s, "http_error", f"HTTP {code}: {msg}", code))
+                msg  = ("URL not found — page may have moved." if code == 404
+                        else "Server blocked Render's IP." if code in (403, 429)
+                        else "Server error.")
+                result_q.put(_make(s, "http_error", f"HTTP {code}: {msg}", code))
                 return
 
+            stype = s.get("scrape_type", "html")
             if stype == "rss":
                 soup  = BeautifulSoup(resp.content, "xml")
                 items = soup.find_all("item") or soup.find_all("entry")
                 if not items:
-                    result_q.put(_make_result(s, "rss_empty",
-                                              "Feed OK but 0 items returned.", resp.status_code))
+                    result_q.put(_make(s, "rss_empty", "Feed OK but 0 items.", resp.status_code))
                     return
                 sample = [it.find("title").get_text(strip=True)[:80]
                           for it in items[:3] if it.find("title")]
-                result_q.put(_make_result(s, "healthy",
-                                          f"{len(items)} items in feed.",
-                                          resp.status_code, sample))
+                result_q.put(_make(s, "healthy", f"{len(items)} items in feed.",
+                                   resp.status_code, sample))
             else:
-                soup      = BeautifulSoup(resp.text, "html.parser")
-                body_len  = len(soup.get_text(strip=True))
-                tag_count = len(soup.find_all(True))
-                articles  = _extract_articles_from_soup(soup, url, s["name"],
-                                                        base_url=_base_url(url))
-                if articles:
-                    result_q.put(_make_result(s, "healthy",
-                                              f"{len(articles)} article link(s) found.",
-                                              resp.status_code,
-                                              [a["title"][:80] for a in articles[:3]]))
-                elif body_len < 600 and tag_count < 80:
-                    result_q.put(_make_result(s, "js_rendered",
-                                              f"Only {body_len} chars / {tag_count} tags — "
-                                              f"content is likely JS-rendered. Use an RSS feed.",
-                                              resp.status_code))
+                soup     = BeautifulSoup(resp.text, "html.parser")
+                body_len = len(soup.get_text(strip=True))
+                tag_cnt  = len(soup.find_all(True))
+                arts     = _extract_articles_from_soup(soup, url, s["name"],
+                                                       base_url=_base_url(url))
+                if arts:
+                    result_q.put(_make(s, "healthy",
+                                       f"{len(arts)} article link(s) found.",
+                                       resp.status_code,
+                                       [a["title"][:80] for a in arts[:3]]))
+                elif body_len < 600 and tag_cnt < 80:
+                    result_q.put(_make(s, "js_rendered",
+                                       "Page content appears JS-rendered. Use an RSS feed.",
+                                       resp.status_code))
                 else:
-                    result_q.put(_make_result(s, "no_selector_match",
-                                              f"Page loaded ({len(resp.text):,} bytes) but no "
-                                              f"article links matched any CSS selector pattern.",
-                                              resp.status_code))
-
+                    result_q.put(_make(s, "no_selector_match",
+                                       f"Page loaded ({len(resp.text):,} bytes) but no "
+                                       f"article links matched any selector.",
+                                       resp.status_code))
         except req_lib.exceptions.Timeout:
-            result_q.put(_make_result(s, "unreachable",
-                                      f"Timed out after {PER_REQUEST_TIMEOUT}s — "
-                                      f"server slow or Render IP blocked.",
-                                      "timeout"))
+            result_q.put(_make(s, "unreachable",
+                               f"Timed out after {PER_REQUEST_TIMEOUT}s. "
+                               f"Server slow or Render IP blocked.",
+                               "timeout"))
         except req_lib.exceptions.SSLError as e:
-            result_q.put(_make_result(s, "unreachable",
-                                      f"SSL certificate error: {str(e)[:120]}",
-                                      "ssl_error"))
+            result_q.put(_make(s, "unreachable",
+                               f"SSL error: {str(e)[:120]}", "ssl_error"))
         except Exception as e:
-            result_q.put(_make_result(s, "unreachable", str(e)[:160], "error"))
+            result_q.put(_make(s, "unreachable", str(e)[:160], "error"))
 
-    # Fire all workers simultaneously — no waiting for one to finish before starting next
-    executor = ThreadPoolExecutor(max_workers=min(40, len(targets)))
+    # Fire all checks simultaneously in daemon threads
     for src in targets:
-        executor.submit(_diagnose_and_enqueue, src)
-    executor.shutdown(wait=False)  # don't block — collect via queue below
+        t = threading.Thread(target=_check, args=(src,), daemon=True)
+        t.start()
 
-    # Collect results until deadline or all done
-    results      = []
-    deadline     = _time.monotonic() + WALL_DEADLINE
-    remaining    = len(targets)
+    # Collect results until deadline
+    results   = []
+    deadline  = _time.monotonic() + WALL_DEADLINE
+    remaining = len(targets)
 
     while remaining > 0:
-        timeout_left = deadline - _time.monotonic()
-        if timeout_left <= 0:
+        left = deadline - _time.monotonic()
+        if left <= 0:
             break
         try:
-            result = result_q.get(timeout=min(timeout_left, 2.0))
-            results.append(result)
+            results.append(result_q.get(timeout=min(left, 2.0)))
             remaining -= 1
         except _queue.Empty:
-            # Check if we've hit the wall
             if _time.monotonic() >= deadline:
                 break
 
-    # Any source that never returned gets a timed_out entry
-    finished_ids = {r["id"] for r in results}
+    # Mark anything that didn't finish
+    finished = {r["id"] for r in results}
     for s in targets:
-        if s["id"] not in finished_ids:
-            results.append(_make_result(
-                s, "unreachable",
-                "Did not complete within 85s — backend under load. Run again.",
-                "timed_out",
-            ))
+        if s["id"] not in finished:
+            results.append(_make(s, "unreachable",
+                                 "Did not complete within the deadline. "
+                                 "This usually means the backend is under load — "
+                                 "not that the source is broken. Run again or scrape directly.",
+                                 "timed_out"))
 
-    reason_order = {"unreachable": 0, "http_error": 1, "js_rendered": 2,
-                    "rss_parse_error": 3, "no_selector_match": 4,
-                    "rss_empty": 5, "healthy": 7}
-    results.sort(key=lambda x: (reason_order.get(x["reason"], 9), x["name"]))
+    order = {"unreachable": 0, "http_error": 1, "js_rendered": 2,
+             "no_selector_match": 3, "rss_empty": 4, "healthy": 5}
+    results.sort(key=lambda x: (order.get(x["reason"], 9), x["name"]))
 
     healthy = [r for r in results if r["healthy"]]
     broken  = [r for r in results if not r["healthy"]]
-    partial = len(finished_ids) < len(targets)
-
     return {
-        "checked":  len(results),
-        "healthy":  len(healthy),
-        "broken":   len(broken),
-        "partial":  partial,
+        "checked": len(results), "healthy": len(healthy),
+        "broken": len(broken), "partial": len(finished) < len(targets),
         "by_reason": {k: sum(1 for r in broken if r["reason"] == k)
-                      for k in reason_order if any(r["reason"] == k for r in broken)},
-        "results":  results,
+                      for k in order if any(r["reason"] == k for r in broken)},
+        "results": results,
         "generated_at": datetime.utcnow().isoformat(),
     }
 
 
 @app.get("/sources/diagnose/pdf")
 def diagnose_sources_pdf(include_paused: bool = Query(False), _=Depends(require_auth)):
-    """Run the full diagnostic and return a downloadable PDF report."""
+    """Run full diagnostic and return downloadable PDF report."""
     from fastapi.responses import StreamingResponse
     import io
-    report   = diagnose_sources(include_paused=include_paused)
+    report    = diagnose_sources(include_paused=include_paused)
     pdf_bytes = _build_diagnostic_pdf(report)
     buf = io.BytesIO(pdf_bytes)
     buf.seek(0)
-    filename = f"policypulse-source-diagnostic-{datetime.utcnow().strftime('%Y-%m-%d-%H%M')}.pdf"
-    return StreamingResponse(
-        buf, media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
+    fname = f"policypulse-source-diagnostic-{datetime.utcnow().strftime('%Y-%m-%d-%H%M')}.pdf"
+    return StreamingResponse(buf, media_type="application/pdf",
+                             headers={"Content-Disposition": f"attachment; filename={fname}"})
 
 
 def _build_diagnostic_pdf(report: dict) -> bytes:
-    """Render the source diagnostic report as a formatted PDF using reportlab.
-
-    Key fix: ParagraphStyle must NOT be created with a lambda that hardcodes
-    parent=styles['Normal'] and then also receive parent= as a kwarg at the
-    call site — Python raises 'got multiple values for keyword argument parent'.
-    All styles are now created explicitly with no lambda shortcut.
-
-    URLs are passed through _safe_para() which wraps them in a <font> tag
-    and escapes angle brackets / ampersands to prevent reportlab XML parser
-    crashes on URLs containing query strings or special characters.
-    """
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.units import inch
     from reportlab.lib import colors
-    from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-    )
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     import io, html as _html
 
-    def _safe(text: str) -> str:
-        """Escape XML special chars so reportlab's para parser doesn't choke."""
-        return _html.escape(str(text or ""), quote=False)
-
-    def _safe_url(url: str) -> str:
-        """Wrap URL in a breakable span — long URLs overflow fixed-width columns."""
-        return f'<font color="#1d4ed8">{_safe(url)}</font>'
+    def _s(t): return _html.escape(str(t or ""), quote=False)
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf, pagesize=letter,
-        topMargin=0.65*inch, bottomMargin=0.65*inch,
-        leftMargin=0.65*inch, rightMargin=0.65*inch,
-    )
+    doc = SimpleDocTemplate(buf, pagesize=letter,
+                            topMargin=0.65*inch, bottomMargin=0.65*inch,
+                            leftMargin=0.65*inch, rightMargin=0.65*inch)
     base = getSampleStyleSheet()["Normal"]
 
-    # ── Define every style explicitly — NO lambda with hardcoded parent ──────
-    title_s  = ParagraphStyle("pp_title",  parent=base, fontSize=20,
-                               fontName="Helvetica-Bold",
-                               textColor=colors.HexColor("#003366"), spaceAfter=4)
-    sub_s    = ParagraphStyle("pp_sub",    parent=base, fontSize=10,
-                               textColor=colors.HexColor("#6b8aaa"), spaceAfter=6)
-    meta_s   = ParagraphStyle("pp_meta",   parent=base, fontSize=9,
-                               textColor=colors.HexColor("#94a3b8"), spaceAfter=16)
+    def _sty(name, **kw):
+        return ParagraphStyle(name, parent=base, **kw)
 
-    # Section headers — one per reason colour
-    def _sec(name, hex_col):
-        return ParagraphStyle(f"pp_sec_{name}", parent=base, fontSize=11,
-                              fontName="Helvetica-Bold", spaceBefore=18, spaceAfter=6,
-                              textColor=colors.HexColor(hex_col),
-                              borderPad=4, leading=14)
+    title_s  = _sty("t",  fontSize=18, fontName="Helvetica-Bold",
+                    textColor=colors.HexColor("#003366"), spaceAfter=4)
+    sub_s    = _sty("su", fontSize=9,  textColor=colors.HexColor("#6b8aaa"), spaceAfter=16)
+    sec_red  = _sty("sr", fontSize=11, fontName="Helvetica-Bold", spaceBefore=16, spaceAfter=6,
+                    textColor=colors.HexColor("#dc2626"))
+    sec_yel  = _sty("sy", fontSize=11, fontName="Helvetica-Bold", spaceBefore=16, spaceAfter=6,
+                    textColor=colors.HexColor("#92400e"))
+    sec_grn  = _sty("sg", fontSize=11, fontName="Helvetica-Bold", spaceBefore=16, spaceAfter=6,
+                    textColor=colors.HexColor("#047857"))
+    name_s   = _sty("n",  fontSize=10, fontName="Helvetica-Bold",
+                    textColor=colors.HexColor("#0f1f35"), spaceAfter=1)
+    url_s    = _sty("u",  fontSize=8,  textColor=colors.HexColor("#1d4ed8"), spaceAfter=2)
+    det_s    = _sty("d",  fontSize=9,  textColor=colors.HexColor("#374151"),
+                    spaceAfter=6, leading=13)
+    foot_s   = _sty("f",  fontSize=8,  textColor=colors.HexColor("#9ca3af"))
 
-    sec_red    = _sec("red",    "#dc2626")
-    sec_orange = _sec("orange", "#c2410c")
-    sec_yellow = _sec("yellow", "#92400e")
-    sec_green  = _sec("green",  "#047857")
-
-    name_s   = ParagraphStyle("pp_name",   parent=base, fontSize=10,
-                               fontName="Helvetica-Bold",
-                               textColor=colors.HexColor("#0f1f35"), spaceAfter=1)
-    url_s    = ParagraphStyle("pp_url",    parent=base, fontSize=8,
-                               textColor=colors.HexColor("#1d4ed8"),
-                               wordWrap="CJK", spaceAfter=2)
-    detail_s = ParagraphStyle("pp_detail", parent=base, fontSize=9,
-                               textColor=colors.HexColor("#374151"), spaceAfter=2,
-                               leading=13)
-    sample_s = ParagraphStyle("pp_sample", parent=base, fontSize=8,
-                               fontName="Helvetica-Oblique",
-                               textColor=colors.HexColor("#6b7280"), spaceAfter=8)
-    footer_s = ParagraphStyle("pp_footer", parent=base, fontSize=8,
-                               textColor=colors.HexColor("#9ca3af"))
-
-    REASON_META = {
-        "unreachable":       ("UNREACHABLE — Connection Failed / Timed Out",       sec_red),
-        "http_error":        ("HTTP ERROR — 404 / 403 / 5xx Response",             sec_red),
-        "js_rendered":       ("JS-RENDERED — No Static HTML Content",              sec_orange),
-        "rss_parse_error":   ("INVALID RSS — Feed Not Parseable as XML",           sec_orange),
-        "no_selector_match": ("NO SELECTOR MATCH — Markup Pattern Not Recognised", sec_yellow),
-        "rss_empty":         ("RSS EMPTY — Feed Returned Zero Items",              sec_yellow),
-        "filtered_out":      ("FILTERED — All Links Filtered Out",                 sec_yellow),
-    }
-    REASON_ORDER = ["unreachable", "http_error", "js_rendered", "rss_parse_error",
-                    "no_selector_match", "rss_empty", "filtered_out"]
-
-    results     = report.get("results", [])
-    generated   = report.get("generated_at", "")[:16].replace("T", " ")
-
-    # ── Story ────────────────────────────────────────────────────────────────
+    results = report.get("results", [])
     story = [
         Paragraph("PolicyPulse — Source Diagnostic Report", title_s),
-        Paragraph(f"Generated {generated} UTC", sub_s),
-        Paragraph(
-            f"{report.get('checked',0)} sources checked &nbsp;·&nbsp; "
-            f"<font color='#047857'>{report.get('healthy',0)} healthy</font> &nbsp;·&nbsp; "
-            f"<font color='#dc2626'>{report.get('broken',0)} broken</font>",
-            meta_s,
-        ),
+        Paragraph(f"Generated {report.get('generated_at','')[:16].replace('T',' ')} UTC  ·  "
+                  f"{report['checked']} checked  ·  {report['healthy']} healthy  ·  "
+                  f"{report['broken']} broken", sub_s),
         HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#e5e7eb"),
                    spaceAfter=12),
     ]
 
-    # ── Broken groups ────────────────────────────────────────────────────────
-    for reason in REASON_ORDER:
-        group = [r for r in results if r["reason"] == reason]
-        if not group:
-            continue
-        label, sec_style = REASON_META.get(reason, (reason.upper(), sec_yellow))
-        story.append(Paragraph(f"{label} ({len(group)})", sec_style))
-        for r in group:
-            juris = _safe(r.get("jurisdiction", ""))
-            story.append(Paragraph(
-                f"{_safe(r['name'])}  "
-                f"<font color='#9ca3af' size='8'>[{juris}]</font>",
-                name_s,
-            ))
-            story.append(Paragraph(r["url"], url_s))
-            story.append(Paragraph(_safe(r.get("detail", "")), detail_s))
-            story.append(Spacer(1, 6))
-
-    # ── Healthy group ────────────────────────────────────────────────────────
-    healthy_group = [r for r in results if r["reason"] == "healthy"]
-    if healthy_group:
-        story.append(Paragraph(f"HEALTHY — Working Correctly ({len(healthy_group)})", sec_green))
-        for r in healthy_group:
-            juris = _safe(r.get("jurisdiction", ""))
-            story.append(Paragraph(
-                f"{_safe(r['name'])}  "
-                f"<font color='#9ca3af' size='8'>[{juris}]</font>",
-                name_s,
-            ))
-            story.append(Paragraph(r["url"], url_s))
-            story.append(Paragraph(_safe(r.get("detail", "")), detail_s))
-            samples = r.get("article_sample") or []
-            if samples:
-                story.append(Paragraph(
-                    "e.g. " + _safe(samples[0][:100]),
-                    sample_s,
-                ))
-            story.append(Spacer(1, 6))
-
-    story += [
-        Spacer(1, 20),
-        HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#e5e7eb"),
-                   spaceAfter=6),
-        Paragraph(
-            "PolicyPulse Intelligence Platform · Source Diagnostic Report · "
-            "Re-run from News &amp; Articles → Sources → Diagnose All.",
-            footer_s,
-        ),
+    GROUPS = [
+        ("unreachable",       "🔴 UNREACHABLE / TIMED OUT",  sec_red),
+        ("http_error",        "🔴 HTTP ERROR (404/403/500)",  sec_red),
+        ("js_rendered",       "🟠 JS-RENDERED — use RSS",     sec_yel),
+        ("no_selector_match", "🟡 NO SELECTOR MATCH",         sec_yel),
+        ("rss_empty",         "🟡 RSS FEED EMPTY",            sec_yel),
     ]
+    for reason, label, sty in GROUPS:
+        grp = [r for r in results if r["reason"] == reason]
+        if not grp: continue
+        story.append(Paragraph(f"{label} ({len(grp)})", sty))
+        for r in grp:
+            story += [
+                Paragraph(f"{_s(r['name'])} [{_s(r.get('jurisdiction',''))}]", name_s),
+                Paragraph(_s(r["url"]), url_s),
+                Paragraph(_s(r.get("detail","")), det_s),
+            ]
 
+    healthy = [r for r in results if r["reason"] == "healthy"]
+    if healthy:
+        story.append(Paragraph(f"🟢 HEALTHY ({len(healthy)})", sec_grn))
+        for r in healthy:
+            story += [
+                Paragraph(f"{_s(r['name'])} [{_s(r.get('jurisdiction',''))}]", name_s),
+                Paragraph(_s(r["url"]), url_s),
+                Paragraph(_s(r.get("detail","")), det_s),
+            ]
+            if r.get("article_sample"):
+                story.append(Paragraph(f"e.g. {_s(r['article_sample'][0][:100])}", det_s))
+
+    story += [Spacer(1, 16),
+              HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#e5e7eb"),
+                         spaceAfter=6),
+              Paragraph("PolicyPulse Intelligence Platform · Source Diagnostic Report", foot_s)]
     doc.build(story)
     return buf.getvalue()
 
@@ -823,24 +712,24 @@ def toggle_source_endpoint(source_id: int, _=Depends(require_auth)):
 @app.patch("/sources/{source_id}")
 def edit_source(source_id: int, body: dict, _=Depends(require_auth)):
     import sqlite3
-    allowed = {"name", "url", "jurisdiction", "scrape_type", "active", "max_pages", "pagination_style"}
+    allowed = {"name", "url", "jurisdiction", "scrape_type", "active",
+               "max_pages", "pagination_style"}
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
         raise HTTPException(status_code=400, detail=f"Allowed fields: {allowed}")
     if "max_pages" in updates:
         try:
-            mp = int(updates["max_pages"])
+            updates["max_pages"] = max(1, min(30, int(updates["max_pages"])))
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail="max_pages must be an integer")
-        updates["max_pages"] = max(1, min(30, mp))
     if "pagination_style" in updates and updates["pagination_style"] not in (
             "auto", "path", "query", "offset", "none"):
         raise HTTPException(status_code=400,
-                            detail="pagination_style must be one of: auto, path, query, offset, none")
+                            detail="pagination_style must be auto/path/query/offset/none")
     try:
         update_source(source_id, updates)
     except sqlite3.IntegrityError:
-        raise HTTPException(status_code=409, detail="Another source already uses this exact URL.")
+        raise HTTPException(status_code=409, detail="Another source already uses this URL.")
     return {"ok": True}
 
 
@@ -848,18 +737,18 @@ def edit_source(source_id: int, body: dict, _=Depends(require_auth)):
 def remove_source(source_id: int, _=Depends(require_auth)):
     from database import get_conn
     conn = get_conn()
-    row = conn.execute("SELECT id FROM sources WHERE id = ?", (source_id,)).fetchone()
+    row  = conn.execute("SELECT id FROM sources WHERE id = ?", (source_id,)).fetchone()
     conn.close()
     if not row:
-        raise HTTPException(status_code=404, detail=f"Source {source_id} not found — it may have already been deleted.")
+        raise HTTPException(status_code=404, detail="Source not found.")
     delete_source(source_id)
     return {"ok": True}
 
 
 @app.post("/sources/{source_id}/backfill")
-def backfill_source(source_id: int, body: dict, background_tasks: BackgroundTasks,
-                    _=Depends(require_auth)):
-    """One-off deep historical crawl for a single source without permanently changing max_pages."""
+def backfill_source(source_id: int, body: dict,
+                    background_tasks: BackgroundTasks, _=Depends(require_auth)):
+    """One-off deep historical crawl without changing permanent max_pages."""
     from database import get_conn
     pages = max(1, min(30, int(body.get("pages", 10))))
     conn  = get_conn()
@@ -870,10 +759,10 @@ def backfill_source(source_id: int, body: dict, background_tasks: BackgroundTask
     source = dict(row)
     if source.get("scrape_type") == "rss":
         raise HTTPException(status_code=400,
-                            detail="Backfill only applies to HTML sources — RSS feeds don't paginate this way.")
+                            detail="Backfill only applies to HTML sources.")
     background_tasks.add_task(_run_backfill_bg, source, pages)
     return {"ok": True,
-            "message": f"Backfill started — fetching up to {pages} pages for '{source['name']}' in the background."}
+            "message": f"Backfill started — up to {pages} pages for '{source['name']}'."}
 
 
 def _run_backfill_bg(source: dict, pages: int):
@@ -882,9 +771,8 @@ def _run_backfill_bg(source: dict, pages: int):
     from scraper import scrape_generic_paginated, _base_url, _process_and_save
     log = _log.getLogger(__name__)
     name = source["name"]
-    log.info(f"[backfill] Starting deep crawl for '{name}': up to {pages} pages")
     try:
-        raw   = scrape_generic_paginated(
+        raw  = scrape_generic_paginated(
             source["url"], name, base_url=_base_url(source["url"]),
             max_pages=pages,
             pagination_style=source.get("pagination_style") or "auto",
@@ -892,34 +780,25 @@ def _run_backfill_bg(source: dict, pages: int):
         )
         added, _ = _process_and_save(raw, source, exclusions=get_exclusion_keywords())
         update_source_scraped(name, added)
-        log.info(f"[backfill] Done for '{name}': {added} new articles from up to {pages} pages")
+        log.info(f"[backfill] {name}: {added} new articles from {pages} pages")
     except Exception as e:
-        log.error(f"[backfill] Failed for '{name}': {e}", exc_info=True)
+        log.error(f"[backfill] {name}: {e}", exc_info=True)
 
 
 @app.get("/sources/{source_id}/check")
 def check_source_reachability(source_id: int):
-    """Quick reachability check for a single source.
-
-    Uses GET (not HEAD) — many government and health authority servers return
-    403 or 405 on HEAD requests even when the page is perfectly accessible,
-    which would cause false positives in the Fix Broken Links report.
-    Only reads the first 8KB of the response to keep it fast.
-    """
     import requests as req_lib
     from database import get_conn
     conn = get_conn()
-    row  = conn.execute("SELECT url, scrape_type FROM sources WHERE id = ?", (source_id,)).fetchone()
+    row  = conn.execute("SELECT url FROM sources WHERE id = ?", (source_id,)).fetchone()
     conn.close()
     if not row:
         raise HTTPException(status_code=404, detail="Source not found")
     url = row["url"]
     try:
-        r = req_lib.get(
-            url, timeout=10, allow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; PolicyPulse/1.0)"},
-            stream=True,   # stream so we don't download the full page
-        )
+        r = req_lib.get(url, timeout=10, allow_redirects=True,
+                        headers={"User-Agent": "Mozilla/5.0 (compatible; PolicyPulse/1.0)"},
+                        stream=True)
         r.close()
         return {"reachable": r.status_code < 400, "status": r.status_code, "url": url}
     except req_lib.exceptions.Timeout:
@@ -1560,6 +1439,29 @@ def get_scholarly_scrape_log(limit: int = Query(20)):
     ).fetchall()
     conn.close()
     return {"log": [dict(r) for r in rows]}
+
+
+# ── SOURCE REACHABILITY ───────────────────────────────────────────────────────
+
+@app.get("/sources/{source_id}/check")
+def check_source_reachability(source_id: int):
+    import requests as req_lib
+    from database import get_conn
+    conn = get_conn()
+    row = conn.execute("SELECT url FROM sources WHERE id = ?", (source_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Source not found")
+    url = row["url"]
+    try:
+        r = req_lib.head(url, timeout=8, allow_redirects=True,
+                         headers={"User-Agent": "PolicyPulse/1.0 link-checker"})
+        reachable = r.status_code < 400
+        return {"reachable": reachable, "status": r.status_code, "url": url}
+    except req_lib.exceptions.Timeout:
+        return {"reachable": False, "status": "timeout", "url": url}
+    except Exception as e:
+        return {"reachable": False, "status": str(e)[:80], "url": url}
 
 
 # ── ARTICLE PRUNING ───────────────────────────────────────────────────────────

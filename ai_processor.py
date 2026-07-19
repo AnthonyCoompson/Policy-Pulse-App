@@ -157,78 +157,49 @@ def _parse_extra_terms(raw: str) -> list[str]:
 # ai_extra_low_terms keys in scraper_config (comma-separated strings).
 
 HIGH_RELEVANCE_TERMS: list[str] = [
-    # ── Indigenous policy ────────────────────────────────────────────────
+    # Indigenous policy
     "indigenous", "first nations", "métis", "inuit", "reconciliation",
     "dripa", "undrip", "trc", "ocap", "fnha", "crown-indigenous",
     "residential school", "land rights", "treaty", "nation-to-nation",
     "self-determination", "inherent rights",
-    # ── Post-secondary & research ────────────────────────────────────────
+    # Post-secondary & research
     "post-secondary", "university", "college", "tuition", "campus",
     "sshrc", "nserc", "cihr", "tri-council", "research", "academic",
     "graduate", "scholarship", "endowment", "accreditation",
-    # ── Government & policy ──────────────────────────────────────────────
+    # Government & policy
     "federal", "provincial", "legislation", "bill", "act", "regulation",
     "policy", "budget", "fiscal", "funding", "grant", "investment",
     "government", "ministry", "minister", "senate", "parliament", "hansard",
-    "throne speech", "cabinet", "consultation", "announcement",
-    # ── Health — broad ───────────────────────────────────────────────────
+    "throne speech", "cabinet", "consultation",
+    # Health
     "health", "pharmacare", "healthcare", "mental health", "wellness",
-    "public health", "drug coverage", "care", "clinical", "hospital",
-    "patient", "treatment", "therapy", "medical", "nursing", "physician",
-    "allied health", "diagnostic", "laboratory", "lab", "imaging",
-    "physiotherapy", "occupational therapy", "social work",
-    "health authority", "health services", "health system", "health care",
-    "health worker", "health professional", "health workforce",
-    "health sciences", "hsa", "heabc",
-    # ── Substance use & overdose ─────────────────────────────────────────
-    "opioid", "overdose", "substance use", "substance abuse",
-    "addiction", "toxic drug", "drug poisoning", "drug supply",
-    "naloxone", "safe supply", "supervised consumption", "harm reduction",
-    "decriminalization", "fentanyl", "toxic supply", "illicit drug",
-    "drug death", "drug crisis", "toxic drug crisis",
-    # ── Mental health ────────────────────────────────────────────────────
-    "mental health", "psychiatric", "psychosocial", "crisis intervention",
-    "suicide", "eating disorder", "anxiety", "depression",
-    # ── Labour & collective bargaining ──────────────────────────────────
-    "labour", "labor", "collective bargaining", "collective agreement",
-    "union", "bargaining", "arbitration", "grievance", "strike",
-    "lockout", "wages", "wage", "compensation", "pension",
-    "benefits", "working conditions", "workforce", "employment",
-    "employer", "employee", "worker", "workers", "staff", "staffing",
-    "recruitment", "retention", "shortage", "vacancy", "vacancies",
-    "heu", "cupe", "bcgeu", "psac", "bcfed",
-    # ── Education & workforce ────────────────────────────────────────────
-    "education", "apprenticeship", "childcare", "child care", "early learning",
-    # ── BC-specific ──────────────────────────────────────────────────────
+    "public health", "drug coverage", "opioid", "overdose",
+    # Education & workforce
+    "education", "workforce", "labour", "labor", "employment",
+    "apprenticeship", "childcare", "child care", "early learning",
+    # BC-specific
     "bc government", "british columbia", "bc legislature",
-    "bc ministry", "bc health",
-    # ── Professional regulation ──────────────────────────────────────────
-    "scope of practice", "regulated", "regulator", "college of",
-    "licensing", "registration", "certification", "professional",
-    "pharmacist", "nurse", "physiotherapist", "social worker",
 ]
 
 LOW_RELEVANCE_TERMS: list[str] = [
-    # Sports — only clear entertainment sports, not sports medicine/health
-    "nba", "nfl", "nhl", "mlb", "fifa",
-    "basketball game", "baseball game", "soccer match", "golf tournament",
+    # Sports
+    "nba", "nfl", "nhl", "mlb", "fifa", "hockey game",
+    "basketball", "baseball game", "soccer match", "golf tournament",
     "tennis match", "formula 1", "nascar", "wrestling",
     # Entertainment / celebrity
     "celebrity", "box office", "album release",
     "music video", "red carpet", "awards show", "oscars", "emmys",
     "reality tv", "bachelor", "survivor",
     # Lifestyle noise
-    "horoscope", "astrology", "recipe", "cooking tips",
-    "lottery", "casino", "gambling",
+    "weather forecast", "horoscope", "astrology", "recipe", "cooking tips",
+    "lottery", "casino", "gambling", "real estate listing",
     "stock tip", "crypto price", "bitcoin price",
-    # NOTE: removed "real estate listing", "weather forecast" — these can appear
-    # legitimately in health/housing policy articles
 ]
 
-# Sources that get an automatic score bump so they always clear the pre-filter
-# even without keyword hits in their headline.  Every source in this app should
-# be trusted — a government press release or health authority announcement is
-# almost never irrelevant just because the headline doesn't use a keyword.
+# Sources that get an automatic score bump so they clear the pre-filter even
+# without keyword hits. Government press releases and official parliamentary
+# sources are almost always relevant and should never be dropped by the
+# keyword pre-filter.
 TRUSTED_SOURCE_BOOSTS: dict[str, int] = {
     # BC Government
     "bc government newsroom":                  30,
@@ -242,7 +213,8 @@ TRUSTED_SOURCE_BOOSTS: dict[str, int] = {
     "crown-indigenous":                        25,
     "employment and social development":       20,
     "innovation, science":                     20,
-    # Health Authorities — all should be trusted
+    "innovation science":                      20,
+    # Health Authorities
     "phsa":                                    30,
     "provincial health services":              30,
     "fraser health":                           30,
@@ -251,47 +223,40 @@ TRUSTED_SOURCE_BOOSTS: dict[str, int] = {
     "northern health":                         30,
     "island health":                           30,
     "bc mental health":                        30,
-    "bcmhsus":                                 30,
-    # HSA-specific
+    # HSA / Labour
     "hsa bc":                                  30,
     "heabc":                                   30,
     "health employers":                        30,
     "heu":                                     30,
     "hospital employees":                      30,
-    # Indigenous Health
-    "first nations health authority":          30,
-    "fnha":                                    30,
-    "bc first nations":                        25,
-    # Labour
     "bc federation of labour":                 25,
     "bcfed":                                   25,
     "cupe bc":                                 25,
     "bc labour relations":                     25,
     "lrb":                                     20,
+    # Indigenous Health
+    "first nations health authority":          30,
+    "fnha":                                    30,
+    "bc first nations":                        25,
     # Substance Use & Mental Health
     "bc centre on substance use":              30,
     "bccsu":                                   30,
     "mental health commission":                30,
     # Research & Policy
-    "sshrc":                                   25,
-    "nserc":                                   25,
-    "cihr":                                    25,
     "cihi":                                    25,
-    "cfhi":                                    25,
-    "universities canada":                     20,
-    "university affairs":                      20,
     "policy options":                          20,
     "canadian centre for policy":              20,
-    "higher education strategy":               20,
     # Professional Regulation
     "college of physicians":                   25,
     "bc college of nurses":                    25,
     "bccnm":                                   25,
     "college of pharmacists":                  25,
-    "college of physical therapists":          25,
-    # Other trusted sources in the source list
+    "canadian pharmacists":                    20,
+    # Research Councils (kept for legacy)
+    "sshrc":                                   25,
+    "nserc":                                   25,
+    "cihr":                                    25,
     "hansard":                                 20,
-    "maclean":                                 15,
 }
 
 
@@ -602,15 +567,11 @@ def _parse_gemini_response(text: str, title: str, source_name: str) -> dict | No
     """Parse the raw text from a Gemini response into a result dict.
 
     Relevance threshold:
-    - Trusted sources (in TRUSTED_SOURCE_BOOSTS): accept relevance >= 3
-      Rationale: if we deliberately added BCCSU or CUPE to the source list,
-      every article they publish is relevant by definition. Gemini may score
-      stub pages or brief summaries low (4-5) because of thin text — that's
-      an artifact of the content format, not actual irrelevance.
-    - Untrusted/unknown sources: keep the >= 6 bar to filter noise from
-      Google News RSS feeds that may return tangentially related articles.
-
-    Falls back to _default_analysis() on parse errors rather than crashing.
+    - Trusted sources (in TRUSTED_SOURCE_BOOSTS): accept relevance >= 3.
+      BCCSU stub pages and short summaries score 4-5 from Gemini because
+      the content is thin — but the source is curated so we keep them.
+    - Untrusted sources (Google News RSS etc): keep >= 6 to filter noise.
+    Falls back to _default_analysis() on parse errors.
     """
     text = text.strip()
     if text.lower() in ("null", ""):
@@ -625,15 +586,13 @@ def _parse_gemini_response(text: str, title: str, source_name: str) -> dict | No
         return _default_analysis(title, source_name)
 
     relevance = int(result.get("relevance", 0))
-
-    # Determine minimum threshold based on whether this is a curated source
-    s_lower = source_name.lower()
+    s_lower   = source_name.lower()
     is_trusted = any(k in s_lower for k in TRUSTED_SOURCE_BOOSTS)
-    min_relevance = 3 if is_trusted else 6
+    min_rel    = 3 if is_trusted else 6
 
-    if relevance < min_relevance:
-        log.debug(f"  [ai-filter] relevance={relevance} < {min_relevance} "
-                  f"({'trusted' if is_trusted else 'untrusted'}) — dropped: {title[:60]}")
+    if relevance < min_rel:
+        log.debug(f"  [ai-filter] score={relevance} < {min_rel} "
+                  f"({'trusted' if is_trusted else 'untrusted'}) dropped: {title[:60]}")
         return None
 
     return {
@@ -900,65 +859,36 @@ def _default_analysis(title: str, source_name: str, allow_fallback: bool = True)
 
     # Domain detection — ordered from most to least specific
     domain_rules = [
-        # Indigenous / reconciliation
+        # Indigenous / reconciliation (highest priority)
         (["indigenous", "first nations", "métis", "inuit", "reconcili", "dripa",
           "undrip", "trc", "ocap", "residential school", "land rights", "treaty",
           "nation-to-nation", "self-determination"],
          "Indigenous", "BC"),
-        # Substance use & overdose — must come before general health
-        (["opioid", "overdose", "toxic drug", "fentanyl", "substance use", "addiction",
-          "harm reduction", "safe supply", "supervised consumption", "decriminali",
-          "naloxone", "drug death", "drug crisis", "toxic supply"],
-         "Substance Use & Mental Health", "BC"),
-        # Mental health
-        (["mental health", "psychiatric", "psychosocial", "suicide", "eating disorder",
-          "crisis intervention", "anxiety", "depression"],
-         "Substance Use & Mental Health", "BC"),
-        # Labour & collective bargaining — must come before workforce
-        (["collective bargaining", "collective agreement", "arbitration", "grievance",
-          "strike", "lockout", "wage", "wages", "union", "bargaining",
-          "heu", "cupe", "bcgeu", "hsa", "heabc", "bcfed"],
-         "Labour Relations", "BC"),
-        # Pharmacare / drug coverage
-        (["pharmacare", "drug coverage", "drug plan", "formulary"],
-         "Health", "Federal"),
-        # Health workforce / staffing
-        (["health worker", "health workforce", "health professional", "allied health",
-          "nurse", "nursing", "physiotherap", "lab technician", "diagnostic imaging",
-          "scope of practice", "health human resources", "staffing", "recruitment",
-          "retention", "vacancy", "shortage"],
-         "Health", "BC"),
-        # Broad health
-        (["health", "healthcare", "public health", "clinical", "hospital", "patient",
-          "treatment", "medical", "wellness", "fnha", "health authority"],
-         "Health", "BC"),
-        # Professional regulation
-        (["regulated", "regulator", "college of", "licensing", "registration",
-          "certification", "scope of practice"],
-         "Health", "BC"),
-        # Research funding
-        (["research", "grant", "sshrc", "nserc", "cihr", "tri-council", "funding",
-          "cihi", "cfhi"],
-         "Research Funding", "Federal"),
         # Higher education
         (["university", "college", "post-secondary", "tuition", "student", "campus",
           "accreditation", "endowment"],
          "Higher Education", "BC"),
+        # Research funding
+        (["research", "grant", "sshrc", "nserc", "cihr", "tri-council", "funding"],
+         "Research Funding", "Federal"),
+        # Health / pharmacare
+        (["pharmacare", "drug coverage"], "Pharmacare", "BC"),
+        (["health", "mental health", "wellness", "healthcare", "opioid", "fnha"],
+         "Health", "BC"),
         # Budget & fiscal
-        (["budget", "fiscal", "spending", "billion", "million", "deficit", "surplus",
-          "investment", "psec", "wage mandate"],
-         "Budget & Fiscal Policy", "BC"),
+        (["budget", "fiscal", "spending", "billion", "million", "deficit", "surplus"],
+         "Budget", "Federal"),
         # Legislation
-        (["bill", "legislation", "act", "regulation", "law", "statute", "hansard"],
+        (["bill", "legislation", "act", "regulation", "law", "statute"],
          "Legislation", "BC"),
         # Environment
         (["climate", "emissions", "carbon", "clean energy", "wildfire", "flood",
           "environmental", "net zero"],
          "Environment", "Federal"),
-        # Workforce (general)
+        # Workforce
         (["workforce", "labour", "labor", "employment", "apprenticeship",
-          "childcare", "child care", "worker"],
-         "Labour Relations", "BC"),
+          "childcare", "child care"],
+         "Workforce", "Federal"),
         # Infrastructure
         (["infrastructure", "transit", "housing", "construction"],
          "Infrastructure", "Municipal"),
@@ -983,24 +913,12 @@ def _default_analysis(title: str, source_name: str, allow_fallback: bool = True)
     if not allow_fallback:
         return None  # scholarly scraper uses this to drop off-topic papers
 
-    # For trusted sources (explicitly added to PolicyPulse), always save with
-    # a floor relevance of 5. If we deliberately added BCCSU or CUPE to the
-    # source list, their articles are relevant by definition — even if the
-    # headline uses no tracked keywords (e.g. "New board member appointed").
-    s_lower = source_name.lower()
-    is_trusted = any(k in s_lower for k in TRUSTED_SOURCE_BOOSTS)
-
     return {
-        "domain":         "Health" if is_trusted else "Other",
-        "jurisdiction":   "BC",
-        "relevance":      5 if is_trusted else 4,
+        "domain":         "Other",
+        "jurisdiction":   "Federal",
+        "relevance":      6,
         "sentiment":      "Neutral",
         "summary":        f"{title} — from {source_name}.",
-        "why_it_matters": (
-            f"Published by {source_name}, a monitored source relevant to HSA BC's "
-            f"policy and labour relations mandate."
-            if is_trusted
-            else "Review this article for potential relevance to your policy priorities."
-        ),
+        "why_it_matters": "Review this article for potential relevance to your policy priorities.",
         "tags":           [],
     }
