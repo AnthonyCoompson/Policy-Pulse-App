@@ -45,9 +45,13 @@ from bs4 import BeautifulSoup
 
 log = logging.getLogger(__name__)
 
+# Contact address sent to OpenAlex for the polite pool. Override with the
+# CONTACT_EMAIL env var; the default keeps the current behaviour.
+CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "policy@policypulse.ca")
+
 HEADERS = {
     "User-Agent": (
-        "PolicyPulse/1.0 (mailto:policy@policypulse.ca) "
+        f"PolicyPulse/1.0 (mailto:{CONTACT_EMAIL}) "
         "Mozilla/5.0 (compatible; research-bot)"
     ),
     "Accept": "application/json",
@@ -152,7 +156,7 @@ def fetch_openalex(keywords: list[str], days_back: int = 90) -> list[dict]:
             resp = requests.get(
                 "https://api.openalex.org/works",
                 params=params,
-                headers={**HEADERS, "User-Agent": "PolicyPulse/1.0 (mailto:policy@policypulse.ca)"},
+                headers={**HEADERS, "User-Agent": f"PolicyPulse/1.0 (mailto:{CONTACT_EMAIL})"},
                 timeout=TIMEOUT,
             )
             if resp.status_code != 200:
@@ -900,31 +904,31 @@ def analyze_scholarly(title: str, abstract: str, source: str,
     try:
         cfg             = _load_prompt_config()
         role            = cfg.get("ai_institution_role",
-                                  "a BC university government relations team")
+                                  "program analyst at a provincial housing Crown corporation")
         priority_domains = cfg.get("ai_priority_domains",
-                                   "Indigenous, Reconciliation, Higher Education, Research Funding, Health")
+                                   "Supportive Housing, Shelter and Emergency, Encampments, Funding and Budget, Operator Standards")
     except Exception:
-        role             = "a BC university government relations team"
-        priority_domains = "Indigenous, Reconciliation, Higher Education, Research Funding, Health"
+        role             = "program analyst at a provincial housing Crown corporation"
+        priority_domains = "Supportive Housing, Shelter and Emergency, Encampments, Funding and Budget, Operator Standards"
 
     # Clarify peer-review status for arXiv preprints
     is_preprint = database.lower() == "arxiv"
     peer_review_note = (
-        "NOTE: This is a PREPRINT from arXiv — it has NOT been peer-reviewed. "
+        "NOTE: This is a PREPRINT from arXiv. It has NOT been peer-reviewed. "
         "Mention this pre-publication status in the why_it_matters field.\n\n"
         if is_preprint else
         "This is peer-reviewed academic content from " + database + ".\n\n"
     )
 
     scholarly_hint = (
-        f"[SCHOLARLY ARTICLE FROM {database} — {peer_review_note}"
+        f"[SCHOLARLY ARTICLE FROM {database}. {peer_review_note}"
         f"Score relevance generously: any paper relating to {priority_domains} "
-        f"or Canadian governance should score at least 6. Do not penalise "
+        f"or Canadian housing and homelessness policy should score at least 6. Do not penalise "
         f"academic language or the absence of direct government quotes.]\n\n"
         f"For the why_it_matters field: be concrete and action-oriented for "
         f"{role}. Name the specific mechanism of impact "
-        f"(e.g. funding formula implications, DRIPA alignment requirements, "
-        f"board obligations, consultation deadlines). Never write generic "
+        f"(e.g. evidence for service delivery standards, funding model implications, "
+        f"indicators for monitoring tools, operator reporting requirements). Never write generic "
         f"statements like 'this may be relevant to policy professionals'.\n\n"
     )
 
@@ -933,7 +937,7 @@ def analyze_scholarly(title: str, abstract: str, source: str,
     else:
         combined = (
             scholarly_hint
-            + "NOTE: No abstract available — score based on title alone "
+            + "NOTE: No abstract available. Score based on title alone "
               "using the generous instruction above."
         )
 
@@ -1175,10 +1179,10 @@ def run_scholarly_scrape(
         if not keywords:
             log.warning("No scholarly keywords configured — using built-in defaults")
             keywords = [
-                "Indigenous policy Canada",
-                "post-secondary education Canada",
-                "reconciliation Canada",
-                "pharmacare Canada",
+                "homelessness Canada",
+                "supportive housing evaluation",
+                "Housing First outcomes",
+                "encampments policy",
             ]
 
         log.info(f"  Keywords ({len(keywords)}): {keywords[:6]}")
@@ -1224,7 +1228,8 @@ def run_scholarly_scrape(
             health_kws = [
                 k for k in keywords
                 if any(w in k.lower() for w in
-                       ["health", "pharmacare", "fnha", "indigenous", "mental"])
+                       ["homeless", "housing", "harm reduction", "overdose",
+                        "substance", "mental", "supportive", "encampment"])
             ]
             if health_kws:
                 try:

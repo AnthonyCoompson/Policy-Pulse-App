@@ -46,7 +46,28 @@ import requests
 log = logging.getLogger(__name__)
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent"
+# Model is configurable. gemini-1.5-flash on the v1 endpoint has been retired.
+# Verify the current model name against Google documentation before changing the
+# default. Override with the GEMINI_MODEL env var without redeploying code.
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_API_VERSION = os.environ.get("GEMINI_API_VERSION", "v1beta")
+GEMINI_URL = (
+    f"https://generativelanguage.googleapis.com/{GEMINI_API_VERSION}/models/"
+    f"{GEMINI_MODEL}:generateContent"
+)
+_GEMINI_404_LOGGED = False
+
+
+def _log_gemini_404_once(status: int, body: str = "") -> None:
+    """Log a clear, one-time message if the configured model or endpoint is gone."""
+    global _GEMINI_404_LOGGED
+    if status == 404 and not _GEMINI_404_LOGGED:
+        _GEMINI_404_LOGGED = True
+        log.error(
+            f"Gemini returned 404 for model '{GEMINI_MODEL}' on API '{GEMINI_API_VERSION}'. "
+            f"The model name or endpoint version is probably retired. Set GEMINI_MODEL "
+            f"(and GEMINI_API_VERSION if needed) to a current value. Response: {body[:200]}"
+        )
 
 # Concurrency cap: override with GEMINI_CONCURRENCY env var (default 5).
 # Lower this if you see frequent 429 rate-limit errors in Render logs.
@@ -71,8 +92,8 @@ def _get_semaphore() -> asyncio.Semaphore:
 # To customise for a different institution or policy focus, POST to
 # /scraper-config with one or more of these keys:
 #
-#   ai_institution_name     — e.g. "Simon Fraser University"
-#   ai_institution_role     — e.g. "government relations team at a BC university"
+#   ai_institution_name     e.g. "a provincial housing Crown corporation"
+#   ai_institution_role     e.g. "program analyst at a provincial housing Crown corporation"
 #   ai_priority_domains     — comma-separated list of domains that score 9-10
 #   ai_priority_context     — 1-2 sentences describing what matters most
 #   ai_why_matters_examples — JSON array of example why_it_matters strings
@@ -80,28 +101,29 @@ def _get_semaphore() -> asyncio.Semaphore:
 #   ai_extra_low_terms      — comma-separated additional LOW_RELEVANCE_TERMS
 
 _PROMPT_CONFIG_DEFAULTS: dict = {
-    "ai_institution_name":     "a BC university or college",
-    "ai_institution_role":     "government relations team at a BC post-secondary institution",
-    "ai_priority_domains":     "Indigenous, Reconciliation, Higher Education, Research Funding, Health",
+    "ai_institution_name":     "a provincial housing Crown corporation",
+    "ai_institution_role":     "program analyst at a provincial housing Crown corporation",
+    "ai_priority_domains":     "Supportive Housing, Shelter and Emergency, Encampments, Funding and Budget, Operator Standards",
     "ai_priority_context": (
-        "BC and Canadian post-secondary education, Indigenous policy (DRIPA, UNDRIP, TRC, OCAP), "
-        "health policy (pharmacare, FNHA), and federal/provincial research funding"
+        "supportive housing and homelessness programs in BC, shelter and emergency response, "
+        "encampments, rent supplements, Indigenous homelessness, operator oversight, and "
+        "provincial and federal housing funding"
     ),
     "ai_why_matters_examples": json.dumps([
         (
-            "This bill's proposed board composition changes would require SFU and UBC to amend "
-            "bylaws before the fall semester — Legal and Board Relations should review the draft "
-            "text before second reading."
+            "The new per-diem rate for supportive housing sites changes the budget baseline in "
+            "operating agreements, so variance analysis for affected sites should be re-based "
+            "before the next quarterly review."
         ),
         (
-            "The 12% tri-council infrastructure cut directly reduces eligible renewal funding for "
-            "lab equipment — government relations teams should coordinate a joint sector response "
-            "with Universities Canada before the April budget reply deadline."
+            "The extension of Reaching Home funding for Indigenous homelessness projects changes "
+            "the available funding envelope for urban Indigenous providers, so service agreement "
+            "renewals should be checked against the new allocation before the next intake window."
         ),
         (
-            "The DRIPA Year 3 report sets new benchmarks for Indigenous partnership reporting that "
-            "post-secondary institutions must align with by March 2027 — flag for the VP Indigenous "
-            "portfolio and include in the next board briefing."
+            "The Auditor General's review of shelter operator oversight points to gaps in "
+            "reporting requirements, so the indicator set and reporting frequency in current "
+            "monitoring tools should be reviewed ahead of the follow-up consultation."
         ),
     ]),
 }
@@ -157,36 +179,57 @@ def _parse_extra_terms(raw: str) -> list[str]:
 # ai_extra_low_terms keys in scraper_config (comma-separated strings).
 
 HIGH_RELEVANCE_TERMS: list[str] = [
-    # Indigenous policy
-    "indigenous", "first nations", "métis", "inuit", "reconciliation",
-    "dripa", "undrip", "trc", "ocap", "fnha", "crown-indigenous",
-    "residential school", "land rights", "treaty", "nation-to-nation",
-    "self-determination", "inherent rights",
-    # Post-secondary & research
-    "post-secondary", "university", "college", "tuition", "campus",
-    "sshrc", "nserc", "cihr", "tri-council", "research", "academic",
-    "graduate", "scholarship", "endowment", "accreditation",
-    # Government & policy
-    "federal", "provincial", "legislation", "bill", "act", "regulation",
-    "policy", "budget", "fiscal", "funding", "grant", "investment",
-    "government", "ministry", "minister", "senate", "parliament", "hansard",
-    "throne speech", "cabinet", "consultation",
-    # Health
-    "health", "pharmacare", "healthcare", "mental health", "wellness",
-    "public health", "drug coverage", "opioid", "overdose",
-    # Education & workforce
-    "education", "workforce", "labour", "labor", "employment",
-    "apprenticeship", "childcare", "child care", "early learning",
-    # BC-specific
-    "bc government", "british columbia", "bc legislature",
+    # Core housing and homelessness
+    "homeless", "homelessness", "unhoused", "housing", "supportive housing",
+    "shelter", "emergency shelter", "encampment", "tent city", "rent supplement",
+    "rent assistance", "affordable housing", "social housing", "non-profit housing",
+    "tenancy", "tenant", "eviction", "landlord", "housing first",
+    "transitional housing", "single room occupancy", "sro", "housing crisis",
+    "housing continuum",
+    # Programs and bodies
+    "bc housing", "cmhc", "reaching home", "belonging in bc", "homeless prevention",
+    "community housing fund", "housing hub", "housing supply", "housing accord",
+    "built for zero", "point-in-time", "homeless count",
+    # Health, harm reduction and support
+    "harm reduction", "overdose", "toxic drug", "opioid", "safer supply",
+    "substance use", "mental health", "addiction", "supports", "wraparound",
+    "outreach", "drug decriminalization",
+    # Government and policy
+    "provincial", "federal", "municipal", "legislation", "bill", "act",
+    "regulation", "policy", "budget", "fiscal", "funding", "grant", "investment",
+    "ministry", "minister", "council", "mayor", "auditor general", "audit",
+    "evaluation", "report", "standards", "oversight", "operator",
+    "service agreement", "per diem",
+    # Indigenous housing
+    "indigenous", "first nations", "métis", "inuit", "urban indigenous",
+    "indigenous-led", "ocap", "reconciliation", "treaty", "on-reserve", "off-reserve",
+    # Geography
+    "british columbia", "bc", "b.c.", "vancouver", "surrey", "victoria", "burnaby",
+    "kelowna", "nanaimo", "downtown eastside", "lower mainland", "fraser health",
+    "vancouver coastal",
 ]
+
+# Very short terms produce false positives as plain substrings ("act" inside
+# "react", "bc" inside "abcd", "bill" inside "billion"). These are matched with
+# word boundaries instead. Longer terms stay as substring matches.
+_WORD_BOUNDARY_TERMS = ("act", "bc", "sro", "bill")
+_WORD_BOUNDARY_RE = {t: re.compile(r"\b" + re.escape(t) + r"\b") for t in _WORD_BOUNDARY_TERMS}
+
+
+def _term_hit(term: str, lowered: str) -> bool:
+    """True if term matches lowered title. Short terms use word boundaries."""
+    rx = _WORD_BOUNDARY_RE.get(term)
+    if rx is not None:
+        return rx.search(lowered) is not None
+    return term in lowered
+
 
 LOW_RELEVANCE_TERMS: list[str] = [
     # Sports
     "nba", "nfl", "nhl", "mlb", "fifa", "hockey game",
     "basketball", "baseball game", "soccer match", "golf tournament",
     "tennis match", "formula 1", "nascar", "wrestling",
-    # Entertainment / celebrity
+    # Entertainment and celebrity
     "celebrity", "box office", "album release",
     "music video", "red carpet", "awards show", "oscars", "emmys",
     "reality tv", "bachelor", "survivor",
@@ -194,69 +237,40 @@ LOW_RELEVANCE_TERMS: list[str] = [
     "weather forecast", "horoscope", "astrology", "recipe", "cooking tips",
     "lottery", "casino", "gambling", "real estate listing",
     "stock tip", "crypto price", "bitcoin price",
+    # Real estate noise that is not housing policy
+    "open house", "mortgage rates", "home staging",
 ]
 
 # Sources that get an automatic score bump so they clear the pre-filter even
-# without keyword hits. Government press releases and official parliamentary
-# sources are almost always relevant and should never be dropped by the
-# keyword pre-filter.
+# without keyword hits. Official housing, health, and government sources are
+# almost always relevant and should not be dropped by the keyword pre-filter.
+# Keys are lowercase substrings of the source name.
 TRUSTED_SOURCE_BOOSTS: dict[str, int] = {
-    # BC Government
-    "bc government newsroom":                  30,
-    "bc legislature":                          30,
-    "bc ministry":                             25,
-    "bc public service":                       25,
-    "bc indigenous":                           30,
-    # Federal Government
-    "government of canada":                    25,
-    "health canada":                           30,
-    "crown-indigenous":                        25,
-    "employment and social development":       20,
-    "innovation, science":                     20,
-    "innovation science":                      20,
-    # Health Authorities
-    "phsa":                                    30,
-    "provincial health services":              30,
-    "fraser health":                           30,
-    "vancouver coastal health":                30,
-    "interior health":                         30,
-    "northern health":                         30,
-    "island health":                           30,
-    "bc mental health":                        30,
-    # HSA / Labour
-    "hsa bc":                                  30,
-    "heabc":                                   30,
-    "health employers":                        30,
-    "heu":                                     30,
-    "hospital employees":                      30,
-    "bc federation of labour":                 25,
-    "bcfed":                                   25,
-    "cupe bc":                                 25,
-    "bc labour relations":                     25,
-    "lrb":                                     20,
-    # Indigenous Health
-    "first nations health authority":          30,
-    "fnha":                                    30,
-    "bc first nations":                        25,
-    # Substance Use & Mental Health
-    "bc centre on substance use":              30,
-    "bccsu":                                   30,
-    "mental health commission":                30,
-    # Research & Policy
-    "cihi":                                    25,
-    "policy options":                          20,
-    "canadian centre for policy":              20,
-    # Professional Regulation
-    "college of physicians":                   25,
-    "bc college of nurses":                    25,
-    "bccnm":                                   25,
-    "college of pharmacists":                  25,
-    "canadian pharmacists":                    20,
-    # Research Councils (kept for legacy)
-    "sshrc":                                   25,
-    "nserc":                                   25,
-    "cihr":                                    25,
-    "hansard":                                 20,
+    # Housing bodies
+    "bc housing":                           30,
+    "bc ministry":                          25,
+    "bc government newsroom":               30,
+    "cmhc":                                 30,
+    "reaching home":                        30,
+    "homelessness services association":    30,
+    "bc non-profit housing":                30,
+    "canadian alliance to end homelessness": 30,
+    "auditor general":                      30,
+    "bc coroners":                          25,
+    # Indigenous
+    "crown-indigenous":                     25,
+    "first nations health authority":       30,
+    "fnha":                                 30,
+    "bc first nations":                     25,
+    # Municipal
+    "city of vancouver":                    20,
+    "city of surrey":                       20,
+    "city of victoria":                     20,
+    # Policy commentary and research
+    "policy options":                       20,
+    "yellowhead":                           20,
+    "homeless hub":                         25,
+    "canadian centre for policy":           20,
 }
 
 
@@ -278,11 +292,11 @@ def quick_relevance_score(title: str, source_name: str = "") -> int:
     score         = 0
 
     for term in HIGH_RELEVANCE_TERMS:
-        if term in lowered:
+        if _term_hit(term, lowered):
             score += 15
 
     for term in LOW_RELEVANCE_TERMS:
-        if term in lowered:
+        if _term_hit(term, lowered):
             score -= 30
 
     # Source trust boost — respected sources get a floor score regardless of
@@ -318,16 +332,16 @@ def _build_system_prompt(cfg: dict) -> str:
     role           = cfg.get("ai_institution_role", _PROMPT_CONFIG_DEFAULTS["ai_institution_role"])
     priority_ctx   = cfg.get("ai_priority_context", _PROMPT_CONFIG_DEFAULTS["ai_priority_context"])
 
-    return f"""You are a senior Canadian policy analyst specializing in:
+    return f"""You are a senior Canadian housing and homelessness policy analyst specializing in:
 - {priority_ctx}
-- BC and Federal government policy
-- Higher education governance and funding
-- Health policy (pharmacare, FNHA, mental health)
+- Supportive housing, shelter and emergency response, encampments, rent supplements, and Housing First
+- Indigenous homelessness and Indigenous-led housing providers
+- Operator oversight, service agreements, and provincial and federal housing funding
 
 You analyze news articles and return structured JSON assessments for {institution}.
 
-DOMAIN OPTIONS (return as a JSON array — usually 1 item, up to 3 for genuinely cross-cutting articles):
-Higher Education | Research Funding | Indigenous | Reconciliation | Health | Pharmacare | Budget | Legislation | Infrastructure | Workforce | Consultation | Political | Environment | Housing | Child Care | International | Other
+DOMAIN OPTIONS (return as a JSON array, usually 1 item, up to 3 for genuinely cross-cutting articles):
+Supportive Housing | Shelter and Emergency | Encampments | Rent Supplements | Indigenous Housing | Health and Harm Reduction | Funding and Budget | Operator Standards | Tenancy and Legislation | Evidence and Evaluation | Affordable Housing | Political | Other
 
 DOMAIN ARRAY RULES:
 
@@ -336,29 +350,28 @@ are mentioned in passing.
 
 TWO domains: Use when the article is substantively about two distinct policy areas and a reader
 monitoring either one would need to see it. This is common for:
-- An Indigenous health funding announcement → ["Indigenous", "Health"]
-- A post-secondary budget cut that affects research → ["Higher Education", "Research Funding"]
-- A pharmacare bill with reconciliation implications → ["Pharmacare", "Indigenous"]
-- A consultation process for a new act → ["Legislation", "Consultation"]
+- A funding announcement for Indigenous homelessness projects: ["Indigenous Housing", "Funding and Budget"]
+- A shelter oversight audit: ["Shelter and Emergency", "Operator Standards"]
+- A supportive housing site opening with health supports: ["Supportive Housing", "Health and Harm Reduction"]
+- A tenancy bill that affects rent supplements: ["Tenancy and Legislation", "Rent Supplements"]
 Ask: "Would a monitor of domain B miss something actionable if I only tagged domain A?" If yes, add B.
 
 THREE domains: Rare. Only when three distinct areas are each substantively covered with their own
-detail — not just mentioned. Example: "BC announces $200M for Indigenous-led health research with
-universities" → ["Indigenous", "Health", "Research Funding"]. Each domain has its own mechanism,
-stakeholders, and implications in the article.
+detail, not just mentioned. Each domain has its own mechanism, stakeholders, and implications in
+the article.
 
 HARD LIMITS:
 - Never return more than 3 domains.
-- Tags capture cross-cutting themes (DRIPA, Budget, Urgent) — don't add a domain just to match a tag.
-- When genuinely unsure whether a second domain applies, include it — over-tagging by one domain
-  is less harmful than a GR professional missing a relevant article entirely.
+- Tags capture cross-cutting themes (Funding, Audit, Urgent). Do not add a domain just to match a tag.
+- When genuinely unsure whether a second domain applies, include it. Over-tagging by one domain
+  is less harmful than a program analyst missing a relevant article entirely.
 
-JURISDICTION OPTIONS: Federal | BC | Alberta | Ontario | Quebec | Municipal | Pan-Canadian | International
+JURISDICTION OPTIONS: Federal | BC | Municipal | Regional | Pan-Canadian | International
 
 SENTIMENT OPTIONS: Critical | Supportive | Neutral
 
 TAG OPTIONS (pick up to 4 that apply):
-Urgent | Briefing Note Worthy | UNDRIP | DRIPA | TRC | OCAP | Budget | Funding | Research | Legislation | Regulation | Consultation | Reconciliation | Indigenous | Health | Mental Health | Pharmacare | Workforce | Infrastructure | Political | Data/Evidence | Court Decision | Audit | International
+Urgent | Briefing Note Worthy | Supportive Housing | Shelter | Encampments | Rent Supplement | Housing First | Indigenous | Toxic Drug Crisis | Operator | Funding | Budget | Legislation | Regulation | Consultation | Evaluation | Data/Evidence | Audit | Court Decision | Tenancy | Mental Health | Reaching Home | International
 
 Return ONLY valid JSON. No markdown, no explanation, no text before or after the JSON."""
 
@@ -379,20 +392,20 @@ def _build_analysis_prompts(cfg: dict) -> tuple[str, str]:
         good_examples = "\n".join(f'- "{ex}"' for ex in examples[:3])
     except Exception:
         good_examples = (
-            '- "This bill\'s proposed changes require institutions to review bylaws before second reading."\n'
-            '- "The funding cut reduces eligible renewal allocations — a joint sector response is needed."\n'
-            '- "DRIPA benchmarks require new reporting by March 2027 — flag for VP Indigenous portfolio."'
+            '- "The new per-diem rate for supportive housing sites changes the budget baseline in operating agreements, so variance analysis should be re-based before the next quarterly review."\n'
+            '- "The Reaching Home extension changes the funding envelope for Indigenous homelessness providers, so service agreement renewals should be checked against the new allocation."\n'
+            '- "The audit of shelter operator oversight points to reporting gaps, so indicator sets in monitoring tools should be reviewed before the follow-up consultation."'
         )
 
     full_prompt = f"""Analyze this article and return a JSON object with these exact fields:
 
 {{
-  "domain": ["<primary domain>", "<optional second domain>", "<optional third domain — rare>"],
+  "domain": ["<primary domain>", "<optional second domain>", "<optional third domain, rare>"],
   "jurisdiction": "<single jurisdiction from list>",
   "relevance": <integer 1-10, where 10 = critical for {priority_doms}>,
   "sentiment": "<Critical|Supportive|Neutral toward government policy>",
-  "summary": "<2-3 sentences summarizing what the article actually says — drawn from the article text, not just the title>",
-  "why_it_matters": "<2-3 sentences — see guidance below>",
+  "summary": "<2-3 sentences summarizing what the article actually says, drawn from the article text, not just the title>",
+  "why_it_matters": "<2-3 sentences, see guidance below>",
   "tags": ["<tag1>", "<tag2>"]
 }}
 
@@ -401,35 +414,36 @@ domain is a JSON array. Use 1 item for single-domain articles, 2 items when genu
 TITLE: <TITLE>
 
 Relevance scoring guide:
-9-10: Critical — directly affects {priority_doms}
-7-8: High — relevant to sector, worth monitoring closely
-6: Moderate — tangentially relevant, include if space allows
-1-5: Low relevance — return null
+9-10: Directly affects supportive housing or homelessness programs, funding envelopes, operator obligations, or monitoring requirements in BC
+7-8: Relevant to the sector, worth monitoring
+6: Tangential, include if space allows
+1-5: Return null
 
-WHY IT MATTERS — guidance for writing a strong entry:
-Write 2-3 sentences that answer: "So what does this mean for a {role} RIGHT NOW?"
-Be concrete and action-oriented. Name the specific mechanism of impact (funding formula,
-legislative deadline, consultation window, board obligation).
+WHY IT MATTERS: guidance for writing a strong entry:
+The reader is a {role}. Write 2-3 sentences that answer: what does this mean for
+service agreements, funding allocations, operator reporting, monitoring tools, or delivery risk
+right now? Name the specific mechanism (funding envelope, reporting requirement, standard,
+consultation window, legislative change). Be concrete and action-oriented.
 
 GOOD examples:
 {good_examples}
 
-BAD examples (too generic — never write these):
+BAD examples (too generic, never write these):
 - "This article may be relevant to policy professionals monitoring government activity."
 - "Review this article for potential relevance to your policy priorities."
-- "This could have implications for higher education stakeholders."
+- "This could have implications for housing stakeholders."
 
 If relevance would be 5 or below, return exactly: null"""
 
     title_only_prompt = f"""Analyze this article and return a JSON object with these exact fields:
 
 {{
-  "domain": ["<primary domain>", "<optional second domain>", "<optional third domain — rare>"],
+  "domain": ["<primary domain>", "<optional second domain>", "<optional third domain, rare>"],
   "jurisdiction": "<single jurisdiction from list>",
   "relevance": <integer 1-10, where 10 = critical for {priority_doms}>,
   "sentiment": "<Critical|Supportive|Neutral toward government policy>",
   "summary": "<2-3 sentences summarizing the likely policy significance based on the title and source>",
-  "why_it_matters": "<2-3 sentences — see guidance below>",
+  "why_it_matters": "<2-3 sentences, see guidance below>",
   "tags": ["<tag1>", "<tag2>"]
 }}
 
@@ -440,19 +454,21 @@ SOURCE: <SOURCE>
 URL: <URL>
 
 Relevance scoring guide:
-9-10: Critical — directly affects {priority_doms}
-7-8: High — relevant to sector, worth monitoring closely
-6: Moderate — tangentially relevant, include if space allows
-1-5: Low relevance — return null
+9-10: Directly affects supportive housing or homelessness programs, funding envelopes, operator obligations, or monitoring requirements in BC
+7-8: Relevant to the sector, worth monitoring
+6: Tangential, include if space allows
+1-5: Return null
 
-WHY IT MATTERS — guidance for writing a strong entry:
-Write 2-3 sentences that answer: "So what does this mean for a {role} RIGHT NOW?"
-Be concrete and action-oriented. Name the specific mechanism of impact.
+WHY IT MATTERS: guidance for writing a strong entry:
+The reader is a {role}. Write 2-3 sentences that answer: what does this mean for
+service agreements, funding allocations, operator reporting, monitoring tools, or delivery risk
+right now? Name the specific mechanism (funding envelope, reporting requirement, standard,
+consultation window, legislative change). Be concrete and action-oriented.
 
 GOOD examples:
 {good_examples}
 
-BAD examples (too generic — never write these):
+BAD examples (too generic, never write these):
 - "This article may be relevant to policy professionals monitoring government activity."
 - "Review this article for potential relevance to your policy priorities."
 
@@ -566,12 +582,8 @@ def _normalize_domain(raw) -> str:
 def _parse_gemini_response(text: str, title: str, source_name: str) -> dict | None:
     """Parse the raw text from a Gemini response into a result dict.
 
-    Relevance threshold:
-    - Trusted sources (in TRUSTED_SOURCE_BOOSTS): accept relevance >= 3.
-      BCCSU stub pages and short summaries score 4-5 from Gemini because
-      the content is thin — but the source is curated so we keep them.
-    - Untrusted sources (Google News RSS etc): keep >= 6 to filter noise.
-    Falls back to _default_analysis() on parse errors.
+    Returns None if relevance < 6 or text is 'null'.
+    Falls back to _default_analysis() on parse errors rather than crashing.
     """
     text = text.strip()
     if text.lower() in ("null", ""):
@@ -585,20 +597,13 @@ def _parse_gemini_response(text: str, title: str, source_name: str) -> dict | No
         log.warning(f"JSON parse error: {e} — raw: {text[:200]}")
         return _default_analysis(title, source_name)
 
-    relevance = int(result.get("relevance", 0))
-    s_lower   = source_name.lower()
-    is_trusted = any(k in s_lower for k in TRUSTED_SOURCE_BOOSTS)
-    min_rel    = 3 if is_trusted else 6
-
-    if relevance < min_rel:
-        log.debug(f"  [ai-filter] score={relevance} < {min_rel} "
-                  f"({'trusted' if is_trusted else 'untrusted'}) dropped: {title[:60]}")
+    if result.get("relevance", 0) < 6:
         return None
 
     return {
         "domain":         _normalize_domain(result.get("domain", "Other")),
         "jurisdiction":   result.get("jurisdiction", "Unknown"),
-        "relevance":      relevance,
+        "relevance":      int(result.get("relevance", 6)),
         "sentiment":      result.get("sentiment", "Neutral"),
         "summary":        result.get("summary", title),
         "why_it_matters": result.get("why_it_matters",
@@ -720,6 +725,11 @@ def analyze_article(title: str, url: str, source_name: str = "",
                     continue
                 return _default_analysis(title, source_name)
 
+            # A 404 means the model or endpoint version is gone. Retrying cannot help.
+            if resp.status_code == 404:
+                _log_gemini_404_once(404, resp.text)
+                return _default_analysis(title, source_name)
+
             resp.raise_for_status()
             data = resp.json()
             text = data["candidates"][0]["content"]["parts"][0]["text"]
@@ -770,6 +780,10 @@ async def analyze_article_async(title: str, url: str, source_name: str = "",
                             continue
                         return _default_analysis(title, source_name)
 
+                    if resp.status_code == 404:
+                        _log_gemini_404_once(404, resp.text)
+                        return _default_analysis(title, source_name)
+
                     resp.raise_for_status()
                     data = resp.json()
                     text = data["candidates"][0]["content"]["parts"][0]["text"]
@@ -812,7 +826,7 @@ async def analyze_articles_batch(items: list) -> list:
     Example:
         results = asyncio.run(analyze_articles_batch([
             {"title": "Budget cuts", "url": "https://...", "source_name": "CBC", "article_text": "..."},
-            {"title": "DRIPA update", "url": "https://...", "source_name": "BC Gov", "article_text": "..."},
+            {"title": "Encampment response plan approved", "url": "https://...", "source_name": "BC Gov", "article_text": "..."},
         ]))
     """
     tasks = [
@@ -833,9 +847,9 @@ async def analyze_articles_batch(items: list) -> list:
 def _default_analysis(title: str, source_name: str, allow_fallback: bool = True) -> dict | None:
     """Keyword-based fallback analysis when AI is unavailable or returns null.
 
-    Applies the same domain taxonomy as the AI prompt so results are consistent.
-    Uses the DB-configured priority domains to determine which categories earn
-    higher relevance scores.
+    Applies the same housing and homelessness domain taxonomy as the AI prompt
+    so results are consistent. Uses the DB-configured priority domains to decide
+    which categories earn higher relevance scores.
 
     Args:
         title:          Article headline string.
@@ -843,69 +857,75 @@ def _default_analysis(title: str, source_name: str, allow_fallback: bool = True)
         allow_fallback: If False, returns None instead of a minimum-relevance
                         result when no policy keywords match. Used by the
                         scholarly scraper so genuinely off-topic papers are
-                        filtered out rather than saved with a floor score of 6.
+                        filtered out rather than saved with a floor score.
     """
     title_lower = title.lower()
 
-    # Load priority domains from config to give them higher fallback scores.
-    # This means if you add "Climate" to your priority domains, climate articles
-    # will score 7+ in the fallback even when Gemini is down.
     try:
         cfg = _load_prompt_config()
         priority_domains_raw = cfg.get("ai_priority_domains", _PROMPT_CONFIG_DEFAULTS["ai_priority_domains"])
         priority_domains = [d.strip().lower() for d in priority_domains_raw.split(",")]
     except Exception:
-        priority_domains = ["indigenous", "reconciliation", "higher education", "research funding", "health"]
+        priority_domains = ["supportive housing", "shelter and emergency", "encampments",
+                            "funding and budget", "operator standards"]
 
-    # Domain detection — ordered from most to least specific
+    # Domain detection, ordered from most to least specific.
     domain_rules = [
-        # Indigenous / reconciliation (highest priority)
-        (["indigenous", "first nations", "métis", "inuit", "reconcili", "dripa",
-          "undrip", "trc", "ocap", "residential school", "land rights", "treaty",
-          "nation-to-nation", "self-determination"],
-         "Indigenous", "BC"),
-        # Higher education
-        (["university", "college", "post-secondary", "tuition", "student", "campus",
-          "accreditation", "endowment"],
-         "Higher Education", "BC"),
-        # Research funding
-        (["research", "grant", "sshrc", "nserc", "cihr", "tri-council", "funding"],
-         "Research Funding", "Federal"),
-        # Health / pharmacare
-        (["pharmacare", "drug coverage"], "Pharmacare", "BC"),
-        (["health", "mental health", "wellness", "healthcare", "opioid", "fnha"],
-         "Health", "BC"),
-        # Budget & fiscal
-        (["budget", "fiscal", "spending", "billion", "million", "deficit", "surplus"],
-         "Budget", "Federal"),
-        # Legislation
-        (["bill", "legislation", "act", "regulation", "law", "statute"],
-         "Legislation", "BC"),
-        # Environment
-        (["climate", "emissions", "carbon", "clean energy", "wildfire", "flood",
-          "environmental", "net zero"],
-         "Environment", "Federal"),
-        # Workforce
-        (["workforce", "labour", "labor", "employment", "apprenticeship",
-          "childcare", "child care"],
-         "Workforce", "Federal"),
-        # Infrastructure
-        (["infrastructure", "transit", "housing", "construction"],
-         "Infrastructure", "Municipal"),
+        # Indigenous housing and homelessness
+        (["indigenous", "first nations", "métis", "inuit", "reconcili", "ocap",
+          "treaty", "urban indigenous", "indigenous-led"],
+         "Indigenous Housing"),
+        # Encampments
+        (["encampment", "tent city"], "Encampments"),
+        # Supportive housing
+        (["supportive housing", "housing first", "transitional housing",
+          "single room occupancy", "sro"],
+         "Supportive Housing"),
+        # Shelter and emergency response, general homelessness
+        (["homeless", "unhoused", "shelter", "point-in-time", "homeless count"],
+         "Shelter and Emergency"),
+        # Rent supplements
+        (["rent supplement", "rent assistance"], "Rent Supplements"),
+        # Tenancy and legislation
+        (["tenancy", "tenant", "eviction", "landlord", "legislation", "bill", "act",
+          "regulation"],
+         "Tenancy and Legislation"),
+        # Operator standards and oversight
+        (["operator", "oversight", "service agreement", "per diem", "standards",
+          "auditor general", "audit"],
+         "Operator Standards"),
+        # Health and harm reduction
+        (["harm reduction", "overdose", "toxic drug", "opioid", "safer supply",
+          "substance use", "mental health", "addiction"],
+         "Health and Harm Reduction"),
+        # Funding and budget
+        (["funding", "budget", "fiscal", "grant", "investment", "billion", "million",
+          "reaching home"],
+         "Funding and Budget"),
+        # Evidence and evaluation
+        (["evaluation", "report", "research", "data", "evidence"],
+         "Evidence and Evaluation"),
+        # General housing
+        (["affordable housing", "social housing", "non-profit housing", "housing"],
+         "Affordable Housing"),
     ]
 
-    for keywords, domain, default_jurisdiction in domain_rules:
-        if any(kw in title_lower for kw in keywords):
-            # Boost relevance if this domain is in the configured priority list
+    why_default = (
+        "Review this item for effects on service agreements, funding allocations, "
+        "operator reporting, or delivery risk in housing and homelessness programs."
+    )
+
+    for keywords, domain in domain_rules:
+        if any(_term_hit(kw, title_lower) for kw in keywords):
             is_priority = any(p in domain.lower() for p in priority_domains)
             relevance = 8 if is_priority else 6
             return {
                 "domain":         domain,
-                "jurisdiction":   default_jurisdiction,
+                "jurisdiction":   "BC",
                 "relevance":      relevance,
                 "sentiment":      "Neutral",
-                "summary":        f"{title} — from {source_name}.",
-                "why_it_matters": "Review this article for potential relevance to your policy priorities.",
+                "summary":        f"{title}. From {source_name}.",
+                "why_it_matters": why_default,
                 "tags":           [],
             }
 
@@ -915,10 +935,10 @@ def _default_analysis(title: str, source_name: str, allow_fallback: bool = True)
 
     return {
         "domain":         "Other",
-        "jurisdiction":   "Federal",
+        "jurisdiction":   "BC",
         "relevance":      6,
         "sentiment":      "Neutral",
-        "summary":        f"{title} — from {source_name}.",
-        "why_it_matters": "Review this article for potential relevance to your policy priorities.",
+        "summary":        f"{title}. From {source_name}.",
+        "why_it_matters": why_default,
         "tags":           [],
     }
