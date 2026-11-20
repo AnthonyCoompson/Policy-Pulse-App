@@ -23,6 +23,7 @@ v3: Added optional Turso (libSQL) backend. When TURSO_URL is set, get_conn()
 import sqlite3
 import os
 from datetime import datetime
+from urllib.parse import quote_plus
 
 DB_PATH = os.environ.get("DB_PATH", "policypulse.db")
 
@@ -34,6 +35,9 @@ TURSO_URL   = os.environ.get("TURSO_URL", "")
 TURSO_TOKEN = os.environ.get("TURSO_TOKEN", "")
 
 _use_turso = bool(TURSO_URL)
+
+# Bump this string to replace seeded sources and keywords on the next boot.
+SEED_VERSION = "housing-v1"
 
 if _use_turso:
     import libsql_experimental as libsql
@@ -419,20 +423,48 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_tracker_events_tracker ON tracker_events(tracker_id);
     """)
 
-    # Seed sources if empty
-    cur.execute("SELECT COUNT(*) FROM sources")
-    if cur.fetchone()[0] == 0:
+    # Columns used by the Sources tab (Pages stepper, Backfill). The July build wrote to
+    # these without creating them, which made its whole boot migration roll back.
+    for _col, _ddl in (("max_pages", "INTEGER DEFAULT 1"),
+                       ("pagination_style", "TEXT DEFAULT 'auto'")):
+        try:
+            cur.execute(f"ALTER TABLE sources ADD COLUMN {_col} {_ddl}")
+            conn.commit()
+        except Exception:
+            pass  # column already exists
+
+    # Versioned seed data. When SEED_VERSION changes, sources, research sources,
+    # scholarly keywords and watchlist keywords are replaced with the current
+    # defaults. Articles are never touched here (use POST /admin/clear-content).
+    # Any sources or keywords you added yourself are replaced too, so export
+    # anything you want to keep before bumping the version.
+    stored_version = None
+    try:
+        row = cur.execute("SELECT value FROM scraper_config WHERE key = 'seed_version'").fetchone()
+        stored_version = row["value"] if row else None
+    except Exception:
+        stored_version = None
+
+    if stored_version != SEED_VERSION:
+        cur.execute("DELETE FROM sources")
+        cur.execute("DELETE FROM research_sources")
+        cur.execute("DELETE FROM scholarly_keywords")
+        cur.execute("DELETE FROM watchlist_keywords")
         _seed_sources(cur)
-
-    # Seed research sources if empty
-    cur.execute("SELECT COUNT(*) FROM research_sources")
-    if cur.fetchone()[0] == 0:
         _seed_research_sources(cur)
-
-    # Seed scholarly keywords if empty
-    cur.execute("SELECT COUNT(*) FROM scholarly_keywords")
-    if cur.fetchone()[0] == 0:
         _seed_scholarly_keywords(cur)
+        _seed_watchlist_keywords(cur)
+        cur.execute(
+            "INSERT INTO scraper_config (key, value) VALUES ('seed_version', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (SEED_VERSION,)
+        )
+
+    # One row per source URL. Safe here because sources were just deduplicated by reseeding.
+    try:
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_url_unique ON sources(url)")
+    except Exception:
+        pass
 
     conn.commit()
 
@@ -461,303 +493,157 @@ def init_db():
     except Exception:
         pass  # column already exists
 
-    # ── Migration: add health sources + fix source URLs ─────────────────────────
-    # Safe to run on every boot — INSERT OR IGNORE skips already-present rows.
-    # ── Migration: clean up broken sources and apply all known URL fixes ─────────
-    # Runs every boot — all operations are idempotent.
-    # Based on PolicyPulse-Source-Diagnostic-2026-07-14.pdf findings.
-    try:
-        # 1. Delete duplicate rows with broken/outdated exact URLs
-        for bad_url in [
-            "https://www.canada.ca/en/health-canada/news.html",
-            "https://www.canada.ca/en/health-canada/news.atom",
-            "https://www.cihi.ca/sites/default/files/cihi-news-rss.xml",
-            "https://www.mentalhealthcommission.ca/news/",
-            "https://www.phsa.ca/about-site/news-stories",
-            "https://heabc.bc.ca/news-and-resources/",
-            "https://heabc.bc.ca/feed/",
-            "https://www.leg.bc.ca/rss/bills",
-            "https://www.leg.bc.ca/rss/bills-introduced",
-            "https://www.leg.bc.ca/rss/news",
-            "https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings",
-            "https://www.bccnm.ca/news/Pages/default.aspx",
-            "https://www.bccnm.ca/news/",
-            "https://www.bccnm.ca/NP/news/Pages/default.aspx",
-            "https://www.interiorhealth.ca/about/media-centre/news",
-            "https://www.interiorhealth.ca/about/media-centre",
-            "https://www.northernhealth.ca/about-northern-health/news",
-            "https://www.northernhealth.ca/about-northern-health/media-centre/news-releases",
-            "https://www.pharmacists.ca/news-events/news/",
-            "https://www.pharmacists.ca/rss/news.xml",
-            "https://www.cptbc.org/news/",
-            "https://www.collegept.ca/about/news-events",
-            "https://www.bclrb.ca/decisions/",
-            "https://www.bcmhsus.ca/about/news-stories",
-            "https://www.bcmhsus.ca/",
-            "https://www.cfhi-fcass.ca/news",
-            "https://www.cfhi-fcass.ca/news-and-events/news",
-            "https://cihr-irsc.gc.ca/rss/news-eng.xml",
-            "https://www.cihr-irsc.gc.ca/rss/news-eng.xml",
-            "https://cihr-irsc.gc.ca/e/news_releases.html",
-            "https://www.sshrc-crsh.gc.ca/rss/news-nouvelles-eng.xml",
-            "https://www.sshrc-crsh.gc.ca/news-nouvelles/index-eng.aspx",
-            "https://www.nserc-crsng.gc.ca/rss/news-eng.xml",
-            "https://www.nserc-crsng.gc.ca/Media-Media/NewsReleases-CommuniquesDePresse_eng.asp",
-            "https://www.universityaffairs.ca/feed/",
-            "https://www.univcan.ca/feed/",
-            "https://www.timeshighereducation.com/rss.xml",
-            "https://higheredstrategy.com/feed/",
-            "https://www.macleans.ca/education/feed/",
-            "https://www.burnaby.ca/city-hall/news",
-            "https://www.burnaby.ca/news",
-            "https://www2.gov.bc.ca/gov/content/careers-myhr/about-the-bc-public-service/our-organization",
-            "https://news.gov.bc.ca/ministries/public-service-agency",
-            "https://news.gov.bc.ca/ministries/indigenous-relations-reconciliation",
-            "https://www.canada.ca/en/employment-social-development/news.html",
-            "https://www.canada.ca/en/innovation-science-economic-development/news.html",
-            "https://www.canada.ca/en/crown-indigenous-relations-northern-affairs/news.html",
-            "https://www.canada.ca/en/employment-social-development/news.atom",
-            "https://www.canada.ca/en/innovation-science-economic-development/news.atom",
-            "https://www.canada.ca/en/crown-indigenous-relations-northern-affairs/news.atom",
-        ]:
-            cur.execute("DELETE FROM sources WHERE url = ?", (bad_url,))
-
-        # 2. Delete academia/irrelevant sources by name pattern
-        for pattern in [
-            "%University Affairs%", "%Higher Education Strategy%",
-            "%Maclean%Education%", "%Times Higher Education%",
-            "%Universities Canada%", "%SSHRC%", "%NSERC%",
-            "%CFHI%", "%CIHR%", "%Burnaby%",
-            "%Physical Therapists%",  # collegept.ca DNS fails
-        ]:
-            cur.execute("DELETE FROM sources WHERE name LIKE ?", (pattern,))
-
-        # 3. Name-based dedup — keep row with highest article_count
-        dupes = cur.execute(
-            "SELECT name FROM sources GROUP BY name HAVING COUNT(*) > 1"
-        ).fetchall()
-        for (name,) in dupes:
-            rows = cur.execute(
-                "SELECT id FROM sources WHERE name=? ORDER BY article_count DESC, id ASC",
-                (name,)
-            ).fetchall()
-            for row in rows[1:]:
-                cur.execute("DELETE FROM sources WHERE id=?", (row[0],))
-
-        # 4. Apply URL fixes (LIKE-based so they catch any remaining variant)
-        _fixes = [
-            # Core working sources — pin correct URLs
-            ("%Substance Use%",
-             "https://www.bccsu.ca/news-and-media/", "html",
-             "BC Centre on Substance Use"),
-            ("%Mental Health Commission%",
-             "https://www.mentalhealthcommission.ca/feed/", "rss",
-             "Mental Health Commission of Canada"),
-            ("%Indigenous%Reconciliation%",
-             "https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",
-             "html", "BC Indigenous Relations & Reconciliation"),
-            ("%Federation of Labour%",
-             "https://bcfed.ca/news/", "html", "BC Federation of Labour"),
-            ("%Hospital Employees Union%",
-             "https://www.heu.org/news/", "html", "HEU — Hospital Employees Union"),
-            ("%CUPE BC%",
-             "https://cupe.bc.ca/news/", "html", "CUPE BC"),
-            ("%Labour Relations Board%",
-             "https://lrb.bc.ca/news/", "html", "BC Labour Relations Board"),
-            ("%CIHI%",
-             "https://www.cihi.ca/en/news", "html",
-             "CIHI — Canadian Institute for Health Info"),
-            ("%Canadian Pharmacists%",
-             "https://www.pharmacists.ca/rss/news.xml", "rss",
-             "Canadian Pharmacists Association"),
-            ("%College of Nurses%",
-             "https://www.bccnm.ca/news/", "html",
-             "BC College of Nurses & Midwives"),
-            ("%HEABC%",
-             "https://heabc.bc.ca/", "html",
-             "HEABC — Health Employers Association of BC"),
-            ("%Interior Health%",
-             "https://www.interiorhealth.ca/about/media-centre", "html",
-             "Interior Health Authority"),
-            ("%Northern Health%",
-             "https://www.northernhealth.ca/about-northern-health/media-centre", "html",
-             "Northern Health Authority"),
-            ("%Provincial Health Services%",
-             "https://www.phsa.ca/about/news-stories", "html",
-             "PHSA — Provincial Health Services Authority"),
-            ("%Legislature%",
-             "https://www.leg.bc.ca/bills-statutes/2026/42nd-parliament/3rd-session",
-             "html", "BC Legislature — Bills & Proceedings"),
-            ("%Public Service Agency%",
-             "https://news.gov.bc.ca/", "html",
-             "BC Public Service Agency"),
-            # Federal: canada.ca IP-blocked — use Google News RSS
-            ("%Health Canada%",
-             "https://news.google.com/rss/search?q=Health+Canada+site:canada.ca&hl=en-CA&gl=CA&ceid=CA:en",
-             "rss", "Health Canada News"),
-            ("%Crown-Indigenous%",
-             "https://news.google.com/rss/search?q=%22Crown-Indigenous+Relations%22+Canada&hl=en-CA&gl=CA&ceid=CA:en",
-             "rss", "Crown-Indigenous Relations Canada"),
-            ("%Innovation Science%",
-             "https://news.google.com/rss/search?q=%22Innovation+Science%22+Canada+government&hl=en-CA&gl=CA&ceid=CA:en",
-             "rss", "Innovation Science and Economic Development"),
-            ("%Canada%Education%",
-             "https://news.google.com/rss/search?q=%22Employment+Social+Development%22+Canada&hl=en-CA&gl=CA&ceid=CA:en",
-             "rss", "Government of Canada — Employment & Social Development"),
-        ]
-        for name_like, new_url, new_type, new_name in _fixes:
-            try:
-                cur.execute(
-                    "UPDATE sources SET url=?, scrape_type=?, name=? WHERE name LIKE ?",
-                    (new_url, new_type, new_name, name_like)
-                )
-            except Exception:
-                pass
-
-        # 5. RSS sources never use HTML pagination
-        cur.execute("UPDATE sources SET pagination_style='none' WHERE scrape_type='rss'")
-
-        # 6. BCCSU: WordPress /page/N/ pagination
-        cur.execute(
-            "UPDATE sources SET max_pages=3, pagination_style='path' "
-            "WHERE name LIKE '%Substance Use%' AND scrape_type='html'"
-        )
-
-        conn.commit()
-    except Exception as e:
-        import logging as _ml
-        _ml.getLogger(__name__).warning(f"Source migration error: {e}")
-
     conn.close()
 
 
-def _seed_sources(cur):
-    """Seed sources for a fresh install. All URLs verified working as of 2026-07."""
-    sources = [
-        # ── HSA-specific ───────────────────────────────────────────────────────
-        ("HSA BC — News & Updates",
-         "https://hsabc.org/feed/", "BC", "rss"),
-        ("HEABC — Health Employers Association of BC",
-         "https://heabc.bc.ca/", "BC", "html"),
-        ("HEU — Hospital Employees Union",
-         "https://www.heu.org/news/", "BC", "html"),
-        # ── Health Authorities ─────────────────────────────────────────────────
-        ("PHSA — Provincial Health Services Authority",
-         "https://www.phsa.ca/about/news-stories", "BC", "html"),
-        ("Fraser Health Authority",
-         "https://www.fraserhealth.ca/news", "BC", "html"),
-        ("Vancouver Coastal Health Authority",
-         "https://www.vch.ca/en/news", "BC", "html"),
-        ("Interior Health Authority",
-         "https://www.interiorhealth.ca/about/media-centre", "BC", "html"),
-        ("Northern Health Authority",
-         "https://www.northernhealth.ca/about-northern-health/media-centre", "BC", "html"),
-        ("Island Health Authority",
-         "https://www.islandhealth.ca/news", "BC", "html"),
-        # ── BC Government ──────────────────────────────────────────────────────
-        ("BC Government Newsroom",
-         "https://news.gov.bc.ca/", "BC", "html"),
+def _gn(query: str) -> str:
+    """Google News RSS search URL. Used for sites that block Render's IP range
+    or change their markup often, and for topic feeds."""
+    return ("https://news.google.com/rss/search?q=" + quote_plus(query) +
+            "&hl=en-CA&gl=CA&ceid=CA:en")
+
+
+def get_seed_sources() -> list[tuple]:
+    """The seeded housing sources as (name, url, jurisdiction, scrape_type) tuples."""
+    return list(_SEED_SOURCES())
+
+
+def _SEED_SOURCES():
+    """Housing and homelessness sources for BC.
+
+    The name is matched against TRUSTED_SOURCE_BOOSTS in ai_processor.py, so keep
+    the lowercase keywords there in sync when renaming a source here.
+
+    Rows built with _gn() use Google News RSS, which is reliable from Render and
+    survives site redesigns. Direct html rows are BC government newsroom pages,
+    which use the same template that already works for other ministries.
+    """
+    return [
+        # ── BC housing bodies and ministries ──────────────────────────────────
+        ("BC Housing",                                    _gn("site:bchousing.org"),            "BC", "rss"),
+        ("BC Ministry of Housing and Municipal Affairs",
+         "https://news.gov.bc.ca/ministries/housing-and-municipal-affairs",                       "BC", "html"),
+        ("BC Ministry of Social Development and Poverty Reduction",
+         "https://news.gov.bc.ca/ministries/social-development-and-poverty-reduction",            "BC", "html"),
         ("BC Ministry of Health",
-         "https://news.gov.bc.ca/ministries/health", "BC", "html"),
-        ("BC Ministry of Mental Health & Addictions",
-         "https://news.gov.bc.ca/ministries/mental-health-and-addictions", "BC", "html"),
-        ("BC Ministry of Post-Secondary Education",
-         "https://news.gov.bc.ca/ministries/post-secondary-education-and-future-skills",
-         "BC", "html"),
-        ("BC Indigenous Relations & Reconciliation",
-         "https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",
-         "BC", "html"),
-        ("BC Legislature — Bills & Proceedings",
-         "https://www.leg.bc.ca/bills-statutes/2026/42nd-parliament/3rd-session",
-         "BC", "html"),
-        # ── Federal — Google News RSS (canada.ca IP-blocked on Render) ─────────
-        ("Health Canada News",
-         "https://news.google.com/rss/search?q=Health+Canada+site:canada.ca&hl=en-CA&gl=CA&ceid=CA:en",
-         "Federal", "rss"),
-        ("Crown-Indigenous Relations Canada",
-         "https://news.google.com/rss/search?q=%22Crown-Indigenous+Relations%22+Canada&hl=en-CA&gl=CA&ceid=CA:en",
-         "Federal", "rss"),
-        ("Innovation Science and Economic Development",
-         "https://news.google.com/rss/search?q=%22Innovation+Science%22+Canada+government&hl=en-CA&gl=CA&ceid=CA:en",
-         "Federal", "rss"),
-        ("Government of Canada — Employment & Social Development",
-         "https://news.google.com/rss/search?q=%22Employment+Social+Development%22+Canada&hl=en-CA&gl=CA&ceid=CA:en",
-         "Federal", "rss"),
-        # ── Professional Regulation ────────────────────────────────────────────
-        ("College of Physicians & Surgeons of BC",
-         "https://www.cpsbc.ca/news", "BC", "html"),
-        ("BC College of Nurses & Midwives",
-         "https://www.bccnm.ca/news/", "BC", "html"),
-        ("BC College of Pharmacists",
-         "https://www.bcpharmacists.org/news", "BC", "html"),
-        ("Canadian Pharmacists Association",
-         "https://www.pharmacists.ca/rss/news.xml", "Federal", "rss"),
-        # ── Labour ────────────────────────────────────────────────────────────
-        ("BC Federation of Labour",
-         "https://bcfed.ca/news/", "BC", "html"),
-        ("CUPE BC",
-         "https://cupe.bc.ca/news/", "BC", "html"),
-        ("BC Labour Relations Board",
-         "https://lrb.bc.ca/news/", "BC", "html"),
-        # ── Indigenous Health ──────────────────────────────────────────────────
+         "https://news.gov.bc.ca/ministries/health",                                              "BC", "html"),
+        ("BC Ministry of Mental Health and Addictions",
+         "https://news.gov.bc.ca/ministries/mental-health-and-addictions",                        "BC", "html"),
+        ("BC Government Newsroom",            "https://news.gov.bc.ca/",                           "BC", "html"),
+        ("Auditor General of BC",             _gn("site:bcauditor.com"),                            "BC", "rss"),
+        ("BC Coroners Service",               _gn('"BC Coroners Service" toxic drug deaths'),       "BC", "rss"),
+        ("Homelessness Services Association of BC",
+         _gn('"Homelessness Services Association of BC"'),                                         "BC", "rss"),
+        ("BC Non-Profit Housing Association", _gn("site:bcnpha.ca"),                                "BC", "rss"),
+        # ── Indigenous ────────────────────────────────────────────────────────
         ("First Nations Health Authority",
-         "https://www.fnha.ca/about/news-and-events/news", "BC", "html"),
-        ("BC First Nations Summit",
-         "https://fns.bc.ca/news/", "BC", "html"),
-        # ── Mental Health & Substance Use ──────────────────────────────────────
-        ("BC Centre on Substance Use",
-         "https://www.bccsu.ca/news-and-media/", "BC", "html"),
-        ("Mental Health Commission of Canada",
-         "https://www.mentalhealthcommission.ca/feed/", "Federal", "rss"),
-        # ── Health Research ────────────────────────────────────────────────────
-        ("CIHI — Canadian Institute for Health Info",
-         "https://www.cihi.ca/en/news", "Federal", "html"),
-        # ── Policy Commentary ──────────────────────────────────────────────────
+         "https://www.fnha.ca/about/news-and-events/news",                                         "BC", "html"),
+        ("BC First Nations Summit",           "https://fns.bc.ca/news/",                           "BC", "html"),
+        ("Crown-Indigenous Relations Canada",
+         _gn('"Crown-Indigenous Relations" housing OR homelessness'),                         "Federal", "rss"),
+        # ── Federal and pan-Canadian ──────────────────────────────────────────
+        ("CMHC Newsroom",                     _gn("site:cmhc-schl.gc.ca"),                    "Federal", "rss"),
+        ("Reaching Home Federal Homelessness Strategy",
+         _gn('"Reaching Home" homelessness'),                                                "Federal", "rss"),
+        ("Canadian Alliance to End Homelessness",
+         _gn("site:caeh.ca"),                                                          "Pan-Canadian", "rss"),
         ("Policy Options (IRPP)",
-         "https://policyoptions.irpp.org/feed/", "Federal", "rss"),
-        ("Canadian Centre for Policy Alternatives BC",
-         "https://www.policyalternatives.ca/feed/", "BC", "rss"),
+         "https://policyoptions.irpp.org/feed/",                                       "Pan-Canadian", "rss"),
+        # ── Municipal ─────────────────────────────────────────────────────────
+        ("City of Vancouver Housing and Homelessness",
+         _gn("site:vancouver.ca housing OR homelessness"),                              "Municipal", "rss"),
+        ("City of Surrey Housing",
+         _gn("site:surrey.ca housing OR homelessness"),                                 "Municipal", "rss"),
+        ("City of Victoria Housing",
+         _gn("site:victoria.ca housing OR homelessness"),                               "Municipal", "rss"),
+        # ── Topic news feeds ──────────────────────────────────────────────────
+        ("Housing News: BC Supportive Housing",
+         _gn('"supportive housing" "British Columbia"'),                                       "BC", "rss"),
+        ("Housing News: BC Encampments",
+         _gn("encampment British Columbia OR Vancouver OR Victoria OR Kelowna"),               "BC", "rss"),
+        ("Housing News: BC Homelessness",
+         _gn('homelessness "British Columbia"'),                                               "BC", "rss"),
+        ("Housing News: BC Tenancy and Rent",
+         _gn('"Residential Tenancy" OR "rent supplement" British Columbia'),                   "BC", "rss"),
+        ("Housing News: Canada Homelessness Policy",
+         _gn("homelessness Canada federal policy"),                                      "Federal", "rss"),
     ]
+
+
+def _seed_sources(cur):
+    """Housing and homelessness sources for BC. The name is matched against
+    TRUSTED_SOURCE_BOOSTS in ai_processor.py, so keep the lowercase keywords
+    there in sync when renaming a source here.
+
+    Rows marked 'gn' use Google News RSS (reliable from Render). Direct html
+    rows are BC government newsroom pages, which use the same template that
+    already works for the health and Indigenous relations ministries."""
     cur.executemany(
-        "INSERT OR IGNORE INTO sources (name, url, jurisdiction, scrape_type) VALUES (?,?,?,?)",
-        sources
+        "INSERT INTO sources (name, url, jurisdiction, scrape_type) VALUES (?,?,?,?)",
+        _SEED_SOURCES()
     )
 
 
-
 def _seed_research_sources(cur):
-    """Seed the default Canadian think-tank research sources."""
+    """Research and think-tank sources. Rows with active=0 are new and their
+    publication-page URLs have not been verified from the server, so they start
+    paused. Check them from the Research tab, then activate."""
+    verify_note = "URL not verified. Run a research fetch, check it returns items, then activate."
     sources = [
-        ("Canadian Centre for Policy Alternatives", "https://www.policyalternatives.ca/publications", "think_tank", 1, 1),
-        ("Yellowhead Institute",                    "https://yellowheadinstitute.org/resources/",      "think_tank", 1, 2),
-        ("National Collaborating Centre for Indigenous Health", "https://www.nccih.ca/495/Publications_and_Resources.nccih", "think_tank", 1, 2),
-        ("Macdonald-Laurier Institute",             "https://macdonaldlaurier.ca/publications/",       "think_tank", 1, 0),
-        ("CD Howe Institute",                       "https://www.cdhowe.org/intelligence-memos",       "think_tank", 1, 0),
-        ("Broadbent Institute",                     "https://www.broadbentinstitute.ca/research",      "think_tank", 1, 0),
+        ("Yellowhead Institute",
+         "https://yellowheadinstitute.org/resources/",       "think_tank", 1, 2, ""),
+        ("Canadian Centre for Policy Alternatives",
+         "https://www.policyalternatives.ca/publications",   "think_tank", 1, 1, ""),
+        ("Macdonald-Laurier Institute",
+         "https://macdonaldlaurier.ca/publications/",        "think_tank", 1, 0,
+         "Included for contrasting policy views."),
+        ("CD Howe Institute",
+         "https://www.cdhowe.org/intelligence-memos",        "think_tank", 1, 0,
+         "Included for contrasting policy views."),
+        ("Homeless Hub",
+         "https://www.homelesshub.ca/resources",             "think_tank", 0, 2, verify_note),
+        ("Canadian Alliance to End Homelessness Research",
+         "https://caeh.ca/research/",                        "think_tank", 0, 1, verify_note),
     ]
     cur.executemany(
-        "INSERT INTO research_sources (name, url, source_type, active, relevance_boost) VALUES (?,?,?,?,?)",
+        "INSERT INTO research_sources (name, url, source_type, active, relevance_boost, notes) "
+        "VALUES (?,?,?,?,?,?)",
         sources
     )
 
 
 def _seed_scholarly_keywords(cur):
-    """Seed default scholarly search keywords."""
+    """Default scholarly search keywords (OpenAlex, Semantic Scholar, DOAJ, arXiv, PubMed)."""
     keywords = [
-        "Indigenous policy Canada",
-        "DRIPA UNDRIP reconciliation",
-        "First Nations health Canada",
-        "post-secondary education Canada",
-        "research funding SSHRC NSERC",
-        "pharmacare Canada",
-        "BC government policy",
-        "OCAP data sovereignty Indigenous",
-        "TRC calls to action",
-        "Indigenous higher education",
+        "homelessness Canada",
+        "supportive housing outcomes",
+        "Housing First evaluation Canada",
+        "encampments policy Canada",
+        "shelter system Canada",
+        "rent supplement evaluation",
+        "Indigenous homelessness Canada",
+        "homelessness prevention",
+        "supportive housing operator oversight",
+        "toxic drug supply housing",
+        "homelessness British Columbia",
+        "supportive housing cost evaluation",
     ]
     now = datetime.utcnow().isoformat()
     cur.executemany(
         "INSERT INTO scholarly_keywords (keyword, active, created_date) VALUES (?,1,?)",
+        [(kw, now) for kw in keywords]
+    )
+
+
+def _seed_watchlist_keywords(cur):
+    """Keywords that drive the Google News keyword feeds on every scrape."""
+    keywords = [
+        "supportive housing", "homelessness", "encampment", "Reaching Home",
+        "BC Housing", "rent supplement", "shelter", "tenancy",
+    ]
+    now = datetime.utcnow().isoformat()
+    cur.executemany(
+        "INSERT INTO watchlist_keywords (keyword, created_date) VALUES (?,?)",
         [(kw, now) for kw in keywords]
     )
 
@@ -968,14 +854,18 @@ def get_sources():
 
 def add_source(name: str, url: str, jurisdiction: str, scrape_type: str = "html") -> int:
     conn = get_conn()
-    cur = conn.execute(
-        "INSERT INTO sources (name, url, jurisdiction, scrape_type, active) VALUES (?,?,?,?,1)",
-        (name.strip(), url.strip(), jurisdiction.strip(), scrape_type)
-    )
-    new_id = cur.lastrowid
-    conn.commit()
-    conn.close()
-    return new_id
+    try:
+        cur = conn.execute(
+            "INSERT INTO sources (name, url, jurisdiction, scrape_type, active) VALUES (?,?,?,?,1)",
+            (name.strip(), url.strip(), jurisdiction.strip(), scrape_type)
+        )
+        new_id = cur.lastrowid
+        conn.commit()
+        return new_id
+    finally:
+        # Always release the connection. A duplicate URL raises IntegrityError, and a
+        # connection left open after that kept the database write-locked.
+        conn.close()
 
 
 def toggle_source(source_id: int) -> bool:
@@ -1000,7 +890,8 @@ def delete_source(source_id: int):
 
 
 def update_source(source_id: int, fields: dict):
-    allowed = {"name", "url", "jurisdiction", "scrape_type", "active"}
+    allowed = {"name", "url", "jurisdiction", "scrape_type", "active",
+               "max_pages", "pagination_style"}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return
@@ -1233,15 +1124,17 @@ def get_subscribers():
 
 def add_subscriber(name: str, email: str, role: str = "Reader") -> int:
     conn = get_conn()
-    now = datetime.utcnow().isoformat()
-    cur = conn.execute(
-        "INSERT INTO subscribers (name, email, role, active, added_date) VALUES (?,?,?,1,?)",
-        (name.strip(), email.strip().lower(), role.strip(), now)
-    )
-    new_id = cur.lastrowid
-    conn.commit()
-    conn.close()
-    return new_id
+    try:
+        now = datetime.utcnow().isoformat()
+        cur = conn.execute(
+            "INSERT INTO subscribers (name, email, role, active, added_date) VALUES (?,?,?,1,?)",
+            (name.strip(), email.strip().lower(), role.strip(), now)
+        )
+        new_id = cur.lastrowid
+        conn.commit()
+        return new_id
+    finally:
+        conn.close()
 
 
 def toggle_subscriber(subscriber_id: int) -> bool:

@@ -86,65 +86,33 @@ def require_auth(request: Request):
 @app.post("/ai/chat")
 async def ai_chat(body: dict):
     """
-    Proxy Groq Llama chat completions through the backend so no
-    browser-side API key is ever needed.
+    Proxy Groq chat completions through the backend so no browser-side API
+    key is ever needed.
 
     Body:    { "messages": [...], "max_tokens": 1000 }
-    Returns: { "ok": true, "content": "..." }
+    Returns: { "ok": true, "content": "...", "model": "..." }
 
-    Requires GROQ_API_KEY in Render environment variables.
-    Get a free key at https://console.groq.com
+    Requires GROQ_API_KEY in Render environment variables. The model is set
+    with GROQ_MODEL (default openai/gpt-oss-120b) and falls back to other
+    current Groq models automatically if one has been retired.
     """
-    import httpx
+    from ai_processor import groq_chat_async, GroqError
 
-    groq_key = os.environ.get("GROQ_API_KEY", "")
-    if not groq_key:
-        raise HTTPException(
-            status_code=503,
-            detail="GROQ_API_KEY not set in Render environment variables. "
-                   "Get a free key at https://console.groq.com and add it to Render."
-        )
-
-    messages   = body.get("messages", [])
-    max_tokens = int(body.get("max_tokens", 1000))
-
+    messages = body.get("messages", [])
     if not messages:
         raise HTTPException(status_code=400, detail="messages required")
-
-    payload = {
-        "model":       "llama-3.3-70b-versatile",
-        "messages":    messages,
-        "max_tokens":  max_tokens,
-        "temperature": 0.2,
-    }
+    try:
+        max_tokens = max(50, min(4000, int(body.get("max_tokens", 1000))))
+    except (TypeError, ValueError):
+        max_tokens = 1000
 
     try:
-        async with httpx.AsyncClient(timeout=45) as client:
-            resp = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {groq_key}",
-                    "Content-Type":  "application/json",
-                },
-            )
-            if resp.status_code == 429:
-                raise HTTPException(
-                    status_code=429,
-                    detail="Groq rate limit — please wait a moment and try again."
-                )
-            resp.raise_for_status()
-            data    = resp.json()
-            content = data["choices"][0]["message"]["content"]
-            return {"ok": True, "content": content}
-
-    except HTTPException:
-        raise
+        content, model = await groq_chat_async(messages, max_tokens=max_tokens, temperature=0.2)
+        return {"ok": True, "content": content, "model": model}
+    except GroqError as e:
+        raise HTTPException(status_code=e.status, detail=e.message)
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"AI proxy error: {str(e)[:200]}"
-        )
+        raise HTTPException(status_code=500, detail=f"AI proxy error: {str(e)[:200]}")
 
 
 # ── ARTICLES ──────────────────────────────────────────────────────────────────
@@ -408,62 +376,32 @@ def create_source(body: dict, _=Depends(require_auth)):
 
 @app.post("/sources/fix-all")
 def fix_all_sources(_=Depends(require_auth)):
-    """Apply all known URL fixes immediately without a redeploy."""
-    from database import get_conn
+    """Restore every seeded source to its known-good URL, type and jurisdiction.
+
+    Only sources that still exist (matched by exact name) are updated, so sources
+    you deleted stay deleted and sources you added yourself are not touched.
+    """
+    from database import get_conn, get_seed_sources
     conn  = get_conn()
     fixed = []
-    _fixes = [
-        ("%Substance Use%",          "https://www.bccsu.ca/news-and-media/",                                                               "html", "BC Centre on Substance Use"),
-        ("%Mental Health Commission%","https://www.mentalhealthcommission.ca/feed/",                                                        "rss",  "Mental Health Commission of Canada"),
-        ("%Indigenous%Reconciliation%","https://news.gov.bc.ca/ministries/indigenous-relations-and-reconciliation",                        "html", "BC Indigenous Relations & Reconciliation"),
-        ("%Federation of Labour%",   "https://bcfed.ca/news/",                                                                             "html", "BC Federation of Labour"),
-        ("%Hospital Employees Union%","https://www.heu.org/news/",                                                                         "html", "HEU — Hospital Employees Union"),
-        ("%CUPE BC%",                "https://cupe.bc.ca/news/",                                                                           "html", "CUPE BC"),
-        ("%Labour Relations Board%", "https://lrb.bc.ca/news/",                                                                            "html", "BC Labour Relations Board"),
-        ("%Health Canada%",          "https://news.google.com/rss/search?q=Health+Canada+site:canada.ca&hl=en-CA&gl=CA&ceid=CA:en",        "rss",  "Health Canada News"),
-        ("%Crown-Indigenous%",       "https://news.google.com/rss/search?q=%22Crown-Indigenous+Relations%22+Canada&hl=en-CA&gl=CA&ceid=CA:en", "rss", "Crown-Indigenous Relations Canada"),
-        ("%Innovation Science%",     "https://news.google.com/rss/search?q=%22Innovation+Science%22+Canada+government&hl=en-CA&gl=CA&ceid=CA:en", "rss", "Innovation Science and Economic Development"),
-        ("%Canada%Education%",       "https://news.google.com/rss/search?q=%22Employment+Social+Development%22+Canada&hl=en-CA&gl=CA&ceid=CA:en", "rss", "Government of Canada — Employment & Social Development"),
-        ("%CIHI%",                   "https://www.cihi.ca/en/news",                                                                        "html", "CIHI — Canadian Institute for Health Info"),
-        ("%Canadian Pharmacists%",   "https://www.pharmacists.ca/rss/news.xml",                                                            "rss",  "Canadian Pharmacists Association"),
-        ("%College of Nurses%",      "https://www.bccnm.ca/news/",                                                                         "html", "BC College of Nurses & Midwives"),
-        ("%HEABC%",                  "https://heabc.bc.ca/",                                                                               "html", "HEABC — Health Employers Association of BC"),
-        ("%Interior Health%",        "https://www.interiorhealth.ca/about/media-centre",                                                   "html", "Interior Health Authority"),
-        ("%Northern Health%",        "https://www.northernhealth.ca/about-northern-health/media-centre",                                   "html", "Northern Health Authority"),
-        ("%Provincial Health Services%","https://www.phsa.ca/about/news-stories",                                                         "html", "PHSA — Provincial Health Services Authority"),
-        ("%Legislature%",            "https://www.leg.bc.ca/bills-statutes/2026/42nd-parliament/3rd-session",                              "html", "BC Legislature — Bills & Proceedings"),
-        ("%Public Service Agency%",  "https://news.gov.bc.ca/",                                                                            "html", "BC Public Service Agency"),
-    ]
     try:
-        # Delete known-broken duplicate rows by exact URL
-        for bad_url in [
-            "https://www.canada.ca/en/health-canada/news.html",
-            "https://www.canada.ca/en/health-canada/news.atom",
-            "https://www.cihi.ca/sites/default/files/cihi-news-rss.xml",
-            "https://www.mentalhealthcommission.ca/news/",
-            "https://www.phsa.ca/about-site/news-stories",
-            "https://heabc.bc.ca/news-and-resources/",
-            "https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings",
-            "https://www.bccnm.ca/news/Pages/default.aspx",
-        ]:
-            conn.execute("DELETE FROM sources WHERE url = ?", (bad_url,))
-
-        for name_like, new_url, new_type, new_name in _fixes:
-            r = conn.execute(
-                "UPDATE sources SET url=?, scrape_type=?, name=? WHERE name LIKE ?",
-                (new_url, new_type, new_name, name_like)
-            )
-            if r.rowcount and r.rowcount > 0:
-                fixed.append(new_name)
-
-        # Pause collegept.ca — DNS fails entirely
-        conn.execute("UPDATE sources SET active=0 WHERE name LIKE '%Physical Therapists%'")
-        conn.execute("UPDATE sources SET pagination_style='none' WHERE scrape_type='rss'")
+        for name, url, jurisdiction, scrape_type in get_seed_sources():
+            row = conn.execute(
+                "SELECT url, scrape_type, jurisdiction FROM sources WHERE name = ?", (name,)
+            ).fetchone()
+            if not row:
+                continue
+            if (row["url"], row["scrape_type"], row["jurisdiction"]) != (url, scrape_type, jurisdiction):
+                conn.execute(
+                    "UPDATE sources SET url=?, scrape_type=?, jurisdiction=? WHERE name=?",
+                    (url, scrape_type, jurisdiction, name)
+                )
+                fixed.append(name)
         conn.commit()
     finally:
         conn.close()
     return {"ok": True, "fixed": fixed, "count": len(fixed),
-            "message": "URLs updated. Run a scrape to test."}
+            "message": "Seeded sources restored to their known-good URLs. Run a scrape to test."}
 
 
 @app.get("/sources/diagnose")
@@ -1294,6 +1232,34 @@ def remove_scholarly_tag(article_id: int, tag: str, _=Depends(require_auth)):
     return {"ok": True}
 
 
+# ── ADMIN: CLEAR OLD CONTENT ──────────────────────────────────────────────────
+# Seed versioning replaces sources and keywords automatically but never deletes
+# articles. Use this to wipe old (for example education) content on demand.
+
+@app.post("/admin/clear-content")
+def clear_content(body: dict, _=Depends(require_auth)):
+    """Delete all unstaged articles and scholarly articles. Body: {"confirm": "CLEAR"}"""
+    from database import get_conn
+    if (body or {}).get("confirm") != "CLEAR":
+        raise HTTPException(status_code=400, detail='Send {"confirm": "CLEAR"} to proceed.')
+    conn = get_conn()
+    try:
+        news = conn.execute("SELECT COUNT(*) FROM articles WHERE staged = 0").fetchone()[0]
+        conn.execute("DELETE FROM articles WHERE staged = 0")
+        scholarly = 0
+        try:
+            scholarly = conn.execute(
+                "SELECT COUNT(*) FROM scholarly_articles WHERE staged = 0").fetchone()[0]
+            conn.execute("DELETE FROM scholarly_articles WHERE staged = 0")
+        except Exception:
+            pass
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True, "deleted_articles": news, "deleted_scholarly": scholarly,
+            "note": "Staged items were kept."}
+
+
 # ── HEALTH ────────────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -1402,7 +1368,7 @@ def view_public_digest(token: str):
     banner = (
         '<div style="background:#003366;color:#fff;text-align:center;padding:8px 16px;'
         'font-family:Georgia,serif;font-size:12px">'
-        '&#128225; PolicyPulse Intelligence Digest &bull; '
+        '&#128225; PolicyPulse Housing Intelligence Digest &bull; '
         + (row["sent_date"] or "")[:10] +
         '</div>'
     )
@@ -1689,7 +1655,7 @@ def _email_wrapper(title: str, subtitle: str, body_html: str, badge_color: str =
   <div style="padding:24px 28px">{body_html}</div>
   <div style="background:#f8faff;padding:16px 28px;border-top:1px solid #e8eef4;
               font-size:11px;color:#6b8aaa;text-align:center">
-    PolicyPulse Intelligence Platform
+    Sent by PolicyPulse, a portfolio demonstration project.
   </div>
 </div></body></html>"""
 
@@ -1767,8 +1733,8 @@ def test_urgent_alert(body: dict, _=Depends(require_auth)):
         return {"ok": False, "detail": "No subscribers have opted into urgent alerts."}
     test_article = {
         "title": "TEST: PolicyPulse Urgent Alert — Configuration Check",
-        "url": "https://policypulse.ca", "source": "PolicyPulse System",
-        "jurisdiction": "Test", "domain": "Configuration", "relevance": 10,
+        "url": "https://example.org", "source": "PolicyPulse System",
+        "jurisdiction": "Test", "domain": "System Test", "relevance": 10,
         "sentiment": "Neutral",
         "summary": "This is a test alert sent from the PolicyPulse admin panel.",
         "why_it_matters": "If you received this email, urgent alerts are working correctly.",
@@ -1785,11 +1751,11 @@ def test_keyword_alert(body: dict, _=Depends(require_auth)):
     recipients = get_alert_subscribers("keyword")
     if not recipients:
         return {"ok": False, "detail": "No subscribers have opted into keyword alerts."}
-    keyword = body.get("keyword", "DRIPA")
+    keyword = body.get("keyword", "encampments")
     test_article = {
         "title": f"TEST: PolicyPulse Keyword Alert for '{keyword}'",
-        "url": "https://policypulse.ca", "source": "PolicyPulse System",
-        "jurisdiction": "Test", "domain": "Configuration", "relevance": 8,
+        "url": "https://example.org", "source": "PolicyPulse System",
+        "jurisdiction": "Test", "domain": "System Test", "relevance": 8,
         "sentiment": "Neutral",
         "summary": f"This is a test alert for the watchlist keyword '{keyword}'.",
         "why_it_matters": "If you received this, keyword alert delivery is working correctly.",
@@ -2017,32 +1983,14 @@ def delete_tracker_event_endpoint(tracker_id: int, event_id: int,
 # ── TRACKER AI — SYNTHESIS & SUGGESTIONS ─────────────────────────────────────
 
 async def _groq_call(messages: list, max_tokens: int = 1800) -> str:
-    """Internal Groq call shared by synthesize and suggest endpoints."""
-    import httpx
-    groq_key = os.environ.get("GROQ_API_KEY", "")
-    if not groq_key:
-        raise HTTPException(
-            status_code=503,
-            detail="GROQ_API_KEY not set — add it in Render environment variables."
-        )
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            json={
-                "model":       "llama-3.3-70b-versatile",
-                "messages":    messages,
-                "max_tokens":  max_tokens,
-                "temperature": 0.3,
-            },
-            headers={
-                "Authorization": f"Bearer {groq_key}",
-                "Content-Type":  "application/json",
-            },
-        )
-        if resp.status_code == 429:
-            raise HTTPException(status_code=429, detail="Groq rate limit — wait and retry.")
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+    """Internal Groq call shared by the tracker synthesize, suggest and gaps endpoints."""
+    from ai_processor import groq_chat_async, GroqError
+    try:
+        content, _model = await groq_chat_async(messages, max_tokens=max_tokens,
+                                                temperature=0.3, timeout=60)
+        return content
+    except GroqError as e:
+        raise HTTPException(status_code=e.status, detail=e.message)
 
 
 @app.post("/trackers/{tracker_id}/synthesize")

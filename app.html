@@ -979,14 +979,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
           <input id="preview-tag-inp" class="filter-input" placeholder="Type a tag..." style="padding:5px 10px;font-size:11px;width:120px;height:28px" onkeydown="if(event.key==='Enter')previewAddTag()">
           <select id="preview-tag-drop" class="sentiment-picker" style="height:28px;font-size:11px" onchange="previewPickTag(this)">
             <option value="">Quick tags...</option>
-            <option>Urgent</option><option>Briefing Note Worthy</option>
-            <option>DRIPA</option><option>UNDRIP</option><option>TRC</option><option>OCAP</option>
-            <option>Budget</option><option>Funding</option><option>Research</option>
-            <option>Legislation</option><option>Reconciliation</option><option>Indigenous</option>
-            <option>Health</option><option>Pharmacare</option><option>Consultation</option>
-            <option>Workforce</option><option>Political</option><option>Court Decision</option>
-            <option>Audit</option><option>Data/Evidence</option><option>International</option>
-          </select>
+            <option>Urgent</option><option>Briefing Note Worthy</option><option>Housing</option><option>Supportive Housing</option><option>Shelter</option><option>Encampments</option><option>Rent Supplement</option><option>Housing First</option><option>Indigenous</option><option>Toxic Drug Crisis</option><option>Operator</option><option>Funding</option><option>Budget</option><option>Legislation</option><option>Regulation</option><option>Consultation</option><option>Evaluation</option><option>Data/Evidence</option><option>Audit</option><option>Court Decision</option><option>Tenancy</option><option>Mental Health</option><option>Reaching Home</option><option>International</option></select>
           <button class="btn btn-ghost btn-sm" onclick="previewAddTag()">+ Add</button>
         </div>
       </div>
@@ -1109,8 +1102,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         <button class="btn btn-green btn-sm" onclick="bulkStage()">+ Stage</button>
         <select class="sentiment-picker" onchange="bulkTag(this.value);this.value=''" style="height:26px">
           <option value="">+ Tag...</option>
-          <option>Urgent</option><option>Briefing Note Worthy</option><option>DRIPA</option><option>TRC</option><option>Budget</option><option>Indigenous</option><option>Health</option>
-        </select>
+          <option>Urgent</option><option>Briefing Note Worthy</option><option>Housing</option><option>Supportive Housing</option><option>Shelter</option><option>Encampments</option><option>Rent Supplement</option><option>Housing First</option><option>Indigenous</option><option>Toxic Drug Crisis</option><option>Operator</option><option>Funding</option><option>Budget</option><option>Legislation</option><option>Regulation</option><option>Consultation</option><option>Evaluation</option><option>Data/Evidence</option><option>Audit</option><option>Court Decision</option><option>Tenancy</option><option>Mental Health</option><option>Reaching Home</option><option>International</option></select>
         <button class="btn btn-red btn-sm" onclick="bulkDelete()">&#x1F5D1; Delete</button>
         <button class="btn btn-ghost btn-sm" onclick="clearSelection()">&#x2715; Clear</button>
         <label style="font-size:11px;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="select-all-chk" onchange="toggleSelectAll(this.checked)"> All</label>
@@ -1120,35 +1112,35 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         <span class="tag-chip active" onclick="filterTag('',this)">All</span>
         <span class="tag-chip" onclick="filterTag('Urgent',this)">&#x26A0; Urgent</span>
         <span class="tag-chip" onclick="filterTag('Briefing Note Worthy',this)">&#x1F4CB; Briefing Note</span>
-        <span class="tag-chip" onclick="filterTag('DRIPA',this)">DRIPA</span>
-        <span class="tag-chip" onclick="filterTag('UNDRIP',this)">UNDRIP</span>
-        <span class="tag-chip" onclick="filterTag('TRC',this)">TRC</span>
-        <span class="tag-chip" onclick="filterTag('OCAP',this)">OCAP</span>
-        <span class="tag-chip" onclick="filterTag('Budget',this)">Budget</span>
-        <span class="tag-chip" onclick="filterTag('Funding',this)">Funding</span>
-        <span class="tag-chip" onclick="filterTag('Research',this)">Research</span>
-        <span class="tag-chip" onclick="filterTag('Legislation',this)">Legislation</span>
-        <span class="tag-chip" onclick="filterTag('Reconciliation',this)">Reconciliation</span>
+        <span class="tag-chip" onclick="filterTag('Housing',this)">Housing</span>
+        <span class="tag-chip" onclick="filterTag('Supportive Housing',this)">Supportive Housing</span>
+        <span class="tag-chip" onclick="filterTag('Shelter',this)">Shelter</span>
+        <span class="tag-chip" onclick="filterTag('Encampments',this)">Encampments</span>
+        <span class="tag-chip" onclick="filterTag('Rent Supplement',this)">Rent Supplement</span>
+        <span class="tag-chip" onclick="filterTag('Housing First',this)">Housing First</span>
         <span class="tag-chip" onclick="filterTag('Indigenous',this)">Indigenous</span>
-        <span class="tag-chip" onclick="filterTag('Health',this)">Health</span>
-        <span class="tag-chip" onclick="filterTag('Pharmacare',this)">Pharmacare</span>
+        <span class="tag-chip" onclick="filterTag('Toxic Drug Crisis',this)">Toxic Drug Crisis</span>
+        <span class="tag-chip" onclick="filterTag('Operator',this)">Operator</span>
+        <span class="tag-chip" onclick="filterTag('Funding',this)">Funding</span>
+        <span class="tag-chip" onclick="filterTag('Budget',this)">Budget</span>
+        <span class="tag-chip" onclick="filterTag('Legislation',this)">Legislation</span>
+        <span class="tag-chip" onclick="filterTag('Regulation',this)">Regulation</span>
         <span class="tag-chip" onclick="filterTag('Consultation',this)">Consultation</span>
-        <span class="tag-chip" onclick="filterTag('Workforce',this)">Workforce</span>
-        <span class="tag-chip" onclick="filterTag('Political',this)">Political</span>
+        <span class="tag-chip" onclick="filterTag('Evaluation',this)">Evaluation</span>
+        <span class="tag-chip" onclick="filterTag('Data/Evidence',this)">Data/Evidence</span>
+        <span class="tag-chip" onclick="filterTag('Audit',this)">Audit</span>
+        <span class="tag-chip" onclick="filterTag('Court Decision',this)">Court Decision</span>
+        <span class="tag-chip" onclick="filterTag('Tenancy',this)">Tenancy</span>
+        <span class="tag-chip" onclick="filterTag('Mental Health',this)">Mental Health</span>
+        <span class="tag-chip" onclick="filterTag('Reaching Home',this)">Reaching Home</span>
+        <span class="tag-chip" onclick="filterTag('International',this)">International</span>
       </div>
       <div class="filters">
         <input class="filter-input" id="search-input" placeholder="🔍  Search articles…" oninput="debouncedSearch()">
         <select class="filter-select" id="filter-domain" onchange="renderFeed()">
-          <option value="">All Domains</option>
-          <option>Higher Education</option><option>Research Funding</option><option>Indigenous</option>
-          <option>Reconciliation</option><option>Health</option><option>Budget</option>
-          <option>Legislation</option><option>Infrastructure</option><option>Pharmacare</option>
-          <option>Workforce</option><option>Consultation</option>
-        </select>
+          <option value="">All Domains</option><option>Supportive Housing</option><option>Shelter and Emergency</option><option>Encampments</option><option>Rent Supplements</option><option>Indigenous Housing</option><option>Health and Harm Reduction</option><option>Funding and Budget</option><option>Operator Standards</option><option>Tenancy and Legislation</option><option>Evidence and Evaluation</option><option>Affordable Housing</option><option>Political</option><option>Other</option></select>
         <select class="filter-select" id="filter-juris" onchange="renderFeed()">
-          <option value="">All Jurisdictions</option>
-          <option>Federal</option><option>BC</option><option>Municipal</option><option>Pan-Canadian</option>
-        </select>
+          <option value="">All Jurisdictions</option><option>Federal</option><option>BC</option><option>Municipal</option><option>Regional</option><option>Pan-Canadian</option><option>International</option></select>
         <select class="filter-select" id="filter-sentiment" onchange="renderFeed()">
           <option value="">All Sentiments</option>
           <option>Critical</option><option>Supportive</option><option>Neutral</option>
@@ -1159,6 +1151,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         <button class="pill active" id="pill-unread" onclick="toggleUnread()">Unread Only</button>
         <button class="pill" id="pill-flagged" onclick="toggleFlagFilter()">&#x1F6A9; Flagged Only</button>
         <button class="pill" id="pill-multidomain" onclick="toggleMultiDomainFilter()" title="Show only articles tagged with more than one policy domain">&#x1F3F7; Multi-Domain</button>
+        <button class="pill" id="pill-clear-filters" onclick="clearFeedFilters()" title="Reset search, dropdowns, tags and saved filter settings">&#x2715; Clear filters</button>
         <select class="filter-select" id="sort-select" onchange="setSortFromSelect()" style="min-width:155px">
           <option value="date_desc">&#128197; Newest First</option>
           <option value="rel_desc">&#128293; Highest Relevance</option>
@@ -1270,7 +1263,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
             </div>
           </div>
           <div style="display:flex;gap:8px">
-            <button class="btn btn-ghost btn-sm" onclick="resetNewsFilters()">&#x21BA; Reset Defaults</button>
+            <button class="btn btn-ghost btn-sm" onclick="filterBulk('news-all',true)">&#x2611; Select all</button><button class="btn btn-ghost btn-sm" onclick="filterBulk('news-all',false)">&#x2610; Clear all</button><button class="btn btn-ghost btn-sm" onclick="resetNewsFilters()">&#x21BA; Reset Defaults</button>
             <button class="btn btn-primary" onclick="applyNewsFilterSettings()">&#x2713; Apply &amp; Save</button>
           </div>
         </div>
@@ -1299,19 +1292,22 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
 
         <!-- ── ROW 2: Domain whitelist ── -->
         <div class="card" style="margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F3F7; Domain Filter <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(tick to show, untick to hide)</span></div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F3F7; Domain Filter <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(tick the ones to show. None ticked shows all)</span></div>
+          <div style="display:flex;gap:6px;margin:-4px 0 10px"><button class="btn btn-ghost btn-sm" onclick="filterBulk('news-domain',true)">&#x2611; Select all</button><button class="btn btn-ghost btn-sm" onclick="filterBulk('news-domain',false)">&#x2610; Clear all</button></div>
           <div id="news-domain-checkboxes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"></div>
         </div>
 
         <!-- ── ROW 3: Jurisdiction filter ── -->
         <div class="card" style="margin-bottom:10px">
           <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F30E; Jurisdiction Filter</div>
+          <div style="display:flex;gap:6px;margin:-4px 0 10px"><button class="btn btn-ghost btn-sm" onclick="filterBulk('news-juris',true)">&#x2611; Select all</button><button class="btn btn-ghost btn-sm" onclick="filterBulk('news-juris',false)">&#x2610; Clear all</button></div>
           <div id="news-juris-checkboxes" style="display:flex;gap:8px;flex-wrap:wrap"></div>
         </div>
 
         <!-- ── ROW 4: Sentiment filter ── -->
         <div class="card" style="margin-bottom:10px">
           <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px">&#x1F4AC; Sentiment Filter</div>
+          <div style="display:flex;gap:6px;margin:-4px 0 10px"><button class="btn btn-ghost btn-sm" onclick="filterBulk('news-sent',true)">&#x2611; Select all</button><button class="btn btn-ghost btn-sm" onclick="filterBulk('news-sent',false)">&#x2610; Clear all</button></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
               <input type="checkbox" id="news-sent-critical" checked style="accent-color:var(--cyan)"> &#x1F534; Critical
@@ -1354,7 +1350,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
           <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Only show articles whose title or summary contains at least one of these words.</div>
           <div id="news-must-contain-tags" style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px"></div>
           <div style="display:flex;gap:8px">
-            <input class="filter-input" id="news-must-contain-inp" placeholder="e.g. DRIPA, pharmacare, reconciliation…" style="max-width:300px" onkeydown="if(event.key==='Enter')addNewsMustContain()">
+            <input class="filter-input" id="news-must-contain-inp" placeholder="e.g. encampment, supportive housing, Reaching Home…" style="max-width:300px" onkeydown="if(event.key==='Enter')addNewsMustContain()">
             <button class="btn btn-cyan btn-sm" onclick="addNewsMustContain()">+ Add</button>
           </div>
         </div>
@@ -1394,7 +1390,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         </div>
         <div id="watchlist-tags" style="margin-bottom:8px"></div>
         <div style="display:flex;gap:8px">
-          <input class="filter-input" id="kw-input" placeholder="Add keyword (e.g. pharmacare, TRC, DRIPA)…" style="max-width:300px" onkeydown="if(event.key==='Enter')addKeyword()">
+          <input class="filter-input" id="kw-input" placeholder="Add keyword (e.g. rent supplement, shelter, tenancy)…" style="max-width:300px" onkeydown="if(event.key==='Enter')addKeyword()">
           <button class="btn btn-cyan" onclick="addKeyword()">+ Add</button>
           <button class="btn btn-ghost btn-sm" onclick="scrapeNow()" title="Trigger an immediate scrape using current keywords">&#x1F50D; Scrape Now</button>
         </div>
@@ -1421,8 +1417,8 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         </div>
         <div class="filters">
           <input class="filter-input" id="archive-search" placeholder="Full-text search archives…" oninput="renderArchive()">
-          <select class="filter-select" id="archive-domain" onchange="renderArchive()"><option value="">All Domains</option><option>Higher Education</option><option>Research Funding</option><option>Indigenous</option><option>Reconciliation</option><option>Health</option><option>Budget</option><option>Legislation</option></select>
-          <select class="filter-select" id="archive-juris" onchange="renderArchive()"><option value="">All Jurisdictions</option><option>Federal</option><option>BC</option><option>Municipal</option></select>
+          <select class="filter-select" id="archive-domain" onchange="renderArchive()"><option value="">All Domains</option><option>Supportive Housing</option><option>Shelter and Emergency</option><option>Encampments</option><option>Rent Supplements</option><option>Indigenous Housing</option><option>Health and Harm Reduction</option><option>Funding and Budget</option><option>Operator Standards</option><option>Tenancy and Legislation</option><option>Evidence and Evaluation</option><option>Affordable Housing</option><option>Political</option><option>Other</option></select>
+          <select class="filter-select" id="archive-juris" onchange="renderArchive()"><option value="">All Jurisdictions</option><option>Federal</option><option>BC</option><option>Municipal</option><option>Regional</option><option>Pan-Canadian</option><option>International</option></select>
           <select class="filter-select" id="archive-source" onchange="renderArchive()" style="max-width:200px"><option value="">All Sources</option></select>
         </div>
         <div id="archive-results"></div>
@@ -1489,8 +1485,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         <button class="btn btn-ghost btn-sm" onclick="researchBulkMarkUnread()">&#x21A9; Unread</button>
         <select class="sentiment-picker" onchange="researchBulkTag(this.value);this.value=''" style="height:26px">
           <option value="">+ Tag...</option>
-          <option>Urgent</option><option>Briefing Note Worthy</option><option>DRIPA</option><option>TRC</option><option>Budget</option><option>Indigenous</option><option>Health</option><option>Research</option><option>Reconciliation</option>
-        </select>
+          <option>Urgent</option><option>Briefing Note Worthy</option><option>Housing</option><option>Supportive Housing</option><option>Shelter</option><option>Encampments</option><option>Rent Supplement</option><option>Housing First</option><option>Indigenous</option><option>Toxic Drug Crisis</option><option>Operator</option><option>Funding</option><option>Budget</option><option>Legislation</option><option>Regulation</option><option>Consultation</option><option>Evaluation</option><option>Data/Evidence</option><option>Audit</option><option>Court Decision</option><option>Tenancy</option><option>Mental Health</option><option>Reaching Home</option><option>International</option></select>
         <button class="btn btn-red btn-sm" onclick="clearResearchSelection()">&#x2715; Clear</button>
         <label style="font-size:11px;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="research-select-all-chk" onchange="toggleResearchSelectAll(this.checked)"> All</label>
       </div>
@@ -1500,33 +1495,36 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         <span class="tag-chip active" onclick="filterResearchTag('',this)">All</span>
         <span class="tag-chip" onclick="filterResearchTag('Urgent',this)">&#x26A0; Urgent</span>
         <span class="tag-chip" onclick="filterResearchTag('Briefing Note Worthy',this)">&#x1F4CB; Briefing Note</span>
-        <span class="tag-chip" onclick="filterResearchTag('DRIPA',this)">DRIPA</span>
-        <span class="tag-chip" onclick="filterResearchTag('UNDRIP',this)">UNDRIP</span>
-        <span class="tag-chip" onclick="filterResearchTag('TRC',this)">TRC</span>
-        <span class="tag-chip" onclick="filterResearchTag('OCAP',this)">OCAP</span>
-        <span class="tag-chip" onclick="filterResearchTag('Budget',this)">Budget</span>
-        <span class="tag-chip" onclick="filterResearchTag('Funding',this)">Funding</span>
-        <span class="tag-chip" onclick="filterResearchTag('Research',this)">Research</span>
-        <span class="tag-chip" onclick="filterResearchTag('Legislation',this)">Legislation</span>
-        <span class="tag-chip" onclick="filterResearchTag('Reconciliation',this)">Reconciliation</span>
+        <span class="tag-chip" onclick="filterResearchTag('Housing',this)">Housing</span>
+        <span class="tag-chip" onclick="filterResearchTag('Supportive Housing',this)">Supportive Housing</span>
+        <span class="tag-chip" onclick="filterResearchTag('Shelter',this)">Shelter</span>
+        <span class="tag-chip" onclick="filterResearchTag('Encampments',this)">Encampments</span>
+        <span class="tag-chip" onclick="filterResearchTag('Rent Supplement',this)">Rent Supplement</span>
+        <span class="tag-chip" onclick="filterResearchTag('Housing First',this)">Housing First</span>
         <span class="tag-chip" onclick="filterResearchTag('Indigenous',this)">Indigenous</span>
-        <span class="tag-chip" onclick="filterResearchTag('Health',this)">Health</span>
-        <span class="tag-chip" onclick="filterResearchTag('Pharmacare',this)">Pharmacare</span>
+        <span class="tag-chip" onclick="filterResearchTag('Toxic Drug Crisis',this)">Toxic Drug Crisis</span>
+        <span class="tag-chip" onclick="filterResearchTag('Operator',this)">Operator</span>
+        <span class="tag-chip" onclick="filterResearchTag('Funding',this)">Funding</span>
+        <span class="tag-chip" onclick="filterResearchTag('Budget',this)">Budget</span>
+        <span class="tag-chip" onclick="filterResearchTag('Legislation',this)">Legislation</span>
+        <span class="tag-chip" onclick="filterResearchTag('Regulation',this)">Regulation</span>
+        <span class="tag-chip" onclick="filterResearchTag('Consultation',this)">Consultation</span>
+        <span class="tag-chip" onclick="filterResearchTag('Evaluation',this)">Evaluation</span>
+        <span class="tag-chip" onclick="filterResearchTag('Data/Evidence',this)">Data/Evidence</span>
+        <span class="tag-chip" onclick="filterResearchTag('Audit',this)">Audit</span>
+        <span class="tag-chip" onclick="filterResearchTag('Court Decision',this)">Court Decision</span>
+        <span class="tag-chip" onclick="filterResearchTag('Tenancy',this)">Tenancy</span>
+        <span class="tag-chip" onclick="filterResearchTag('Mental Health',this)">Mental Health</span>
+        <span class="tag-chip" onclick="filterResearchTag('Reaching Home',this)">Reaching Home</span>
+        <span class="tag-chip" onclick="filterResearchTag('International',this)">International</span>
       </div>
       <!-- Filters -->
       <div class="filters">
         <input class="filter-input" id="research-search-inp" placeholder="&#x1F50D; Search titles, abstracts, authors…" oninput="debounceResearchSearch()">
         <select class="filter-select" id="research-filter-domain" onchange="renderResearchFeed()">
-          <option value="">All Domains</option>
-          <option>Higher Education</option><option>Research Funding</option><option>Indigenous</option>
-          <option>Reconciliation</option><option>Health</option><option>Budget</option>
-          <option>Legislation</option><option>Infrastructure</option><option>Pharmacare</option>
-          <option>Workforce</option><option>Consultation</option><option>Political</option><option>Environment</option><option>Housing</option><option>International</option><option>Other</option>
-        </select>
+          <option value="">All Domains</option><option>Supportive Housing</option><option>Shelter and Emergency</option><option>Encampments</option><option>Rent Supplements</option><option>Indigenous Housing</option><option>Health and Harm Reduction</option><option>Funding and Budget</option><option>Operator Standards</option><option>Tenancy and Legislation</option><option>Evidence and Evaluation</option><option>Affordable Housing</option><option>Political</option><option>Other</option></select>
         <select class="filter-select" id="research-filter-juris" onchange="renderResearchFeed()">
-          <option value="">All Jurisdictions</option>
-          <option>Federal</option><option>BC</option><option>Municipal</option><option>Pan-Canadian</option><option>International</option>
-        </select>
+          <option value="">All Jurisdictions</option><option>Federal</option><option>BC</option><option>Municipal</option><option>Regional</option><option>Pan-Canadian</option><option>International</option></select>
         <select class="filter-select" id="research-filter-sentiment" onchange="renderResearchFeed()">
           <option value="">All Sentiments</option>
           <option>Critical</option><option>Supportive</option><option>Neutral</option>
@@ -1538,6 +1536,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         </select>
         <button class="pill active" id="research-pill-unread" onclick="toggleResearchUnread()">Unread Only</button>
         <button class="pill" id="research-pill-flagged" onclick="toggleResearchFlagFilter()">&#x1F6A9; Flagged</button>
+        <button class="pill" id="research-pill-clear" onclick="clearResearchFilters()" title="Reset search, dropdowns, tags and saved filter settings">&#x2715; Clear filters</button>
         <select class="filter-select" id="research-sort" onchange="renderResearchFeed()" style="min-width:155px">
           <option value="date_desc">&#x1F4C5; Newest First</option>
           <option value="rel_desc">&#x1F525; Highest Relevance</option>
@@ -1593,10 +1592,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         <div class="filters">
           <input class="filter-input" id="research-archive-search" placeholder="Full-text search research archives&hellip;" oninput="renderResearchArchive()">
           <select class="filter-select" id="research-archive-domain" onchange="renderResearchArchive()">
-            <option value="">All Domains</option>
-            <option>Higher Education</option><option>Research Funding</option><option>Indigenous</option>
-            <option>Reconciliation</option><option>Health</option><option>Budget</option><option>Legislation</option>
-          </select>
+            <option value="">All Domains</option><option>Supportive Housing</option><option>Shelter and Emergency</option><option>Encampments</option><option>Rent Supplements</option><option>Indigenous Housing</option><option>Health and Harm Reduction</option><option>Funding and Budget</option><option>Operator Standards</option><option>Tenancy and Legislation</option><option>Evidence and Evaluation</option><option>Affordable Housing</option><option>Political</option><option>Other</option></select>
           <select class="filter-select" id="research-archive-db" onchange="renderResearchArchive()">
             <option value="">All Databases</option>
             <option>OpenAlex</option><option>Semantic Scholar</option><option>PubMed Central</option>
@@ -1705,7 +1701,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
             </div>
           </div>
           <div style="display:flex;gap:8px">
-            <button class="btn btn-ghost btn-sm" onclick="resetResearchFilters()">&#x21BA; Reset Defaults</button>
+            <button class="btn btn-ghost btn-sm" onclick="filterBulk('research-all',true)">&#x2611; Select all</button><button class="btn btn-ghost btn-sm" onclick="filterBulk('research-all',false)">&#x2610; Clear all</button><button class="btn btn-ghost btn-sm" onclick="resetResearchFilters()">&#x21BA; Reset Defaults</button>
             <button class="btn btn-primary" onclick="applyResearchFilterSettings()">&#x2713; Apply &amp; Save</button>
           </div>
         </div>
@@ -1731,6 +1727,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         <!-- Database source filter -->
         <div class="card" style="margin-bottom:10px">
           <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:12px">&#x1F4DA; Database Sources <span style="font-weight:400;color:var(--dim);text-transform:none;font-size:10px;letter-spacing:0">(untick to exclude from display and from next fetch)</span></div>
+          <div style="display:flex;gap:6px;margin:-4px 0 10px"><button class="btn btn-ghost btn-sm" onclick="filterBulk('research-db',true)">&#x2611; Select all</button><button class="btn btn-ghost btn-sm" onclick="filterBulk('research-db',false)">&#x2610; Clear all</button></div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.18);border-radius:7px;font-size:12px;color:var(--text)">
               <input type="checkbox" id="rdb-openalex" checked style="accent-color:#6366f1"> <span class="research-db-badge db-openalex">OpenAlex</span> <span style="color:var(--muted);font-size:10px">250M works</span>
@@ -1756,6 +1753,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         <!-- Domain filter -->
         <div class="card" style="margin-bottom:10px">
           <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:12px">&#x1F3F7; Domain Filter</div>
+          <div style="display:flex;gap:6px;margin:-4px 0 10px"><button class="btn btn-ghost btn-sm" onclick="filterBulk('research-domain',true)">&#x2611; Select all</button><button class="btn btn-ghost btn-sm" onclick="filterBulk('research-domain',false)">&#x2610; Clear all</button></div>
           <div id="research-domain-checkboxes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"></div>
         </div>
 
@@ -2004,11 +2002,7 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
           <input class="filter-input" id="briefing-search" placeholder="&#x1F50D; Filter articles..." oninput="renderBriefingArticleList()" style="flex:1;min-width:120px">
           <select class="filter-select" id="briefing-filter-domain" onchange="renderBriefingArticleList()">
-            <option value="">All Domains</option>
-            <option>Higher Education</option><option>Indigenous</option><option>Reconciliation</option>
-            <option>Research Funding</option><option>Health</option><option>Budget</option>
-            <option>Legislation</option><option>Pharmacare</option><option>Workforce</option>
-          </select>
+            <option value="">All Domains</option><option>Supportive Housing</option><option>Shelter and Emergency</option><option>Encampments</option><option>Rent Supplements</option><option>Indigenous Housing</option><option>Health and Harm Reduction</option><option>Funding and Budget</option><option>Operator Standards</option><option>Tenancy and Legislation</option><option>Evidence and Evaluation</option><option>Affordable Housing</option><option>Political</option><option>Other</option></select>
           <select class="filter-select" id="briefing-sort" onchange="renderBriefingArticleList()">
             <option value="rel">Highest Relevance</option>
             <option value="date">Newest First</option>
@@ -2111,17 +2105,17 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
       <div>
         <div class="page-title">Ask AI</div>
-        <div class="page-subtitle" id="askai-status">Query your policy database using Groq AI — grounded in your tracked articles</div>
+        <div class="page-subtitle" id="askai-status">Ask questions about your tracked housing and homelessness articles</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="clearChat()" title="Clear conversation history">&#x1F9F9; Clear Chat</button>
       </div>
     </div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px">
-      <button class="btn btn-ghost btn-sm" onclick="askSuggestion(this)">What happened on reconciliation this month?</button>
-      <button class="btn btn-ghost btn-sm" onclick="askSuggestion(this)">Summarize federal research funding news</button>
+      <button class="btn btn-ghost btn-sm" onclick="askSuggestion(this)">What are the biggest supportive housing developments this month?</button>
+      <button class="btn btn-ghost btn-sm" onclick="askSuggestion(this)">Summarize new housing and homelessness funding announcements</button>
       <button class="btn btn-ghost btn-sm" onclick="askSuggestion(this)">Which articles should go in this week's digest?</button>
-      <button class="btn btn-ghost btn-sm" onclick="askSuggestion(this)">What are the top urgent items to brief on?</button>
+      <button class="btn btn-ghost btn-sm" onclick="askSuggestion(this)">What encampment and shelter issues should I know about?</button>
     </div>
     <div id="chat-messages"></div>
     <div class="chat-input-row">
@@ -2746,6 +2740,10 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
           <button class="btn btn-red btn-sm" onclick="pruneArticles()">&#x1F5D1; Prune Now</button>
         </div>
         <div id="prune-result" style="display:none;padding:10px 14px;border-radius:8px;font-size:12px"></div>
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.7">Remove every news and research article that is not staged for a digest. Use this once after switching the app to housing, then run Scrape Now. This cannot be undone.</div>
+          <button class="btn btn-red btn-sm" onclick="clearOldContent()">&#x1F5D1; Clear all unstaged content</button>
+        </div>
       </div>
 
       <!-- ── NOTION INTEGRATION (panel) ── -->
@@ -3065,22 +3063,13 @@ body.light-mode #briefing-recommendation { background:rgba(0,119,170,0.05); bord
         <div style="font-weight:700;font-size:15px;color:var(--white);margin-bottom:16px" id="tracker-modal-title">New Tracker</div>
         <div style="display:grid;gap:10px">
           <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Name *</label>
-            <input class="filter-input" id="tm-name" placeholder="e.g. BC Pharmacare Implementation" style="width:100%"></div>
+            <input class="filter-input" id="tm-name" placeholder="e.g. Supportive Housing Operator Oversight" style="width:100%"></div>
           <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Description</label>
             <textarea class="why-input" id="tm-desc" rows="2" placeholder="What are you tracking and why?" style="width:100%;font-size:12px;padding:8px 10px"></textarea></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Domain</label>
               <select class="filter-select" id="tm-domain" style="width:100%">
-                <option value="">— Any —</option>
-                <option>Higher Education</option><option>Research Funding</option>
-                <option>Indigenous</option><option>Reconciliation</option>
-                <option>Health</option><option>Pharmacare</option>
-                <option>Budget</option><option>Legislation</option>
-                <option>Infrastructure</option><option>Workforce</option>
-                <option>Consultation</option><option>Environment</option>
-                <option>Housing</option><option>Child Care</option>
-                <option>Political</option><option>International</option>
-              </select></div>
+                <option value="">Any domain</option><option>Supportive Housing</option><option>Shelter and Emergency</option><option>Encampments</option><option>Rent Supplements</option><option>Indigenous Housing</option><option>Health and Harm Reduction</option><option>Funding and Budget</option><option>Operator Standards</option><option>Tenancy and Legislation</option><option>Evidence and Evaluation</option><option>Affordable Housing</option><option>Political</option><option>Other</option></select></div>
             <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Status</label>
               <select class="filter-select" id="tm-status" style="width:100%">
                 <option value="Emerging">🟡 Emerging</option>
@@ -3561,11 +3550,7 @@ var _researchFilterSettings = {
 };
 var _researchMustContainList = [];
 
-var RESEARCH_DOMAINS_LIST = [
-  'Higher Education','Research Funding','Indigenous','Reconciliation',
-  'Health','Pharmacare','Budget','Legislation','Infrastructure',
-  'Workforce','Consultation','Political','Environment','Housing','International','Other'
-];
+var RESEARCH_DOMAINS_LIST = ['Supportive Housing','Shelter and Emergency','Encampments','Rent Supplements','Indigenous Housing','Health and Harm Reduction','Funding and Budget','Operator Standards','Tenancy and Legislation','Evidence and Evaluation','Affordable Housing','Political','Other'];
 
 var DB_ID_MAP = {
   'rdb-openalex':  'OpenAlex',
@@ -3666,7 +3651,7 @@ function applyResearchFilterSettings(){
 
   _researchFilterSettings.mustContain = _researchMustContainList.slice();
 
-  try { localStorage.setItem('pp_research_filter_settings', JSON.stringify(_researchFilterSettings)); } catch(e){}
+  try { localStorage.setItem('pp_research_filter_settings_v2', JSON.stringify(_researchFilterSettings)); } catch(e){}
 
   _researchPageNum = 0;
   renderResearchFeed();
@@ -3711,6 +3696,17 @@ function previewResearchFilterCount(){
   if(el) el.textContent = countResearchFiltered()+' of '+(_researchArticles||[]).length+' articles';
 }
 
+function clearResearchFilters(){
+  ['research-search-inp','research-filter-domain','research-filter-juris','research-filter-sentiment','research-filter-db'].forEach(function(id){
+    var e = document.getElementById(id); if(e) e.value = '';
+  });
+  _researchActiveTag = '';
+  document.querySelectorAll('#research-tag-filter-bar .tag-chip').forEach(function(c, i){ c.classList.toggle('active', i === 0); });
+  _researchShowUnreadOnly = false;  var u = document.getElementById('research-pill-unread');  if(u) u.classList.remove('active');
+  _researchShowFlaggedOnly = false; var f = document.getElementById('research-pill-flagged'); if(f) f.classList.remove('active');
+  resetResearchFilters();   // clears saved settings and re-renders the feed
+}
+
 function resetResearchFilters(){
   _researchFilterSettings = {
     minRelevance:6, databases:['OpenAlex','Semantic Scholar','PubMed Central','DOAJ','arXiv','Canadian Think Tank'],
@@ -3725,7 +3721,7 @@ function resetResearchFilters(){
   var ag=document.getElementById('research-max-age-days'); if(ag) ag.value=0;
   var oaAll=document.getElementById('research-access-all'); if(oaAll) oaAll.checked=true;
   renderResearchMustContainTags();
-  try { localStorage.removeItem('pp_research_filter_settings'); } catch(e){}
+  try { localStorage.removeItem('pp_research_filter_settings_v2'); } catch(e){}
   renderResearchFeed();
   showToast('&#x21BA;','Research Filters Reset','All research filter settings cleared.',2500);
 }
@@ -3766,7 +3762,8 @@ function buildResearchFetchConfig(){
 /* Restore saved research filter settings on startup */
 (function _loadSavedResearchSettings(){
   try {
-    var saved = localStorage.getItem('pp_research_filter_settings');
+    try{localStorage.removeItem('pp_research_filter_settings');}catch(e){}
+    var saved = localStorage.getItem('pp_research_filter_settings_v2');
     if(saved) _researchFilterSettings = Object.assign(_researchFilterSettings, JSON.parse(saved));
     _researchMustContainList = (_researchFilterSettings.mustContain||[]).slice();
   } catch(e){}
@@ -3933,11 +3930,7 @@ function buildResearchCard(a, forDashboard){
     +'<input id="rtag-inp-'+a.id+'" class="filter-input" placeholder="Type or pick..." style="padding:2px 7px;font-size:10px;width:90px;height:22px" onkeydown="if(event.key===&quot;Enter&quot;)addResearchTag('+a.id+')">'
     +'<select class="sentiment-picker" style="height:22px;padding:1px 4px;font-size:10px" onchange="pickResearchTagFromDropdown('+a.id+',this)">'
     +'<option value="">&#x1F4CB; Quick tags</option>'
-    +'<option>Urgent</option><option>Briefing Note Worthy</option><option>DRIPA</option><option>UNDRIP</option><option>TRC</option><option>OCAP</option>'
-    +'<option>Budget</option><option>Funding</option><option>Research</option><option>Legislation</option><option>Reconciliation</option><option>Indigenous</option>'
-    +'<option>Health</option><option>Pharmacare</option><option>Consultation</option><option>Workforce</option><option>Political</option><option>Court Decision</option>'
-    +'<option>Audit</option><option>Data/Evidence</option><option>International</option>'
-    +'</select>'
+    +'<option>Urgent</option><option>Briefing Note Worthy</option><option>Housing</option><option>Supportive Housing</option><option>Shelter</option><option>Encampments</option><option>Rent Supplement</option><option>Housing First</option><option>Indigenous</option><option>Toxic Drug Crisis</option><option>Operator</option><option>Funding</option><option>Budget</option><option>Legislation</option><option>Regulation</option><option>Consultation</option><option>Evaluation</option><option>Data/Evidence</option><option>Audit</option><option>Court Decision</option><option>Tenancy</option><option>Mental Health</option><option>Reaching Home</option><option>International</option></select>'
     +'<button class="btn-add-tag" onclick="addResearchTag('+a.id+')">&#x2714;</button>'
     +'</span>'
     +'</div>'
@@ -4738,41 +4731,10 @@ function saveBackendUrl() {
 
 /* === END API HELPERS === */
 
-const ARTICLES_SEED=[
-  {id:1,title:"BC Announces $340M Indigenous Post-Secondary Investment Framework",url:"https://www2.gov.bc.ca/gov/content/education-training/post-secondary-education",source:"BC Ministry of Post-Secondary Education",jurisdiction:"BC",domain:"Indigenous",relevance:9,sentiment:"Supportive",summary:"Province commits $340M over five years to Indigenous-led institutions, emphasizing governance sovereignty and culturally grounded programming.",whyItMatters:"Directly affects funding allocation for Indigenous education partnerships and DRIPA alignment requirements.",pubDate:"2026-04-17",read:false,staged:true,tags:["Indigenous","Reconciliation","Briefing Note Worthy"]},
-  {id:2,title:"DRIPA Action Plan Year 3 Progress Report Released",url:"https://www2.gov.bc.ca/gov/content/governments/indigenous-people/dripa",source:"Indigenous Relations & Reconciliation",jurisdiction:"BC",domain:"Reconciliation",relevance:9,sentiment:"Supportive",summary:"Third annual implementation report highlights gains in land rights, child welfare, and education with calls for accelerated federal alignment.",whyItMatters:"Sets benchmarks post-secondary institutions must align with for DRIPA compliance reporting.",pubDate:"2026-04-16",read:false,staged:false,tags:["Reconciliation","Indigenous","Urgent"]},
-  {id:3,title:"BC Draft Post-Secondary Accountability Framework Open for Consultation",url:"https://www2.gov.bc.ca/gov/content/education-training/post-secondary-education/institution-resources-administration",source:"BC Ministry of Post-Secondary Education",jurisdiction:"BC",domain:"Higher Education",relevance:9,sentiment:"Neutral",summary:"Ministry releases draft framework proposing new performance metrics tied to reconciliation outcomes and community benefit agreements.",whyItMatters:"Institutions will need to demonstrate measurable reconciliation outcomes to receive full funding allocations.",pubDate:"2026-04-15",read:false,staged:false,tags:["Legislation","Consultation","Higher Education"]},
-  {id:4,title:"SSHRC Partnership Development Grants — Spring 2026 Results",url:"https://www.sshrc-crsh.gc.ca/funding-financement/programs-programmes/partnership_development_grants-subventions_partenariat_developpement-eng.aspx",source:"Government of Canada Post-Secondary",jurisdiction:"Federal",domain:"Research Funding",relevance:8,sentiment:"Supportive",summary:"47 awards totalling $18.2M released with strong BC institutional representation; partnership models strongly favoured.",whyItMatters:"Signals SSHRC appetite for community-embedded research partnerships — key for upcoming proposal cycles.",pubDate:"2026-04-14",read:false,staged:true,tags:["Research Funding","Budget"]},
-  {id:5,title:"Federal Budget 2026: Post-Secondary Research Infrastructure Cuts Raise Alarm",url:"https://www.universityaffairs.ca/news",source:"University Affairs Canada",jurisdiction:"Federal",domain:"Budget",relevance:10,sentiment:"Critical",summary:"Federal budget reduces tri-council research infrastructure allocations by 12%, drawing sharp criticism from university associations across Canada.",whyItMatters:"Immediate threat to capital equipment renewal and graduate research capacity — advocacy response required urgently.",pubDate:"2026-04-13",read:true,staged:true,tags:["Fiscal Policy","Budget","Urgent","Briefing Note Worthy"]},
-  {id:6,title:"TRC Call to Action 62 Curriculum Resources Launched in BC",url:"https://www2.gov.bc.ca/gov/content/education-training/post-secondary-education/indigenous-education",source:"BC Ministry of Post-Secondary Education",jurisdiction:"BC",domain:"Reconciliation",relevance:8,sentiment:"Supportive",summary:"BC launches TRC-aligned curriculum resources for post-secondary institutions, developed in partnership with First Nations educators.",whyItMatters:"Provides a ready framework for fulfilling TRC obligations 62–65 in academic programming reviews.",pubDate:"2026-04-11",read:true,staged:false,tags:["Reconciliation","Indigenous","Higher Education"]},
-  {id:7,title:"Bill 22 — Post-Secondary Institutions Amendment Act Introduced",url:"https://www.leg.bc.ca/parliamentary-business/legislation-debates-proceedings/42nd-parliament/4th-session/bills/progress-of-bills",source:"BC Legislature",jurisdiction:"BC",domain:"Legislation",relevance:9,sentiment:"Neutral",summary:"New bill proposes governance amendments affecting board composition requirements and financial reporting standards for BC public universities.",whyItMatters:"May require bylaw amendments and board recruitment strategy revisions if passed in current form.",pubDate:"2026-04-10",read:false,staged:false,tags:["Legislation","Regulation","Higher Education"]},
-  {id:8,title:"CIHR Institute of Indigenous Peoples' Health — Strategic Plan 2026–2031",url:"https://cihr-irsc.gc.ca/e/193.html",source:"Government of Canada Post-Secondary",jurisdiction:"Federal",domain:"Health",relevance:8,sentiment:"Supportive",summary:"Five-year plan centres on Indigenous data sovereignty, OCAP principles, and elimination of health disparities in research design.",whyItMatters:"Shapes eligibility criteria for CIHR grants involving Indigenous health research — OCAP compliance now explicitly required.",pubDate:"2026-04-09",read:false,staged:false,tags:["Health","Indigenous","Research Funding"]},
-  {id:9,title:"Universities Canada Pre-Budget Brief Calls for Science Strategy Renewal",url:"https://univcan.ca/media-room/media-releases/",source:"University Affairs Canada",jurisdiction:"Federal",domain:"Research Funding",relevance:7,sentiment:"Critical",summary:"National advocacy brief urges federal reinvestment in talent pipelines, research infrastructure, and Indigenous research sovereignty frameworks.",whyItMatters:"Positions university sector advocacy heading into fall budget consultations — worth monitoring for alignment.",pubDate:"2026-04-08",read:true,staged:false,tags:["Research Funding","Political","Workforce"]},
-  {id:10,title:"Burnaby City Council Approves University District Transit Corridor",url:"https://www.burnaby.ca/city-hall/news",source:"Burnaby Municipal Government",jurisdiction:"Municipal",domain:"Infrastructure",relevance:6,sentiment:"Supportive",summary:"Council approves planning study for rapid transit connection serving Burnaby Mountain, with SkyTrain extension assessment by Q3 2026.",whyItMatters:"Strengthens community access and sustainable campus planning for ongoing municipal partnership discussions.",pubDate:"2026-04-06",read:true,staged:false,tags:["Infrastructure","Municipal"]},
-  {id:11,title:"BC Pharmacare Expansion: Extended Coverage for Post-Secondary Students",url:"https://www2.gov.bc.ca/gov/content/health/health-drug-coverage/pharmacare-for-bc-residents",source:"BC Ministry of Post-Secondary Education",jurisdiction:"BC",domain:"Pharmacare",relevance:7,sentiment:"Supportive",summary:"Province extends pharmacare coverage to all enrolled post-secondary students, effective September 2026.",whyItMatters:"Reduces administrative burden on institutional health plans and improves student wellness outcomes.",pubDate:"2026-03-28",read:true,staged:false,tags:["Pharmacare","Health","Higher Education"]},
-  {id:12,title:"NSERC Alliance Grants: New Indigenous Research Partnership Stream",url:"https://www.nserc-crsng.gc.ca/Innovate-Innover/alliance-alliance/index_eng.asp",source:"Government of Canada Post-Secondary",jurisdiction:"Federal",domain:"Research Funding",relevance:8,sentiment:"Supportive",summary:"NSERC launches dedicated stream for Indigenous-led natural sciences partnerships with expedited review and enhanced community governance.",whyItMatters:"Creates a new funding pathway requiring genuine Indigenous co-governance of research design.",pubDate:"2026-03-20",read:true,staged:false,tags:["Research Funding","Indigenous","Reconciliation"]},
-];
-const SOURCES_SEED=[
-  {id:1,name:"BC Ministry of Post-Secondary Education",url:"gov.bc.ca/postsecondary",jurisdiction:"BC",active:true,lastScraped:"2026-04-18 07:00",count:12},
-  {id:2,name:"Government of Canada Post-Secondary",url:"edcanada.ca",jurisdiction:"Federal",active:true,lastScraped:"2026-04-18 07:01",count:8},
-  {id:3,name:"BC Legislature",url:"leg.bc.ca",jurisdiction:"BC",active:true,lastScraped:"2026-04-18 07:02",count:6},
-  {id:4,name:"Indigenous Relations & Reconciliation",url:"gov.bc.ca/indigenous",jurisdiction:"BC",active:true,lastScraped:"2026-04-18 07:03",count:5},
-  {id:5,name:"University Affairs Canada",url:"universityaffairs.ca/news",jurisdiction:"Federal",active:true,lastScraped:"2026-04-18 07:04",count:9},
-  {id:6,name:"Burnaby Municipal Government",url:"burnaby.ca",jurisdiction:"Municipal",active:true,lastScraped:"2026-04-18 07:05",count:3},
-  {id:7,name:"Higher Education Strategy Associates",url:"higheredstrategy.com",jurisdiction:"Pan-Canadian",active:true,lastScraped:"2026-04-18 07:06",count:4},
-  {id:8,name:"Innovation Canada",url:"innovation.ca",jurisdiction:"Federal",active:false,lastScraped:"2026-04-17 07:00",count:2},
-];
-const SUBSCRIBERS_SEED=[
-  {id:1,name:"Anthony Coompson",email:"anthony@sfu.ca",role:"Admin",active:true,added:"2026-01-15"},
-  {id:2,name:"Dr. Sarah Chen",email:"s.chen@sfu.ca",role:"Reader",active:true,added:"2026-02-01"},
-  {id:3,name:"James Whitfield",email:"j.whitfield@sfu.ca",role:"Reader",active:true,added:"2026-02-10"},
-  {id:4,name:"Maria Santos",email:"m.santos@sfu.ca",role:"Reader",active:false,added:"2026-03-05"},
-];
-const DIGEST_HISTORY_SEED=[
-  {id:1,subject:"PolicyPulse Weekly — Apr 14, 2026",created:"2026-04-14",sent:"2026-04-14",recipients:4,token:"pp-abc123"},
-  {id:2,subject:"PolicyPulse Weekly — Apr 7, 2026",created:"2026-04-07",sent:"2026-04-07",recipients:3,token:"pp-def456"},
-  {id:3,subject:"PolicyPulse Weekly — Mar 31, 2026",created:"2026-03-31",sent:"2026-03-31",recipients:3,token:"pp-ghi789"},
-];
+const ARTICLES_SEED=[];
+const SOURCES_SEED=[];
+const SUBSCRIBERS_SEED=[];
+const DIGEST_HISTORY_SEED=[];
 var _sectionLimits=(function(){try{return JSON.parse(localStorage.getItem('pp_section_limits')||'null')||{};}catch(e){return {};}}());
 function getSectionMax(id,def){return _sectionLimits[id]!==undefined?_sectionLimits[id]:def;}
 const DS_DEF=[
@@ -4818,7 +4780,7 @@ function saveDigestHistory(){
 }
 let digestHistory=loadDigestHistory();
 let digestSections=DS_DEF.map(s=>({...s,items:[]}));
-let watchlist=["Indigenous","DRIPA","TRC","SSHRC","budget","pharmacare"];
+let watchlist=["supportive housing","homelessness","encampment","Reaching Home","BC Housing","rent supplement","shelter","tenancy"];
 let showUnreadOnly=true;
 let showMultiDomainOnly=false;
 let chatHistory=[];
@@ -5209,7 +5171,7 @@ async function previewAsk(){
 
   try{
     var d = await apiFetch('/ai/chat',{method:'POST',body:JSON.stringify({messages:groqMsgs,max_tokens:500})});
-    if(!d||!d.ok) throw new Error((d&&d.detail)||'No response from server');
+    if(!d||!d.ok) throw new Error((d&&d.detail)||'No response from the server. If Render was asleep, wait 30 seconds and try again');
     var reply = d.content||'No response.';
     typingDiv.remove();
     var aiDiv = document.createElement('div');
@@ -5390,7 +5352,7 @@ async function init(){
     if (!API_BASE) { showToast('&#128268;', 'Connect Your Backend', 'Enter your Render URL in Settings to load real articles.', 7000); }
     else { var ac = articles.filter(function(a){ return a.relevance >= 8 && !a.read; }).length; showToast('&#128225;', 'PolicyPulse Live', ac > 0 ? ac + ' high-relevance articles waiting.' : 'Feed loaded and up to date.', 4000); }
   }, 900);
-  appendMsg('Hello! I\'m your PolicyPulse AI assistant. I can help you find key articles, summarize policy trends, suggest digest content, or answer strategic questions. What would you like to know?','msg-ai');
+  appendMsg('Hello! I\'m your PolicyPulse AI assistant. I can help you find key housing and homelessness articles, summarize trends, suggest digest content, or answer questions about what you are tracking. What would you like to know?','msg-ai');
 }
 
 function _setBootStatus(msg){
@@ -5658,14 +5620,7 @@ function buildCard(a,expanded){
           <input id="tag-inp-${a.id}" class="filter-input" placeholder="Type or pick..." style="padding:2px 7px;font-size:10px;width:90px;height:22px" onkeydown="if(event.key==='Enter')addManualTag(${a.id})" oninput="filterTagDropdown(${a.id},this.value)">
           <select id="tag-drop-${a.id}" class="sentiment-picker" style="height:22px;padding:1px 4px;font-size:10px" onchange="pickTagFromDropdown(${a.id},this)">
             <option value="">&#x1F4CB; Quick tags</option>
-            <option>Urgent</option><option>Briefing Note Worthy</option>
-            <option>DRIPA</option><option>UNDRIP</option><option>TRC</option><option>OCAP</option>
-            <option>Budget</option><option>Funding</option><option>Research</option>
-            <option>Legislation</option><option>Reconciliation</option><option>Indigenous</option>
-            <option>Health</option><option>Pharmacare</option><option>Consultation</option>
-            <option>Workforce</option><option>Political</option><option>Court Decision</option>
-            <option>Audit</option><option>Data/Evidence</option><option>International</option>
-          </select>
+            <option>Urgent</option><option>Briefing Note Worthy</option><option>Housing</option><option>Supportive Housing</option><option>Shelter</option><option>Encampments</option><option>Rent Supplement</option><option>Housing First</option><option>Indigenous</option><option>Toxic Drug Crisis</option><option>Operator</option><option>Funding</option><option>Budget</option><option>Legislation</option><option>Regulation</option><option>Consultation</option><option>Evaluation</option><option>Data/Evidence</option><option>Audit</option><option>Court Decision</option><option>Tenancy</option><option>Mental Health</option><option>Reaching Home</option><option>International</option></select>
           <button class="btn-add-tag" onclick="addManualTag(${a.id})">&#x2714;</button>
         </span>
       </div>
@@ -6932,7 +6887,7 @@ async function testUrgentAlert(){
 }
 async function testKeywordAlert(){
   if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Render backend to send alerts.',4000); return; }
-  var kw = prompt('Test watchlist keyword:','DRIPA');
+  var kw = prompt('Test watchlist keyword:','encampment');
   if(!kw) return;
   showToast('&#x1F4E1;','Sending Test...','Sending keyword alert test for "'+kw+'".',3000);
   var d = await apiFetch('/alerts/test-keyword',{method:'POST',body:JSON.stringify({keyword:kw})});
@@ -7010,11 +6965,11 @@ async function sendChat(){
   const contextNote = articles.length > 25
     ? `\n\n[Showing top 25 of ${articles.length} articles by relevance.]`
     : '';
-  const sysPr=`You are PolicyPulse AI — a senior policy analyst for a government relations professional in BC/Canada. Answer concisely and strategically. Cite article titles when recommending.\n\nARTICLE DATABASE (top ${contextArticles.length} by relevance):\n${context}${contextNote}`;
+  const sysPr=`You are PolicyPulse AI, a senior analyst on BC housing and homelessness policy supporting a program analyst at a provincial housing Crown corporation. Answer concisely and practically. Only use the articles provided below, cite article titles when recommending, and say so if the articles do not cover the question.\n\nARTICLE DATABASE (top ${contextArticles.length} by relevance):\n${context}${contextNote}`;
   const groqMessages=[{role:'system',content:sysPr},...chatHistory.slice(0,-1).map(m=>({role:m.role==='assistant'?'assistant':'user',content:m.content})),{role:'user',content:msg}];
   try{
     const d=await apiFetch('/ai/chat',{method:'POST',body:JSON.stringify({messages:groqMessages,max_tokens:1000})});
-    if(!d||!d.ok) throw new Error((d&&d.detail)||'No response from server');
+    if(!d||!d.ok) throw new Error((d&&d.detail)||'No response from the server. If Render was asleep, wait 30 seconds and try again');
     const reply=d.content||'No response.';
     typing.remove();appendMsg(reply,'msg-ai');chatHistory.push({role:'assistant',content:reply});
   }catch(e){typing.remove();appendMsg('Error: '+e.message,'msg-ai');}
@@ -8975,14 +8930,9 @@ var _newsFilterSettings = {
 
 var _newsMustContainList = [];
 
-var NEWS_DOMAINS = [
-  'Higher Education','Research Funding','Indigenous','Reconciliation',
-  'Health','Pharmacare','Budget','Legislation','Infrastructure',
-  'Workforce','Consultation','Political','Environment','Housing',
-  'Child Care','International','Other'
-];
+var NEWS_DOMAINS = ['Supportive Housing','Shelter and Emergency','Encampments','Rent Supplements','Indigenous Housing','Health and Harm Reduction','Funding and Budget','Operator Standards','Tenancy and Legislation','Evidence and Evaluation','Affordable Housing','Political','Other'];
 
-var NEWS_JURISDICTIONS = ['Federal','BC','Municipal','Pan-Canadian','International'];
+var NEWS_JURISDICTIONS = ['Federal','BC','Municipal','Regional','Pan-Canadian','International'];
 
 function initNewsFilterSettings(){
   // Build domain checkboxes from master list
@@ -9057,7 +9007,7 @@ function applyNewsFilterSettings(){
   _newsFilterSettings.mustContain = _newsMustContainList.slice();
 
   // Persist to localStorage
-  try { localStorage.setItem('pp_news_filter_settings', JSON.stringify(_newsFilterSettings)); } catch(e){}
+  try { localStorage.setItem('pp_news_filter_settings_v2', JSON.stringify(_newsFilterSettings)); } catch(e){}
 
   // Re-render feed with new settings
   _page = 0;
@@ -9108,6 +9058,59 @@ function previewNewsFilterCount(){
   if(el) el.textContent = count + ' of ' + articles.length + ' articles';
 }
 
+/* ── Bulk select / clear for filter checkboxes ───────────────────────────── */
+var FILTER_GROUPS = {
+  'news-domain':     ['.news-domain-chk'],
+  'news-juris':      ['.news-juris-chk'],
+  'news-sent':       ['#news-sent-critical', '#news-sent-supportive', '#news-sent-neutral'],
+  'news-source':     ['.news-source-chk'],
+  'research-domain': ['.research-domain-chk'],
+  'research-db':     ['[id^="rdb-"]'],
+  'research-source': ['.research-source-chk']
+};
+FILTER_GROUPS['news-all']     = ['news-domain','news-juris','news-sent','news-source'];
+FILTER_GROUPS['research-all'] = ['research-domain','research-db','research-source'];
+
+function filterBulk(group, checked){
+  var def = FILTER_GROUPS[group];
+  if(!def) return;
+  def.forEach(function(item){
+    if(FILTER_GROUPS[item]){ filterBulk(item, checked); return; }
+    document.querySelectorAll(item).forEach(function(el){ el.checked = checked; });
+  });
+  if(group.indexOf('-all') > -1){
+    showToast(checked ? '&#x2611;' : '&#x2610;',
+      checked ? 'All Selected' : 'All Cleared',
+      'Click Apply &amp; Save to use this. With nothing ticked in a group, that group shows everything.', 3500);
+  }
+}
+
+/* One click: reset search, dropdowns, tag, toggles, and the saved Filter Settings */
+function clearFeedFilters(){
+  ['search-input','filter-domain','filter-juris','filter-sentiment','filter-source'].forEach(function(id){
+    var e = document.getElementById(id); if(e) e.value = '';
+  });
+  activeTag = '';
+  document.querySelectorAll('#tag-filter-bar .tag-chip').forEach(function(c, i){ c.classList.toggle('active', i === 0); });
+  showUnreadOnly = false;      var u = document.getElementById('pill-unread');      if(u) u.classList.remove('active');
+  _showFlaggedOnly = false;    var f = document.getElementById('pill-flagged');     if(f) f.classList.remove('active');
+  showMultiDomainOnly = false; var m = document.getElementById('pill-multidomain'); if(m) m.classList.remove('active');
+  resetNewsFilters();   // clears saved Filter Settings and re-renders the feed
+}
+
+async function clearOldContent(){
+  if(!API_BASE){ showToast('&#x26A0;','No Backend','Connect your Render backend first.',3500); return; }
+  var typed = prompt('This deletes every news and research article that is not staged for a digest.\n\nType CLEAR to confirm:');
+  if(typed !== 'CLEAR'){ showToast('&#x2139;','Cancelled','Nothing was deleted.',2500); return; }
+  var d = await apiFetch('/admin/clear-content', {method:'POST', body:JSON.stringify({confirm:'CLEAR'})});
+  if(!d || !d.ok){ showToast('&#x26A0;','Could Not Clear',(d && d.detail) || 'Check your backend connection and API key.',5000); return; }
+  _articleCache = []; _cacheTime = 0; articles = [];
+  await apiLoadArticles({limit:100, force:true});
+  if(typeof loadResearchArticles === 'function'){ await loadResearchArticles(); renderResearchFeed(); renderDashboardResearchFeed(); }
+  renderFeed(); renderDashboard(); updateBadges();
+  showToast('&#x2705;','Content Cleared', d.deleted_articles + ' articles and ' + d.deleted_scholarly + ' research items removed. Run Scrape Now for fresh housing news.', 7000);
+}
+
 function resetNewsFilters(){
   _newsFilterSettings = {minRelevance:6,domains:[],jurisdictions:[],sentiments:['Critical','Supportive','Neutral'],sources:[],maxAgeDays:0,mustContain:[]};
   _newsMustContainList = [];
@@ -9117,7 +9120,7 @@ function resetNewsFilters(){
   var sl=document.getElementById('news-min-relevance'); if(sl){sl.value=6; document.getElementById('news-min-rel-label').innerHTML='&#x1F4CC; 6/10';}
   var ag=document.getElementById('news-max-age-days'); if(ag) ag.value=0;
   renderNewsMustContainTags();
-  try { localStorage.removeItem('pp_news_filter_settings'); } catch(e){}
+  try { localStorage.removeItem('pp_news_filter_settings_v2'); } catch(e){}
   renderFeed();
   showToast('&#x21BA;','Filters Reset','All news filter settings cleared.',2500);
 }
@@ -9158,7 +9161,8 @@ function renderNewsMustContainTags(){
 // Restore saved settings on startup
 (function loadSavedNewsSettings(){
   try {
-    var saved = localStorage.getItem('pp_news_filter_settings');
+    try{localStorage.removeItem('pp_news_filter_settings');}catch(e){}
+    var saved = localStorage.getItem('pp_news_filter_settings_v2');
     if(saved) _newsFilterSettings = Object.assign(_newsFilterSettings, JSON.parse(saved));
     _newsMustContainList = _newsFilterSettings.mustContain||[];
   } catch(e){}

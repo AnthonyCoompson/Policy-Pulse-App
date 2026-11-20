@@ -371,7 +371,7 @@ JURISDICTION OPTIONS: Federal | BC | Municipal | Regional | Pan-Canadian | Inter
 SENTIMENT OPTIONS: Critical | Supportive | Neutral
 
 TAG OPTIONS (pick up to 4 that apply):
-Urgent | Briefing Note Worthy | Supportive Housing | Shelter | Encampments | Rent Supplement | Housing First | Indigenous | Toxic Drug Crisis | Operator | Funding | Budget | Legislation | Regulation | Consultation | Evaluation | Data/Evidence | Audit | Court Decision | Tenancy | Mental Health | Reaching Home | International
+Urgent | Briefing Note Worthy | Housing | Supportive Housing | Shelter | Encampments | Rent Supplement | Housing First | Indigenous | Toxic Drug Crisis | Operator | Funding | Budget | Legislation | Regulation | Consultation | Evaluation | Data/Evidence | Audit | Court Decision | Tenancy | Mental Health | Reaching Home | International
 
 Return ONLY valid JSON. No markdown, no explanation, no text before or after the JSON."""
 
@@ -597,7 +597,13 @@ def _parse_gemini_response(text: str, title: str, source_name: str) -> dict | No
         log.warning(f"JSON parse error: {e} — raw: {text[:200]}")
         return _default_analysis(title, source_name)
 
-    if result.get("relevance", 0) < 6:
+    # Curated sources (TRUSTED_SOURCE_BOOSTS) keep items scoring 3 or higher, so thin
+    # stub pages from official sources are not dropped. Everything else needs 6.
+    s_lower = source_name.lower()
+    is_trusted = any(k in s_lower for k in TRUSTED_SOURCE_BOOSTS)
+    min_rel = 3 if is_trusted else 6
+    if result.get("relevance", 0) < min_rel:
+        log.debug(f"  [ai-filter] relevance {result.get('relevance', 0)} < {min_rel} dropped: {title[:60]}")
         return None
 
     return {
@@ -612,19 +618,142 @@ def _parse_gemini_response(text: str, title: str, source_name: str) -> dict | No
     }
 
 
+# ── GROQ (shared helper) ─────────────────────────────────────────────────────
+# Groq retired llama-3.3-70b-versatile on 16 Aug 2026, which made every Groq
+# call return 404. The model is now configurable with GROQ_MODEL, and the
+# helper walks a fallback list if the configured model has been retired.
+# Verify names against https://console.groq.com/docs/models before changing.
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL_CANDIDATES: list[str] = []
+for _m in (os.environ.get("GROQ_MODEL", "").strip(), "openai/gpt-oss-120b",
+           "qwen/qwen3.6-27b", "openai/gpt-oss-20b"):
+    if _m and _m not in GROQ_MODEL_CANDIDATES:
+        GROQ_MODEL_CANDIDATES.append(_m)
+_GROQ_WORKING_MODEL: str | None = None
+
+
+class GroqError(Exception):
+    """Raised with a message that is safe and useful to show to the user."""
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = status
+        self.message = message
+
+
+def _groq_models_to_try() -> list[str]:
+    if _GROQ_WORKING_MODEL and _GROQ_WORKING_MODEL in GROQ_MODEL_CANDIDATES:
+        rest = [m for m in GROQ_MODEL_CANDIDATES if m != _GROQ_WORKING_MODEL]
+        return [_GROQ_WORKING_MODEL] + rest
+    return list(GROQ_MODEL_CANDIDATES)
+
+
+def _groq_payload(model: str, messages: list, max_tokens: int, temperature: float) -> dict:
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    if model.startswith("openai/gpt-oss"):
+        # gpt-oss spends part of max_tokens on hidden reasoning. Keep it short
+        # and add headroom so the visible answer is not cut off.
+        payload["reasoning_effort"] = "low"
+        payload["max_tokens"] = max_tokens + 800
+    return payload
+
+
+def _groq_error_text(resp) -> str:
+    try:
+        err = resp.json().get("error", {})
+        return str(err.get("message") or resp.text)[:300]
+    except Exception:
+        return (resp.text or "")[:300]
+
+
+def _groq_model_is_gone(status: int, text: str) -> bool:
+    t = text.lower()
+    return status == 404 or (status == 400 and any(
+        w in t for w in ("model", "decommission", "not found", "does not exist")))
+
+
+def _groq_content(data: dict) -> str:
+    content = (data.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+    content = re.sub(r"<think>.*?</think>", "", content, flags=re.S).strip()
+    if not content:
+        raise GroqError(502, "Groq returned an empty response. Try again.")
+    return content
+
+
+def _groq_raise(status: int, text: str):
+    if status == 401:
+        raise GroqError(503, "Groq rejected the GROQ_API_KEY set in Render (invalid or expired). "
+                             "Create a new key at console.groq.com and update it in Render.")
+    if status == 429:
+        raise GroqError(429, "Groq rate limit reached. Wait a moment and try again.")
+    raise GroqError(502, f"Groq error {status}: {text}")
+
+
+async def groq_chat_async(messages: list, max_tokens: int = 1000,
+                          temperature: float = 0.2, timeout: float = 45) -> tuple[str, str]:
+    """Returns (content, model_used). Raises GroqError on failure."""
+    global _GROQ_WORKING_MODEL
+    key = os.environ.get("GROQ_API_KEY", "")
+    if not key:
+        raise GroqError(503, "GROQ_API_KEY is not set in Render environment variables. "
+                             "Get a free key at https://console.groq.com and add it in Render.")
+    last = ""
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for model in _groq_models_to_try():
+            resp = await client.post(
+                GROQ_URL, json=_groq_payload(model, messages, max_tokens, temperature),
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+            if resp.status_code == 200:
+                _GROQ_WORKING_MODEL = model
+                return _groq_content(resp.json()), model
+            last = _groq_error_text(resp)
+            if _groq_model_is_gone(resp.status_code, last):
+                log.warning(f"Groq model '{model}' unavailable ({resp.status_code}): {last[:120]}")
+                continue
+            _groq_raise(resp.status_code, last)
+    raise GroqError(502, "Groq says none of the configured models exist "
+                         f"({', '.join(GROQ_MODEL_CANDIDATES)}). Set GROQ_MODEL in Render to a "
+                         f"current model from console.groq.com/docs/models. Last error: {last}")
+
+
+def groq_chat_sync(messages: list, max_tokens: int = 1000,
+                   temperature: float = 0.2, timeout: float = 30) -> tuple[str, str]:
+    """Synchronous twin of groq_chat_async, used by the scraper fallback."""
+    global _GROQ_WORKING_MODEL
+    key = os.environ.get("GROQ_API_KEY", "")
+    if not key:
+        raise GroqError(503, "GROQ_API_KEY is not set.")
+    last = ""
+    for model in _groq_models_to_try():
+        resp = requests.post(
+            GROQ_URL, json=_groq_payload(model, messages, max_tokens, temperature),
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            timeout=timeout)
+        if resp.status_code == 200:
+            _GROQ_WORKING_MODEL = model
+            return _groq_content(resp.json()), model
+        last = _groq_error_text(resp)
+        if _groq_model_is_gone(resp.status_code, last):
+            continue
+        _groq_raise(resp.status_code, last)
+    raise GroqError(502, f"No Groq model available. Last error: {last}")
+
+
 # ── GROQ FALLBACK ─────────────────────────────────────────────────────────────
 
 def _analyze_with_groq(title: str, url: str, source_name: str = "",
                         article_text: str = "") -> dict | None:
-    """Try Groq (llama-3.3-70b-versatile) as a fallback when GEMINI_API_KEY
-    is absent.  Uses the same prompt structure and JSON schema as the Gemini
-    path so _parse_gemini_response() can handle the output directly.
+    """Fallback classifier through Groq when GEMINI_API_KEY is absent or Gemini
+    fails. Uses the same prompt and JSON schema as the Gemini path so
+    _parse_gemini_response() can handle the output directly.
 
-    Returns None (not a fallback dict) if GROQ_API_KEY is also missing or
-    on any error, so the caller can chain to _default_analysis().
+    Returns None on any problem so the caller can chain to _default_analysis().
     """
-    groq_key = os.environ.get("GROQ_API_KEY", "")
-    if not groq_key:
+    if not os.environ.get("GROQ_API_KEY", ""):
         return None
 
     cfg           = _load_prompt_config()
@@ -633,45 +762,26 @@ def _analyze_with_groq(title: str, url: str, source_name: str = "",
 
     has_text = bool(article_text and len(article_text.strip()) > 150)
     if has_text:
-        trimmed = article_text.strip()[:6000]
-        prompt  = (full_template
-                   .replace("<TITLE>", title)
-                   .replace("<SOURCE>", source_name)
-                   .replace("<URL>", url)
-                   .replace("<ARTICLE_TEXT>", trimmed))
+        prompt = (full_template
+                  .replace("<TITLE>", title)
+                  .replace("<SOURCE>", source_name)
+                  .replace("<URL>", url)
+                  .replace("<ARTICLE_TEXT>", article_text.strip()[:6000]))
     else:
-        prompt  = (title_only_template
-                   .replace("<TITLE>", title)
-                   .replace("<SOURCE>", source_name)
-                   .replace("<URL>", url))
-
-    payload = {
-        "model":    "llama-3.3-70b-versatile",
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user",   "content": prompt},
-        ],
-        "max_tokens":  500,
-        "temperature": 0.1,
-    }
+        prompt = (title_only_template
+                  .replace("<TITLE>", title)
+                  .replace("<SOURCE>", source_name)
+                  .replace("<URL>", url))
 
     try:
-        resp = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            json=payload,
-            headers={
-                "Authorization": f"Bearer {groq_key}",
-                "Content-Type":  "application/json",
-            },
-            timeout=30,
-        )
-        if resp.status_code == 429:
-            log.warning("Groq rate limit (429) — falling back to keyword classifier")
-            return None
-        resp.raise_for_status()
-        data = resp.json()
-        text = data["choices"][0]["message"]["content"]
+        text, _model = groq_chat_sync(
+            [{"role": "system", "content": system_prompt},
+             {"role": "user", "content": prompt}],
+            max_tokens=500, temperature=0.1)
         return _parse_gemini_response(text, title, source_name)
+    except GroqError as e:
+        log.warning(f"Groq fallback error: {e.message}")
+        return None
     except Exception as e:
         log.warning(f"Groq fallback error: {e}")
         return None
